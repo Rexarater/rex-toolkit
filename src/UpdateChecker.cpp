@@ -622,9 +622,18 @@ bool UpdateChecker::FetchUrl(const std::wstring& url, std::string& responseBody,
 
 bool UpdateChecker::ParseUpdateInfo(const std::string& json, UpdateInfo& info, UpdateCheckResult& result)
 {
+    std::string normalizedJson = json;
+    if (normalizedJson.size() >= 3 &&
+        static_cast<unsigned char>(normalizedJson[0]) == 0xEF &&
+        static_cast<unsigned char>(normalizedJson[1]) == 0xBB &&
+        static_cast<unsigned char>(normalizedJson[2]) == 0xBF)
+    {
+        normalizedJson.erase(0, 3);
+    }
+
     std::map<std::string, std::string> strings;
     std::map<std::string, std::vector<std::string>> arrays;
-    JsonReader reader(json);
+    JsonReader reader(normalizedJson);
     if (!reader.ParseObject(strings, arrays))
     {
         result.status = UpdateCheckStatus::InvalidJson;
