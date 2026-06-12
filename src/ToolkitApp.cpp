@@ -82,6 +82,33 @@ std::wstring PowerShellQuote(const std::wstring& value)
     return quoted;
 }
 
+std::wstring CommandLineQuote(const std::wstring& value)
+{
+    std::wstring quoted = L"\"";
+    size_t slashCount = 0;
+    for (wchar_t ch : value)
+    {
+        if (ch == L'\\')
+        {
+            ++slashCount;
+            continue;
+        }
+        if (ch == L'"')
+        {
+            quoted.append((slashCount * 2) + 1, L'\\');
+            quoted.push_back(ch);
+            slashCount = 0;
+            continue;
+        }
+        quoted.append(slashCount, L'\\');
+        slashCount = 0;
+        quoted.push_back(ch);
+    }
+    quoted.append(slashCount * 2, L'\\');
+    quoted.push_back(L'"');
+    return quoted;
+}
+
 std::wstring HResultMessage(HRESULT result)
 {
     wchar_t* buffer = nullptr;
@@ -4875,7 +4902,7 @@ bool ToolkitApp::CreateAndLaunchUpdateInstaller(
 
     const std::wstring parameters =
         L"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " +
-        PowerShellQuote(scriptPath.wstring());
+        CommandLineQuote(scriptPath.wstring());
     HINSTANCE launchResult = ShellExecuteW(
         hwnd_,
         L"open",

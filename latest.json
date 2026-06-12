@@ -1,9 +1,10 @@
 {
-  "latestVersion": "0.2.2",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.2.2/RexsToolkit_v0.2.2.zip",
+  "latestVersion": "0.2.3",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.2.3/RexsToolkit_v0.2.3.zip",
   "releaseNotes": [
     "Download Update now downloads and installs the update instead of opening GitHub.",
     "Moved the Download Update button below release notes so it no longer covers the text.",
-    "Made the update manifest parser tolerate UTF-8 BOM encoding."
+    "Made the update manifest parser tolerate UTF-8 BOM encoding.",
+    "Fixed the updater handoff script path quoting so the install script actually runs."
   ]
 }
