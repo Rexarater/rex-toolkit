@@ -10,6 +10,7 @@
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <uxtheme.h>
+#include <urlmon.h>
 #include <windowsx.h>
 
 #include <algorithm>
@@ -49,12 +50,65 @@ constexpr UINT kConversionFinishedMessage = WM_APP + 102;
 constexpr UINT kMediaJobUpdateMessage = WM_APP + 103;
 constexpr UINT kMediaFinishedMessage = WM_APP + 104;
 constexpr UINT kUpdateCheckFinishedMessage = WM_APP + 105;
+constexpr UINT kUpdateInstallFinishedMessage = WM_APP + 106;
 constexpr int kMinClicksPerSecond = 1;
 constexpr int kMaxClicksPerSecond = 100;
 constexpr UINT_PTR kClockTimerId = 1002;
 constexpr ULONG_PTR kAutoClickExtraInfo = 0x5254584B;
 
 ToolkitApp* g_activeApp = nullptr;
+
+struct UpdateInstallResult
+{
+    bool success = false;
+    std::wstring message;
+};
+
+std::wstring PowerShellQuote(const std::wstring& value)
+{
+    std::wstring quoted = L"'";
+    for (wchar_t ch : value)
+    {
+        if (ch == L'\'')
+        {
+            quoted += L"''";
+        }
+        else
+        {
+            quoted.push_back(ch);
+        }
+    }
+    quoted.push_back(L'\'');
+    return quoted;
+}
+
+std::wstring HResultMessage(HRESULT result)
+{
+    wchar_t* buffer = nullptr;
+    const DWORD length = FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr,
+        static_cast<DWORD>(result),
+        0,
+        reinterpret_cast<LPWSTR>(&buffer),
+        0,
+        nullptr);
+
+    if (length == 0 || !buffer)
+    {
+        std::wostringstream stream;
+        stream << L"Error 0x" << std::hex << static_cast<unsigned long>(result);
+        return stream.str();
+    }
+
+    std::wstring message(buffer, length);
+    LocalFree(buffer);
+    while (!message.empty() && (message.back() == L'\r' || message.back() == L'\n' || message.back() == L' '))
+    {
+        message.pop_back();
+    }
+    return message;
+}
 
 std::vector<ToolDefinition> CreateToolRegistry()
 {
@@ -833,6 +887,23 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         return 0;
     }
 
+    case kUpdateInstallFinishedMessage:
+    {
+        std::unique_ptr<UpdateInstallResult> result(reinterpret_cast<UpdateInstallResult*>(lParam));
+        updateInstalling_ = false;
+        if (result)
+        {
+            updateInstallStatus_ = result->message;
+        }
+        FinishUpdateThread();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        if (result && result->success)
+        {
+            PostMessageW(hwnd_, WM_CLOSE, 0, 0);
+        }
+        return 0;
+    }
+
     case WM_PAINT:
     {
         PAINTSTRUCT paint {};
@@ -1541,9 +1612,9 @@ void ToolkitApp::RecalculateLayout()
     };
     settingsDownloadUpdateButtonRect_ = {
         settingsLeft + Dips(28),
-        settingsTop + Dips(300),
+        settingsTop + Dips(420),
         settingsLeft + Dips(210),
-        settingsTop + Dips(344)
+        settingsTop + Dips(464)
     };
 
     int desiredContentHeight = contentRect_.bottom - contentRect_.top;
@@ -1561,7 +1632,7 @@ void ToolkitApp::RecalculateLayout()
     }
     else if (currentPage_ == Page::Settings)
     {
-        desiredContentHeight = Dips(620);
+        desiredContentHeight = Dips(760);
     }
     else
     {
@@ -2776,7 +2847,7 @@ void ToolkitApp::PaintSettings(HDC hdc)
         contentRect_.left + margin,
         contentTop + Dips(132),
         contentRect_.right - margin,
-        contentTop + Dips(560)
+        contentTop + Dips(660)
     };
     FillRoundRect(hdc, panel, Dips(16), kPanelBackground);
     StrokeRoundRect(hdc, panel, Dips(16), kBorder);
@@ -2805,7 +2876,7 @@ void ToolkitApp::PaintSettings(HDC hdc)
         updateChecking_ ? L"Checking..." : L"Check for Updates",
         true,
         updateChecking_,
-        !updateChecking_);
+        !updateChecking_ && !updateInstalling_);
 
     RECT resultPanel {
         panel.left + Dips(28),
@@ -2901,7 +2972,25 @@ void ToolkitApp::PaintSettings(HDC hdc)
             }
         }
 
-        PaintButton(hdc, settingsDownloadUpdateButtonRect_, L"Download Update", true);
+        const std::wstring buttonLabel = updateInstalling_ ? L"Working..." : L"Download Update";
+        PaintButton(hdc, settingsDownloadUpdateButtonRect_, buttonLabel.c_str(), true, updateInstalling_, !updateInstalling_);
+
+        if (!updateInstallStatus_.empty())
+        {
+            RECT installStatusRect {
+                settingsDownloadUpdateButtonRect_.right + Dips(16),
+                settingsDownloadUpdateButtonRect_.top,
+                resultPanel.right - Dips(20),
+                settingsDownloadUpdateButtonRect_.bottom
+            };
+            DrawTextLine(
+                hdc,
+                updateInstallStatus_.c_str(),
+                installStatusRect,
+                bodyFont_,
+                kTextSecondary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        }
     }
     else if (updateResult_.status != UpdateCheckStatus::UpToDate)
     {
@@ -3151,7 +3240,7 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
         {
             rect = hit(settingsCheckUpdatesButtonRect_);
             if (rect.right > rect.left) return rect;
-            if (hasUpdateResult_ && updateResult_.status == UpdateCheckStatus::UpdateAvailable)
+            if (hasUpdateResult_ && updateResult_.status == UpdateCheckStatus::UpdateAvailable && !updateInstalling_)
             {
                 rect = hit(settingsDownloadUpdateButtonRect_);
                 if (rect.right > rect.left) return rect;
@@ -3604,9 +3693,10 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
         }
         if (IsPointInRect(settingsDownloadUpdateButtonRect_, point) &&
             hasUpdateResult_ &&
-            updateResult_.status == UpdateCheckStatus::UpdateAvailable)
+            updateResult_.status == UpdateCheckStatus::UpdateAvailable &&
+            !updateInstalling_)
         {
-            OpenUpdateDownloadUrl();
+            StartUpdateInstall();
             return;
         }
     }
@@ -4561,7 +4651,7 @@ void ToolkitApp::ApplyMediaJobUpdate(const MediaDownloadJob& job)
 
 void ToolkitApp::StartUpdateCheck()
 {
-    if (updateChecking_)
+    if (updateChecking_ || updateInstalling_)
     {
         return;
     }
@@ -4571,6 +4661,7 @@ void ToolkitApp::StartUpdateCheck()
     hasUpdateResult_ = false;
     updateResult_ = {};
     updateResult_.currentVersion = APP_VERSION;
+    updateInstallStatus_.clear();
     InvalidateRect(hwnd_, nullptr, FALSE);
 
     HWND hwnd = hwnd_;
@@ -4595,19 +4686,211 @@ void ToolkitApp::ApplyUpdateCheckResult(const UpdateCheckResult& result)
 {
     updateResult_ = result;
     updateChecking_ = false;
+    updateInstallStatus_.clear();
     hasUpdateResult_ = true;
 }
 
-void ToolkitApp::OpenUpdateDownloadUrl()
+void ToolkitApp::StartUpdateInstall()
 {
-    if (!hasUpdateResult_ ||
-        updateResult_.status != UpdateCheckStatus::UpdateAvailable ||
-        !UpdateChecker::IsSafeHttpUrl(updateResult_.downloadUrl))
+    if (updateInstalling_ ||
+        !hasUpdateResult_ ||
+        updateResult_.status != UpdateCheckStatus::UpdateAvailable)
     {
         return;
     }
 
-    ShellExecuteW(hwnd_, L"open", updateResult_.downloadUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    const std::wstring downloadUrl = ResolveUpdatePackageUrl();
+    if (!UpdateChecker::IsSafeHttpUrl(downloadUrl))
+    {
+        updateInstallStatus_ = L"Could not download the update. The download URL is not valid.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
+    FinishUpdateThread();
+    updateInstalling_ = true;
+    updateInstallStatus_ = L"Downloading update...";
+    InvalidateRect(hwnd_, nullptr, FALSE);
+
+    HWND hwnd = hwnd_;
+    updateThread_ = std::thread(
+        [this, hwnd, downloadUrl]()
+        {
+            auto* result = new UpdateInstallResult();
+            std::filesystem::path packagePath;
+            std::wstring errorMessage;
+
+            if (!DownloadUpdatePackage(downloadUrl, packagePath, errorMessage))
+            {
+                result->success = false;
+                result->message = errorMessage.empty()
+                    ? L"Could not download the update."
+                    : errorMessage;
+            }
+            else if (!CreateAndLaunchUpdateInstaller(packagePath, errorMessage))
+            {
+                result->success = false;
+                result->message = errorMessage.empty()
+                    ? L"Could not start the update installer."
+                    : errorMessage;
+            }
+            else
+            {
+                result->success = true;
+                result->message = L"Installing update. Rex's Toolkit will restart.";
+            }
+
+            PostMessageW(hwnd, kUpdateInstallFinishedMessage, 0, reinterpret_cast<LPARAM>(result));
+        });
+}
+
+std::wstring ToolkitApp::ResolveUpdatePackageUrl() const
+{
+    std::wstring downloadUrl = updateResult_.downloadUrl;
+    std::wstring lowerUrl = downloadUrl;
+    std::transform(lowerUrl.begin(), lowerUrl.end(), lowerUrl.begin(), [](wchar_t ch)
+    {
+        return static_cast<wchar_t>(towlower(ch));
+    });
+
+    if (lowerUrl.find(L".zip") != std::wstring::npos)
+    {
+        return downloadUrl;
+    }
+
+    if (!updateResult_.latestVersion.empty())
+    {
+        return L"https://github.com/Rexarater/rex-toolkit/releases/download/v" +
+            updateResult_.latestVersion +
+            L"/RexsToolkit_v" +
+            updateResult_.latestVersion +
+            L".zip";
+    }
+
+    return downloadUrl;
+}
+
+bool ToolkitApp::DownloadUpdatePackage(
+    const std::wstring& downloadUrl,
+    std::filesystem::path& packagePath,
+    std::wstring& errorMessage) const
+{
+    wchar_t tempPathBuffer[MAX_PATH] {};
+    const DWORD tempPathLength = GetTempPathW(static_cast<DWORD>(std::size(tempPathBuffer)), tempPathBuffer);
+    if (tempPathLength == 0 || tempPathLength >= std::size(tempPathBuffer))
+    {
+        errorMessage = L"Could not download the update. Windows did not provide a temporary folder.";
+        return false;
+    }
+
+    const std::filesystem::path tempRoot =
+        std::filesystem::path(tempPathBuffer) / (L"RexToolkitUpdate_" + std::to_wstring(GetCurrentProcessId()));
+
+    std::error_code fileError;
+    std::filesystem::remove_all(tempRoot, fileError);
+    fileError.clear();
+    std::filesystem::create_directories(tempRoot, fileError);
+    if (fileError)
+    {
+        errorMessage = L"Could not create the update staging folder.";
+        return false;
+    }
+
+    packagePath = tempRoot / L"RexsToolkitUpdate.zip";
+
+    const HRESULT comResult = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const bool shouldUninitializeCom = SUCCEEDED(comResult);
+    const HRESULT downloadResult = URLDownloadToFileW(nullptr, downloadUrl.c_str(), packagePath.wstring().c_str(), 0, nullptr);
+    if (shouldUninitializeCom)
+    {
+        CoUninitialize();
+    }
+
+    if (FAILED(downloadResult))
+    {
+        errorMessage = L"Could not download the update. " + HResultMessage(downloadResult);
+        return false;
+    }
+
+    fileError.clear();
+    const auto packageSize = std::filesystem::file_size(packagePath, fileError);
+    if (fileError || packageSize == 0)
+    {
+        errorMessage = L"Could not download the update. The update package was empty.";
+        return false;
+    }
+
+    return true;
+}
+
+bool ToolkitApp::CreateAndLaunchUpdateInstaller(
+    const std::filesystem::path& packagePath,
+    std::wstring& errorMessage) const
+{
+    wchar_t executablePathBuffer[MAX_PATH] {};
+    const DWORD executablePathLength = GetModuleFileNameW(nullptr, executablePathBuffer, static_cast<DWORD>(std::size(executablePathBuffer)));
+    if (executablePathLength == 0 || executablePathLength >= std::size(executablePathBuffer))
+    {
+        errorMessage = L"Could not install the update. The app path could not be resolved.";
+        return false;
+    }
+
+    const std::filesystem::path executablePath(executablePathBuffer);
+    const std::filesystem::path appDirectory = executablePath.parent_path();
+    const std::filesystem::path scriptPath = packagePath.parent_path() / L"install_rex_toolkit_update.ps1";
+    const std::filesystem::path logPath = packagePath.parent_path() / L"install_rex_toolkit_update.log";
+
+    std::wofstream script(scriptPath, std::ios::trunc);
+    if (!script)
+    {
+        errorMessage = L"Could not install the update. The installer script could not be created.";
+        return false;
+    }
+
+    script
+        << L"$ErrorActionPreference = 'Stop'\n"
+        << L"$processIdToWait = " << GetCurrentProcessId() << L"\n"
+        << L"$zipPath = " << PowerShellQuote(packagePath.wstring()) << L"\n"
+        << L"$appDir = " << PowerShellQuote(appDirectory.wstring()) << L"\n"
+        << L"$exePath = " << PowerShellQuote(executablePath.wstring()) << L"\n"
+        << L"$logPath = " << PowerShellQuote(logPath.wstring()) << L"\n"
+        << L"$extractDir = Join-Path ([IO.Path]::GetTempPath()) ('RexToolkitUpdateExtract_' + [guid]::NewGuid().ToString('N'))\n"
+        << L"try {\n"
+        << L"    Wait-Process -Id $processIdToWait -ErrorAction SilentlyContinue\n"
+        << L"    if (Test-Path -LiteralPath $extractDir) { Remove-Item -LiteralPath $extractDir -Recurse -Force }\n"
+        << L"    New-Item -ItemType Directory -Force -Path $extractDir | Out-Null\n"
+        << L"    Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force\n"
+        << L"    $exe = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter 'RexToolkit.exe' -File | Select-Object -First 1\n"
+        << L"    if (-not $exe) { throw 'The update package did not contain RexToolkit.exe.' }\n"
+        << L"    $sourceDir = Split-Path -Parent $exe.FullName\n"
+        << L"    Get-ChildItem -LiteralPath $sourceDir -Force | Copy-Item -Destination $appDir -Recurse -Force\n"
+        << L"    Start-Process -FilePath $exePath\n"
+        << L"    Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue\n"
+        << L"    Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue\n"
+        << L"} catch {\n"
+        << L"    ('Update failed: ' + $_.Exception.Message) | Out-File -FilePath $logPath -Encoding UTF8 -Append\n"
+        << L"    Start-Process -FilePath $exePath\n"
+        << L"}\n";
+    script.close();
+
+    const std::wstring parameters =
+        L"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " +
+        PowerShellQuote(scriptPath.wstring());
+    HINSTANCE launchResult = ShellExecuteW(
+        hwnd_,
+        L"open",
+        L"powershell.exe",
+        parameters.c_str(),
+        nullptr,
+        SW_HIDE);
+
+    if (reinterpret_cast<INT_PTR>(launchResult) <= 32)
+    {
+        errorMessage = L"Could not install the update. PowerShell could not be started.";
+        return false;
+    }
+
+    return true;
 }
 
 void ToolkitApp::ShowMediaFormatDropdown()

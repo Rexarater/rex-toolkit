@@ -61,9 +61,9 @@ Rex's Toolkit checks this file when you click `Check for Updates` on the Setting
 https://raw.githubusercontent.com/Rexarater/rex-toolkit/main/latest.json
 ```
 
-The app compares its local `APP_VERSION` value with the `latestVersion` field in that JSON file. If a newer version exists, it shows the release notes and opens the `downloadUrl` in the default browser when you click `Download Update`.
+The app compares its local `APP_VERSION` value with the `latestVersion` field in that JSON file. If a newer version exists, it shows the release notes and downloads the update package when you click `Download Update`.
 
-Rex's Toolkit does not download, run, install, overwrite, or replace files automatically.
+After the package downloads, Rex's Toolkit closes, copies the updated files into the current app folder, and relaunches. If the app is installed in a protected folder, Windows permissions may prevent the copy from completing.
 
 To publish a new update:
 

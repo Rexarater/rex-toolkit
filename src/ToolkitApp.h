@@ -188,7 +188,10 @@ private:
     void StartUpdateCheck();
     void FinishUpdateThread();
     void ApplyUpdateCheckResult(const UpdateCheckResult& result);
-    void OpenUpdateDownloadUrl();
+    void StartUpdateInstall();
+    std::wstring ResolveUpdatePackageUrl() const;
+    bool DownloadUpdatePackage(const std::wstring& downloadUrl, std::filesystem::path& packagePath, std::wstring& errorMessage) const;
+    bool CreateAndLaunchUpdateInstaller(const std::filesystem::path& packagePath, std::wstring& errorMessage) const;
     void ShowMediaFormatDropdown();
     void ShowMediaQualityDropdown();
     void InstallInputHooks();
@@ -263,7 +266,9 @@ private:
     std::wstring mediaStatusText_;
     UpdateCheckResult updateResult_;
     bool updateChecking_ = false;
+    bool updateInstalling_ = false;
     bool hasUpdateResult_ = false;
+    std::wstring updateInstallStatus_;
     SIZE savedWindowSize_ { 1060, 680 };
     bool savedWindowMaximized_ = false;
 

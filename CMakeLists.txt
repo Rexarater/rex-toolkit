@@ -30,6 +30,7 @@ target_link_libraries(RexToolkit PRIVATE
     Windowscodecs
     Winhttp
     Winmm
+    Urlmon
 )
 
 set(BUNDLED_YT_DLP "${CMAKE_CURRENT_SOURCE_DIR}/tools/yt-dlp.exe")
