@@ -1,7 +1,10 @@
 {
-  "latestVersion": "0.1.0",
+  "latestVersion": "0.2.0",
   "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/latest",
   "releaseNotes": [
-    "Initial test release",
+    "Added the file converter and YouTube & SoundCloud downloader.",
+    "Bundled yt-dlp and FFmpeg with the app.",
+    "Improved global UI layout, themed dropdowns, scrolling, icons, and saved window sizing.",
+    "Improved autoclicker keybind saving and high-speed click timing."
   ]
 }
