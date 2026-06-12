@@ -1317,7 +1317,14 @@ void ToolkitApp::RecalculateLayout()
     headerRect_.bottom = std::min(headerRect_.top + headerHeight, clientRect_.bottom);
 
     const int navGroupWidth = (navWidth * 3) + (navGap * 2);
-    const int navLeft = clientRect_.left + ((clientRect_.right - clientRect_.left) - navGroupWidth) / 2;
+    const int centeredNavLeft = clientRect_.left + ((clientRect_.right - clientRect_.left) - navGroupWidth) / 2;
+    const int navSafeLeft = clientRect_.left + Dips(112);
+    const int navSafeRight = clientRect_.right - Dips(250);
+    int navLeft = centeredNavLeft;
+    if (navSafeRight - navSafeLeft >= navGroupWidth)
+    {
+        navLeft = std::clamp(centeredNavLeft, navSafeLeft, navSafeRight - navGroupWidth);
+    }
     const int navTop = headerRect_.top + ((headerRect_.bottom - headerRect_.top) - navHeight) / 2;
     favoritesNavRect_ = {
         navLeft,
@@ -1900,7 +1907,7 @@ void ToolkitApp::PaintHeader(HDC hdc)
     PaintNavItem(hdc, settingsNavRect_, L"Settings", currentPage_ == Page::Settings);
 
     RECT dateTimeRect {
-        std::max(settingsNavRect_.right + Dips(24), headerRect_.right - Dips(300)),
+        std::max(settingsNavRect_.right + Dips(20), headerRect_.right - Dips(250)),
         headerRect_.top,
         headerRect_.right - Dips(28),
         headerRect_.bottom
@@ -2077,11 +2084,21 @@ void ToolkitApp::PaintNavItem(HDC hdc, const RECT& bounds, const wchar_t* label,
         FillRoundRect(hdc, accent, Dips(4), kAccent);
     }
 
+    SIZE textSize {};
+    HGDIOBJ previousFont = SelectObject(hdc, navFont_);
+    GetTextExtentPoint32W(hdc, label, static_cast<int>(wcslen(label)), &textSize);
+    SelectObject(hdc, previousFont);
+
+    const int iconSize = Dips(20);
+    const int iconGap = Dips(8);
+    const int contentWidth = iconSize + iconGap + textSize.cx;
+    const int contentLeft = bounds.left + ((bounds.right - bounds.left) - contentWidth) / 2;
+    const int iconTop = bounds.top + ((bounds.bottom - bounds.top) - iconSize) / 2;
     RECT iconRect {
-        bounds.left + Dips(16),
-        bounds.top + Dips(10),
-        bounds.left + Dips(36),
-        bounds.top + Dips(30)
+        contentLeft,
+        iconTop,
+        contentLeft + iconSize,
+        iconTop + iconSize
     };
 
     if (navIndex == 0)
@@ -2098,8 +2115,8 @@ void ToolkitApp::PaintNavItem(HDC hdc, const RECT& bounds, const wchar_t* label,
     }
 
     RECT textRect = bounds;
-    textRect.left += Dips(44);
-    textRect.right -= Dips(12);
+    textRect.left = iconRect.right + iconGap;
+    textRect.right = bounds.right - Dips(10);
     DrawTextLine(hdc, label, textRect, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 }
 
