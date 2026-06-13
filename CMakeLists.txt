@@ -4,6 +4,8 @@ project(RexToolkit LANGUAGES CXX)
 
 add_executable(RexToolkit WIN32
     resources.rc
+    src/AnimeTrackerService.cpp
+    src/AnimeTrackerService.h
     src/AppConstants.h
     src/FileConversionService.cpp
     src/FileConversionService.h

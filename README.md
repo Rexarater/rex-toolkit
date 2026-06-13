@@ -12,7 +12,8 @@ The current version provides:
 - A first tool: `Auto Clicker`
 - A real image-focused `File Converter`
 - A media-focused `YouTube & SoundCloud Downloader`
-- A Settings page with manual update checks
+- An AniList-powered `Anime Tracker`
+- A sectioned Settings page with startup, output folder, clock, theme, update, and about options
 - Empty states where no favorites or tools are available
 - A clear tool registration section for future expansion
 
@@ -51,7 +52,24 @@ The Media Downloader supports authorized YouTube and SoundCloud links and can sa
 
 The app first looks for bundled media helpers beside the app, then falls back to tools available on `PATH`. If a dependency is missing, it shows a setup message instead of crashing.
 
-The downloader remembers its last selected format, quality, and output folder in `%APPDATA%\RexToolkit\media_downloader.txt`.
+The downloader remembers its last selected format and quality in `%APPDATA%\RexToolkit\media_downloader.txt`. The default output folder is managed in Settings.
+
+## Settings
+
+Settings are saved in `%APPDATA%\RexToolkit\settings.txt`. The Settings page includes:
+
+- Default output folder
+- Startup page: Favorites or All Tools
+- Date/time format for the top-right clock
+- Theme selection, including light mode
+- Manual update checks
+- About details, project links, licenses, and bundled third-party tools
+
+### Anime Tracker
+
+The Anime Tracker lets you search AniList, add anime to a local watchlist, track watched episodes, change watch status, save local notes, refresh metadata, and see upcoming episodes or sequel relations when AniList provides them.
+
+It does not require a login, does not scrape streaming sites, and does not include piracy or playback features. Watchlist data is saved locally in `%APPDATA%\RexsToolkit\anime_tracker.json`.
 
 ## Manual Update Checks
 

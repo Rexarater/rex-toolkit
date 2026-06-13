@@ -370,6 +370,40 @@ bool JsonHasVideoFormat(const std::wstring& json)
     return false;
 }
 
+int JsonMaxVideoHeight(const std::wstring& json)
+{
+    int maxHeight = 0;
+    const std::wstring heightToken = L"\"height\"";
+    size_t position = 0;
+    while ((position = json.find(heightToken, position)) != std::wstring::npos)
+    {
+        const size_t objectStart = json.rfind(L'{', position);
+        const size_t objectEnd = json.find(L'}', position);
+        if (objectStart == std::wstring::npos || objectEnd == std::wstring::npos || objectStart >= objectEnd)
+        {
+            position += heightToken.size();
+            continue;
+        }
+
+        const std::wstring objectText = json.substr(objectStart, objectEnd - objectStart + 1);
+        const std::wstring vcodec = ToLower(JsonStringValue(objectText, L"vcodec").value_or(L""));
+        if (vcodec.empty() || vcodec == L"none")
+        {
+            position += heightToken.size();
+            continue;
+        }
+
+        if (const auto height = JsonNumberValue(objectText, L"height"))
+        {
+            maxHeight = std::max(maxHeight, static_cast<int>(*height + 0.5));
+        }
+
+        position = objectEnd + 1;
+    }
+
+    return maxHeight;
+}
+
 std::wstring DurationLabel(double secondsValue)
 {
     const int totalSeconds = std::max(0, static_cast<int>(secondsValue + 0.5));
@@ -409,6 +443,12 @@ std::wstring Mp4FormatSelector(Mp4Quality quality)
     {
     case Mp4Quality::Best:
         return L"bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best";
+    case Mp4Quality::P4320:
+        return L"bv*[height<=4320][ext=mp4]+ba[ext=m4a]/b[height<=4320][ext=mp4]/best[height<=4320]";
+    case Mp4Quality::P2160:
+        return L"bv*[height<=2160][ext=mp4]+ba[ext=m4a]/b[height<=2160][ext=mp4]/best[height<=2160]";
+    case Mp4Quality::P1440:
+        return L"bv*[height<=1440][ext=mp4]+ba[ext=m4a]/b[height<=1440][ext=mp4]/best[height<=1440]";
     case Mp4Quality::P1080:
         return L"bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/best[height<=1080]";
     case Mp4Quality::P720:
@@ -809,6 +849,7 @@ std::optional<MediaDownloadJob> MediaMetadataService::Analyze(
 
     const std::wstring vcodec = ToLower(JsonStringValue(result.output, L"vcodec").value_or(L""));
     const bool hasVideoFormat = JsonHasVideoFormat(result.output);
+    job.maxVideoHeight = JsonMaxVideoHeight(result.output);
     if (job.platform == MediaPlatform::SoundCloud)
     {
         job.mediaType = MediaType::Audio;
@@ -1000,6 +1041,12 @@ std::wstring MediaDownloadService::Mp4QualityLabel(Mp4Quality quality)
     {
     case Mp4Quality::Best:
         return L"Best available";
+    case Mp4Quality::P4320:
+        return L"4320p / 8K";
+    case Mp4Quality::P2160:
+        return L"2160p / 4K";
+    case Mp4Quality::P1440:
+        return L"1440p";
     case Mp4Quality::P1080:
         return L"1080p";
     case Mp4Quality::P720:

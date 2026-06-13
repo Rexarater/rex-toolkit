@@ -32,10 +32,13 @@ enum class MediaOutputFormat
 
 enum class Mp4Quality
 {
-    Best,
-    P1080,
-    P720,
-    P480
+    Best = 0,
+    P1080 = 1,
+    P720 = 2,
+    P480 = 3,
+    P1440 = 4,
+    P2160 = 5,
+    P4320 = 6
 };
 
 enum class Mp3Bitrate
@@ -91,6 +94,7 @@ struct MediaDownloadJob
     std::wstring duration;
     std::wstring thumbnailUrl;
     MediaType mediaType = MediaType::Unknown;
+    int maxVideoHeight = 0;
     MediaOutputFormat outputFormat = MediaOutputFormat::Mp4;
     Mp4Quality mp4Quality = Mp4Quality::Best;
     Mp3Bitrate mp3Bitrate = Mp3Bitrate::K320;

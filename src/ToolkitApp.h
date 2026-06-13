@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AnimeTrackerService.h"
 #include "FileConversionService.h"
 #include "MediaDownloadService.h"
 #include "UpdateChecker.h"
@@ -9,6 +10,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -29,7 +31,8 @@ enum class ToolKind
     None,
     AutoClicker,
     FileConverter,
-    MediaDownloader
+    MediaDownloader,
+    AnimeTracker
 };
 
 enum class OutputMouseButton
@@ -62,7 +65,45 @@ enum class DropdownKind
     FileJpgBackground,
     FileFormatOptions,
     MediaFormat,
-    MediaQuality
+    MediaQuality,
+    AnimeFilter,
+    SettingsStartPage,
+    SettingsClockFormat,
+    SettingsTheme
+};
+
+enum class AnimeTrackerTab
+{
+    Search,
+    Anime
+};
+
+enum class SettingsSection
+{
+    General,
+    Appearance,
+    Updates,
+    About
+};
+
+enum class DefaultStartPage
+{
+    Favorites,
+    AllTools
+};
+
+enum class ClockFormat
+{
+    MonthDay24,
+    MonthDay12,
+    Iso24,
+    Friendly12
+};
+
+enum class AppTheme
+{
+    Dark,
+    Light
 };
 
 struct ToolDefinition
@@ -82,6 +123,14 @@ struct AutoClickerState
     ActivationMouseButton activationMouseButton = ActivationMouseButton::X1;
     OutputMouseButton outputButton = OutputMouseButton::Left;
     bool running = false;
+};
+
+struct AppSettings
+{
+    std::filesystem::path defaultOutputFolder;
+    DefaultStartPage startPage = DefaultStartPage::Favorites;
+    ClockFormat clockFormat = ClockFormat::MonthDay24;
+    AppTheme theme = AppTheme::Dark;
 };
 
 class ToolkitApp
@@ -108,6 +157,8 @@ private:
     void SaveFavorites() const;
     void LoadWindowSettings();
     void SaveWindowSettings() const;
+    void LoadAppSettings();
+    void SaveAppSettings() const;
     void LoadMediaDownloadSettings();
     void SaveMediaDownloadSettings() const;
     void LoadAutoClickerSettings();
@@ -115,6 +166,7 @@ private:
     std::wstring SettingsDirectory() const;
     std::wstring FavoritesFilePath() const;
     std::wstring WindowSettingsFilePath() const;
+    std::wstring AppSettingsFilePath() const;
     std::wstring MediaDownloadSettingsFilePath() const;
     std::wstring AutoClickerSettingsFilePath() const;
     void RecalculateLayout();
@@ -131,16 +183,21 @@ private:
     void PaintVersionFooter(HDC hdc);
     void PaintLogo(HDC hdc, const RECT& bounds);
     void PaintBitmap(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds);
+    void PaintBitmapTinted(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds, COLORREF tint);
+    void PaintBitmapCover(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds, int radius);
     void PaintContent(HDC hdc);
     void PaintNavItem(HDC hdc, const RECT& bounds, const wchar_t* label, bool selected);
     void PaintEmptyState(HDC hdc, const wchar_t* title, const wchar_t* subtitle);
     void PaintToolCards(HDC hdc, const std::vector<ToolDefinition>& tools);
     void PaintToolIcon(HDC hdc, ToolKind tool, const RECT& bounds);
+    void PaintAniListIcon(HDC hdc, const RECT& bounds);
     void PaintFavoriteStar(HDC hdc, const RECT& bounds, bool favorite);
     void PaintAutoClicker(HDC hdc);
     void PaintFileConverter(HDC hdc);
     void PaintMediaDownloader(HDC hdc);
+    void PaintAnimeTracker(HDC hdc);
     void PaintSettings(HDC hdc);
+    void PaintSettingsSectionTab(HDC hdc, const RECT& bounds, const wchar_t* label, SettingsSection section);
     void PaintProgressBar(HDC hdc, const RECT& bounds, double progress);
     void PaintButton(HDC hdc, const RECT& bounds, const wchar_t* label, bool primary, bool active = false, bool enabled = true);
     void PaintBackButton(HDC hdc, const RECT& bounds);
@@ -180,6 +237,7 @@ private:
     void CreateMediaDownloaderControls();
     void UpdateMediaDownloaderControls();
     void BrowseMediaOutputFolder();
+    void BrowseDefaultOutputFolder();
     void AnalyzeMediaUrl();
     void StartMediaDownload();
     void CancelMediaDownload();
@@ -194,6 +252,40 @@ private:
     bool CreateAndLaunchUpdateInstaller(const std::filesystem::path& packagePath, std::wstring& errorMessage) const;
     void ShowMediaFormatDropdown();
     void ShowMediaQualityDropdown();
+    void ShowSettingsStartPageDropdown();
+    void ShowSettingsClockFormatDropdown();
+    void ShowSettingsThemeDropdown();
+    void LoadAnimeTrackerData();
+    void SaveAnimeTrackerData();
+    std::wstring AnimeTrackerFilePath() const;
+    void CreateAnimeTrackerControls();
+    void UpdateAnimeTrackerControls();
+    void StartAnimeSearch(bool appendResults);
+    void FinishAnimeThread();
+    void ApplyAnimeSearchResponse(const AnimeSearchResponse& response, const std::wstring& message, bool appendResults);
+    void AddAnimeFromSearch(size_t index);
+    void AddAnimeFromRelation(size_t index);
+    void RefreshAnimeEntry(size_t index);
+    void RefreshAllAnime();
+    void ApplyAnimeRefreshResult(const AnimeSearchResult& result, int listIndex, const std::wstring& message);
+    void SelectAnimeEntry(int index);
+    void RemoveAnimeEntry(size_t index);
+    void IncrementAnimeEpisode(size_t index);
+    void DecrementSelectedAnimeEpisode();
+    void CycleSelectedAnimeStatus();
+    void ToggleSelectedAnimeFavorite();
+    void SaveSelectedAnimeNotes();
+    void ShowAnimeFilterDropdown();
+    std::vector<size_t> VisibleAnimeEntryIndexes() const;
+    std::vector<AnimeRelation> VisibleUpcomingSequels() const;
+    std::wstring AnimeSearchText() const;
+    std::wstring AnimeStatusText(const AnimeEntry& entry) const;
+    std::wstring AnimeProgressText(const AnimeEntry& entry) const;
+    RECT AnimeSearchResultCardRect(size_t index) const;
+    RECT AnimeSearchResultAddRect(size_t index) const;
+    RECT AnimeListRowRect(size_t visibleIndex) const;
+    RECT AnimeListActionRect(size_t visibleIndex, int actionIndex) const;
+    RECT AnimeSequelActionRect(size_t index, int actionIndex) const;
     void InstallInputHooks();
     void RemoveInputHooks();
     bool HandleKeyboardHook(WPARAM message, const KBDLLHOOKSTRUCT& keyboard);
@@ -221,6 +313,10 @@ private:
     std::wstring MediaQualityLabel() const;
     std::wstring MediaSetupMessage() const;
     std::wstring CurrentDateTimeLabel() const;
+    std::wstring StartPageLabel() const;
+    std::wstring ClockFormatLabel() const;
+    std::wstring ThemeLabel() const;
+    void ApplyTheme();
     int Dips(int value) const;
 
     HINSTANCE instance_ = nullptr;
@@ -237,15 +333,22 @@ private:
     Page currentPage_ = Page::Favorites;
     ToolKind currentTool_ = ToolKind::None;
     std::vector<ToolDefinition> tools_;
+    AppSettings appSettings_;
     AutoClickerState autoClicker_;
     FileConversionService fileConversionService_;
     MediaDownloadService mediaDownloadService_;
+    AnimeTrackerService animeTrackerService_;
     std::vector<ConversionJob> conversionJobs_;
     ConversionOptions conversionOptions_;
     MediaDownloadOptions mediaDownloadOptions_;
     MediaDownloadJob mediaDownloadJob_;
     ExternalToolStatus mediaExternalTools_;
     UpdateChecker updateChecker_;
+    AnimeWatchList animeWatchList_;
+    AnimeSearchResponse animeSearchResponse_;
+    std::vector<AnimeSearchResult> animeSearchResults_;
+    std::wstring animeStatusMessage_;
+    std::map<std::wstring, std::unique_ptr<Gdiplus::Bitmap>> animeCoverCache_;
     std::vector<ImageFormat> supportedOutputFormats_;
     int selectedConversionJob_ = -1;
     std::wstring fileConverterSummary_;
@@ -255,6 +358,7 @@ private:
     std::thread mediaThread_;
     std::atomic_bool mediaCancelRequested_ = false;
     std::thread updateThread_;
+    std::thread animeThread_;
     std::thread autoClickThread_;
     std::mutex autoClickMutex_;
     std::condition_variable autoClickCondition_;
@@ -267,8 +371,21 @@ private:
     UpdateCheckResult updateResult_;
     bool updateChecking_ = false;
     bool updateInstalling_ = false;
+    bool animeSearching_ = false;
+    bool animeRefreshing_ = false;
+    bool animeSearchHasRun_ = false;
+    bool animeCanLoadMore_ = false;
+    bool animeAppendSearch_ = false;
     bool hasUpdateResult_ = false;
     std::wstring updateInstallStatus_;
+    int animeCurrentPage_ = 1;
+    int selectedAnimeIndex_ = -1;
+    AnimeUserStatus animeFilter_ = AnimeUserStatus::Watching;
+    bool animeFilterAll_ = true;
+    AnimeTrackerTab animeTrackerTab_ = AnimeTrackerTab::Search;
+    SettingsSection settingsSection_ = SettingsSection::General;
+    bool suppressAnimeNotesChange_ = false;
+    std::wstring animeNotesStatusText_;
     SIZE savedWindowSize_ { 1060, 680 };
     bool savedWindowMaximized_ = false;
 
@@ -277,6 +394,7 @@ private:
     RECT favoritesNavRect_ {};
     RECT allToolsNavRect_ {};
     RECT settingsNavRect_ {};
+    RECT dateTimeRect_ {};
     RECT contentRect_ {};
     RECT backButtonRect_ {};
     RECT startStopButtonRect_ {};
@@ -316,6 +434,34 @@ private:
     RECT mediaCopyPathButtonRect_ {};
     RECT settingsCheckUpdatesButtonRect_ {};
     RECT settingsDownloadUpdateButtonRect_ {};
+    RECT settingsGeneralTabRect_ {};
+    RECT settingsAppearanceTabRect_ {};
+    RECT settingsUpdatesTabRect_ {};
+    RECT settingsAboutTabRect_ {};
+    RECT settingsDefaultFolderRect_ {};
+    RECT settingsBrowseDefaultFolderButtonRect_ {};
+    RECT settingsStartPageButtonRect_ {};
+    RECT settingsClockFormatButtonRect_ {};
+    RECT settingsThemeButtonRect_ {};
+    RECT settingsGithubButtonRect_ {};
+    RECT settingsReportIssueButtonRect_ {};
+    RECT animeSearchTabRect_ {};
+    RECT animeListTabRect_ {};
+    RECT animeSearchEditRect_ {};
+    RECT animeSearchButtonRect_ {};
+    RECT animeLoadMoreButtonRect_ {};
+    RECT animeResultsRect_ {};
+    RECT animeListRect_ {};
+    RECT animeUpcomingRect_ {};
+    RECT animeSequelsRect_ {};
+    RECT animeRefreshAllButtonRect_ {};
+    RECT animeFilterButtonRect_ {};
+    RECT animeStatusButtonRect_ {};
+    RECT animeEpisodeMinusButtonRect_ {};
+    RECT animeEpisodePlusButtonRect_ {};
+    RECT animeFavoriteButtonRect_ {};
+    RECT animeSaveNotesButtonRect_ {};
+    RECT animeNotesEditRect_ {};
     RECT scrollBarTrackRect_ {};
     RECT scrollBarThumbRect_ {};
     RECT hoveredButtonRect_ {};
@@ -331,6 +477,8 @@ private:
     int hoverDropdownIndex_ = -1;
     HWND mediaUrlEdit_ = nullptr;
     HWND mediaFileNameEdit_ = nullptr;
+    HWND animeSearchEdit_ = nullptr;
+    HWND animeNotesEdit_ = nullptr;
     HBRUSH editBackgroundBrush_ = nullptr;
     HDC backBufferDc_ = nullptr;
     HBITMAP backBufferBitmap_ = nullptr;
@@ -355,6 +503,7 @@ private:
     HFONT navFont_ = nullptr;
     HFONT headingFont_ = nullptr;
     HFONT bodyFont_ = nullptr;
+    HFONT searchInputFont_ = nullptr;
     HFONT monospaceFont_ = nullptr;
     int dpi_ = 96;
 };

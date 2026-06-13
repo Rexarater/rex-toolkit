@@ -1,10 +1,11 @@
 {
-  "latestVersion": "0.2.3",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.2.3/RexsToolkit_v0.2.3.zip",
+  "latestVersion": "0.3.0",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.3.0/RexsToolkit_v0.3.0.zip",
   "releaseNotes": [
-    "Download Update now downloads and installs the update instead of opening GitHub.",
-    "Moved the Download Update button below release notes so it no longer covers the text.",
-    "Made the update manifest parser tolerate UTF-8 BOM encoding.",
-    "Fixed the updater handoff script path quoting so the install script actually runs."
+    "Added Anime Tracker with AniList search, local watchlist tracking, episode progress, airing schedules, sequels, cover images, and autosaved notes.",
+    "Added Settings with startup page, default output folder, date/time format, theme switching, updates, and about sections.",
+    "Added light mode and improved global theming for controls, icons, dropdowns, buttons, and scrollbars.",
+    "Improved File Converter, Auto Clicker, and Media Downloader layouts, scrolling behavior, and input handling.",
+    "Reduced repaint work for the live clock to avoid once-per-second UI stutter."
   ]
 }
