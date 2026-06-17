@@ -5,7 +5,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cwctype>
+#include <cstdint>
+#include <fstream>
+#include <map>
 #include <sstream>
 
 namespace
@@ -71,6 +75,72 @@ bool StartsWithHttp(const std::wstring& url)
 {
     const std::wstring lower = ToLower(url);
     return lower.rfind(L"https://", 0) == 0 || lower.rfind(L"http://", 0) == 0;
+}
+
+std::wstring UrlPathAndQuery(const std::wstring& url)
+{
+    const size_t scheme = url.find(L"://");
+    const size_t hostStart = scheme == std::wstring::npos ? 0 : scheme + 3;
+    const size_t pathStart = url.find(L'/', hostStart);
+    if (pathStart == std::wstring::npos)
+    {
+        return L"/";
+    }
+
+    const size_t fragmentStart = url.find(L'#', pathStart);
+    return ToLower(url.substr(pathStart, fragmentStart == std::wstring::npos ? std::wstring::npos : fragmentStart - pathStart));
+}
+
+std::wstring UrlPathOnly(const std::wstring& url)
+{
+    std::wstring path = UrlPathAndQuery(url);
+    const size_t queryStart = path.find(L'?');
+    if (queryStart != std::wstring::npos)
+    {
+        path.resize(queryStart);
+    }
+    while (path.size() > 1 && path.back() == L'/')
+    {
+        path.pop_back();
+    }
+    return path;
+}
+
+std::vector<std::wstring> UrlPathSegments(const std::wstring& url)
+{
+    const std::wstring path = UrlPathOnly(url);
+    std::vector<std::wstring> segments;
+    size_t position = 0;
+    while (position < path.size())
+    {
+        while (position < path.size() && path[position] == L'/')
+        {
+            ++position;
+        }
+        const size_t start = position;
+        while (position < path.size() && path[position] != L'/')
+        {
+            ++position;
+        }
+        if (position > start)
+        {
+            segments.push_back(path.substr(start, position - start));
+        }
+    }
+    return segments;
+}
+
+bool UrlQueryHasParameter(const std::wstring& url, const std::wstring& parameterName)
+{
+    const std::wstring pathAndQuery = UrlPathAndQuery(url);
+    const size_t queryStart = pathAndQuery.find(L'?');
+    if (queryStart == std::wstring::npos)
+    {
+        return false;
+    }
+
+    const std::wstring query = L"&" + pathAndQuery.substr(queryStart + 1);
+    return query.find(L"&" + ToLower(parameterName) + L"=") != std::wstring::npos;
 }
 
 std::optional<std::filesystem::path> FindOnPath(const std::wstring& executableName)
@@ -198,6 +268,10 @@ std::wstring BytesToWide(const std::string& bytes)
     return result;
 }
 
+std::optional<unsigned int> HexDigitValue(wchar_t ch);
+std::optional<unsigned int> ParseJsonUnicodeEscape(const std::wstring& json, size_t position);
+void AppendJsonCodePoint(std::wstring& value, unsigned int codePoint);
+
 std::optional<std::wstring> JsonStringValue(const std::wstring& json, const std::wstring& key)
 {
     const std::wstring token = L"\"" + key + L"\"";
@@ -252,6 +326,37 @@ std::optional<std::wstring> JsonStringValue(const std::wstring& json, const std:
             case L't':
                 value.push_back(L'\t');
                 break;
+            case L'u':
+            {
+                const auto codeUnit = ParseJsonUnicodeEscape(json, position);
+                if (!codeUnit)
+                {
+                    value.push_back(escaped);
+                    break;
+                }
+                position += 4;
+
+                if (*codeUnit >= 0xD800 && *codeUnit <= 0xDBFF &&
+                    position + 6 <= json.size() &&
+                    json[position] == L'\\' &&
+                    json[position + 1] == L'u')
+                {
+                    const auto lowSurrogate = ParseJsonUnicodeEscape(json, position + 2);
+                    if (lowSurrogate && *lowSurrogate >= 0xDC00 && *lowSurrogate <= 0xDFFF)
+                    {
+                        const unsigned int codePoint =
+                            0x10000 +
+                            ((*codeUnit - 0xD800) << 10) +
+                            (*lowSurrogate - 0xDC00);
+                        AppendJsonCodePoint(value, codePoint);
+                        position += 6;
+                        break;
+                    }
+                }
+
+                AppendJsonCodePoint(value, *codeUnit);
+                break;
+            }
             default:
                 value.push_back(escaped);
                 break;
@@ -262,6 +367,56 @@ std::optional<std::wstring> JsonStringValue(const std::wstring& json, const std:
     }
 
     return std::nullopt;
+}
+
+std::optional<unsigned int> HexDigitValue(wchar_t ch)
+{
+    if (ch >= L'0' && ch <= L'9')
+    {
+        return static_cast<unsigned int>(ch - L'0');
+    }
+    if (ch >= L'a' && ch <= L'f')
+    {
+        return static_cast<unsigned int>(ch - L'a' + 10);
+    }
+    if (ch >= L'A' && ch <= L'F')
+    {
+        return static_cast<unsigned int>(ch - L'A' + 10);
+    }
+    return std::nullopt;
+}
+
+std::optional<unsigned int> ParseJsonUnicodeEscape(const std::wstring& json, size_t position)
+{
+    if (position + 4 > json.size())
+    {
+        return std::nullopt;
+    }
+
+    unsigned int value = 0;
+    for (size_t index = 0; index < 4; ++index)
+    {
+        const auto digit = HexDigitValue(json[position + index]);
+        if (!digit)
+        {
+            return std::nullopt;
+        }
+        value = (value << 4) | *digit;
+    }
+    return value;
+}
+
+void AppendJsonCodePoint(std::wstring& value, unsigned int codePoint)
+{
+    if (codePoint <= 0xFFFF)
+    {
+        value.push_back(static_cast<wchar_t>(codePoint));
+        return;
+    }
+
+    codePoint -= 0x10000;
+    value.push_back(static_cast<wchar_t>(0xD800 + ((codePoint >> 10) & 0x3FF)));
+    value.push_back(static_cast<wchar_t>(0xDC00 + (codePoint & 0x3FF)));
 }
 
 std::optional<double> JsonNumberValue(const std::wstring& json, const std::wstring& key)
@@ -304,6 +459,126 @@ std::optional<double> JsonNumberValue(const std::wstring& json, const std::wstri
     {
         return std::nullopt;
     }
+}
+
+std::wstring TrimCopy(std::wstring value)
+{
+    while (!value.empty() && std::iswspace(value.front()))
+    {
+        value.erase(value.begin());
+    }
+    while (!value.empty() && std::iswspace(value.back()))
+    {
+        value.pop_back();
+    }
+    return value;
+}
+
+std::wstring CleanExternalToolOutput(std::wstring value)
+{
+    for (wchar_t& ch : value)
+    {
+        if (ch == L'\r' || ch == L'\n' || ch == L'\t')
+        {
+            ch = L' ';
+        }
+    }
+
+    std::wstring condensed;
+    bool previousWasSpace = false;
+    for (wchar_t ch : value)
+    {
+        if (std::iswspace(ch))
+        {
+            if (!previousWasSpace)
+            {
+                condensed.push_back(L' ');
+            }
+            previousWasSpace = true;
+        }
+        else
+        {
+            condensed.push_back(ch);
+            previousWasSpace = false;
+        }
+    }
+
+    condensed = TrimCopy(condensed);
+    while (condensed.size() >= 4 && ToLower(condensed.substr(condensed.size() - 4)) == L"null")
+    {
+        condensed.resize(condensed.size() - 4);
+        condensed = TrimCopy(condensed);
+    }
+    return condensed;
+}
+
+std::optional<std::wstring> FriendlyExternalToolError(const std::wstring& output, MediaPlatform platform)
+{
+    const std::wstring lower = ToLower(output);
+    if (lower.find(L"drm protected") != std::wstring::npos ||
+        lower.find(L"drm-protected") != std::wstring::npos)
+    {
+        if (platform == MediaPlatform::SoundCloud)
+        {
+            return L"This SoundCloud track is DRM protected, so Rex's Toolkit cannot download it.";
+        }
+        if (platform == MediaPlatform::YouTube)
+        {
+            return L"This YouTube video is DRM protected, so Rex's Toolkit cannot download it.";
+        }
+        return L"This media is DRM protected, so Rex's Toolkit cannot download it.";
+    }
+
+    return std::nullopt;
+}
+
+std::wstring FriendlyExternalToolMessage(
+    const std::wstring& output,
+    MediaPlatform platform,
+    const std::wstring& fallbackMessage)
+{
+    if (auto friendly = FriendlyExternalToolError(output, platform))
+    {
+        return *friendly;
+    }
+
+    const std::wstring cleaned = CleanExternalToolOutput(output);
+    return cleaned.empty() ? fallbackMessage : cleaned;
+}
+
+std::wstring BpmLabel(double value)
+{
+    if (value <= 0.0)
+    {
+        return {};
+    }
+
+    const int rounded = static_cast<int>(value + 0.5);
+    return rounded > 0 ? std::to_wstring(rounded) : std::wstring {};
+}
+
+std::optional<std::wstring> FirstJsonStringOrNumberValue(const std::wstring& json, const std::vector<std::wstring>& keys)
+{
+    for (const std::wstring& key : keys)
+    {
+        if (auto value = JsonStringValue(json, key))
+        {
+            std::wstring trimmed = TrimCopy(*value);
+            if (!trimmed.empty())
+            {
+                return trimmed;
+            }
+        }
+        if (auto value = JsonNumberValue(json, key))
+        {
+            std::wstring label = BpmLabel(*value);
+            if (!label.empty())
+            {
+                return label;
+            }
+        }
+    }
+    return std::nullopt;
 }
 
 bool JsonHasVideoFormat(const std::wstring& json)
@@ -404,6 +679,31 @@ int JsonMaxVideoHeight(const std::wstring& json)
     return maxHeight;
 }
 
+bool JsonContainsKey(const std::wstring& json, const std::wstring& key)
+{
+    return json.find(L"\"" + key + L"\"") != std::wstring::npos;
+}
+
+bool LooksLikeCollectionMetadata(const std::wstring& json)
+{
+    const std::wstring type = ToLower(JsonStringValue(json, L"_type").value_or(L""));
+    if (type == L"playlist" || type == L"multi_video" || type == L"channel" || type == L"url")
+    {
+        return true;
+    }
+
+    const std::wstring extractor = ToLower(JsonStringValue(json, L"extractor_key").value_or(L""));
+    if (extractor.find(L"playlist") != std::wstring::npos ||
+        extractor.find(L"tab") != std::wstring::npos ||
+        extractor.find(L"user") != std::wstring::npos ||
+        extractor.find(L"set") != std::wstring::npos)
+    {
+        return true;
+    }
+
+    return JsonContainsKey(json, L"entries");
+}
+
 std::wstring DurationLabel(double secondsValue)
 {
     const int totalSeconds = std::max(0, static_cast<int>(secondsValue + 0.5));
@@ -421,6 +721,1162 @@ std::wstring DurationLabel(double secondsValue)
         swprintf_s(buffer, L"%d:%02d", minutes, seconds);
     }
     return buffer;
+}
+
+std::wstring FirstHttpLine(const std::wstring& text)
+{
+    size_t position = 0;
+    while (position < text.size())
+    {
+        size_t end = text.find_first_of(L"\r\n", position);
+        if (end == std::wstring::npos)
+        {
+            end = text.size();
+        }
+
+        std::wstring line = TrimCopy(text.substr(position, end - position));
+        if (StartsWithHttp(line))
+        {
+            return line;
+        }
+
+        position = end + 1;
+    }
+    return {};
+}
+
+std::filesystem::path TemporaryPathWithExtension(const std::wstring& extension)
+{
+    std::array<wchar_t, MAX_PATH> tempPath {};
+    const DWORD length = GetTempPathW(static_cast<DWORD>(tempPath.size()), tempPath.data());
+    std::filesystem::path directory = (length > 0 && length < tempPath.size())
+        ? std::filesystem::path(tempPath.data())
+        : std::filesystem::temp_directory_path();
+
+    const std::wstring baseName =
+        L"RexToolkitAudio_" +
+        std::to_wstring(GetCurrentProcessId()) +
+        L"_" +
+        std::to_wstring(GetTickCount64());
+
+    for (int index = 0; index < 100; ++index)
+    {
+        std::filesystem::path candidate = directory / (baseName + L"_" + std::to_wstring(index) + extension);
+        if (!std::filesystem::exists(candidate))
+        {
+            return candidate;
+        }
+    }
+
+    return directory / (baseName + extension);
+}
+
+std::filesystem::path TemporaryRawAudioPath()
+{
+    return TemporaryPathWithExtension(L".raw");
+}
+
+std::filesystem::path TemporaryWavAudioPath()
+{
+    return TemporaryPathWithExtension(L".wav");
+}
+
+std::filesystem::path TemporaryJsonPath()
+{
+    return TemporaryPathWithExtension(L".json");
+}
+
+std::vector<float> ReadPcm16Mono(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+    {
+        return {};
+    }
+
+    input.seekg(0, std::ios::end);
+    const std::streamoff length = input.tellg();
+    input.seekg(0, std::ios::beg);
+    if (length <= 1)
+    {
+        return {};
+    }
+
+    std::vector<char> bytes(static_cast<size_t>(length));
+    input.read(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    const size_t bytesRead = static_cast<size_t>(input.gcount());
+    const size_t sampleCount = bytesRead / 2;
+
+    std::vector<float> samples;
+    samples.reserve(sampleCount);
+    for (size_t index = 0; index < sampleCount; ++index)
+    {
+        const auto low = static_cast<unsigned char>(bytes[index * 2]);
+        const auto high = static_cast<unsigned char>(bytes[index * 2 + 1]);
+        const auto value = static_cast<int16_t>(low | (high << 8));
+        samples.push_back(static_cast<float>(value) / 32768.0f);
+    }
+
+    return samples;
+}
+
+std::wstring ReadTextFileWide(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+    {
+        return {};
+    }
+
+    input.seekg(0, std::ios::end);
+    const std::streamoff length = input.tellg();
+    input.seekg(0, std::ios::beg);
+    if (length <= 0)
+    {
+        return {};
+    }
+
+    std::string bytes(static_cast<size_t>(length), '\0');
+    input.read(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    bytes.resize(static_cast<size_t>(input.gcount()));
+    return BytesToWide(bytes);
+}
+
+std::optional<std::wstring> JsonObjectValue(const std::wstring& json, const std::wstring& key)
+{
+    const std::wstring token = L"\"" + key + L"\"";
+    size_t position = json.find(token);
+    if (position == std::wstring::npos)
+    {
+        return std::nullopt;
+    }
+
+    position = json.find(L':', position + token.size());
+    if (position == std::wstring::npos)
+    {
+        return std::nullopt;
+    }
+
+    ++position;
+    while (position < json.size() && std::iswspace(json[position]))
+    {
+        ++position;
+    }
+
+    if (position >= json.size() || json[position] != L'{')
+    {
+        return std::nullopt;
+    }
+
+    const size_t objectStart = position;
+    int depth = 0;
+    bool inString = false;
+    bool escaped = false;
+    while (position < json.size())
+    {
+        const wchar_t ch = json[position++];
+        if (inString)
+        {
+            if (escaped)
+            {
+                escaped = false;
+            }
+            else if (ch == L'\\')
+            {
+                escaped = true;
+            }
+            else if (ch == L'"')
+            {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (ch == L'"')
+        {
+            inString = true;
+        }
+        else if (ch == L'{')
+        {
+            ++depth;
+        }
+        else if (ch == L'}')
+        {
+            --depth;
+            if (depth == 0)
+            {
+                return json.substr(objectStart, position - objectStart);
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
+std::optional<double> EstimateBpmCore(const std::vector<float>& samples, int sampleRate)
+{
+    if (samples.size() < static_cast<size_t>(sampleRate * 8))
+    {
+        return std::nullopt;
+    }
+
+    constexpr int frameSize = 1024;
+    constexpr int hopSize = 512;
+    const size_t frameCount = samples.size() > frameSize ? (samples.size() - frameSize) / hopSize : 0;
+    if (frameCount < 32)
+    {
+        return std::nullopt;
+    }
+
+    std::vector<double> energy(frameCount, 0.0);
+    for (size_t frame = 0; frame < frameCount; ++frame)
+    {
+        const size_t start = frame * hopSize;
+        double sum = 0.0;
+        for (int offset = 0; offset < frameSize; ++offset)
+        {
+            const double sample = samples[start + offset];
+            sum += sample * sample;
+        }
+        energy[frame] = std::log1p((sum / frameSize) * 1000.0);
+    }
+
+    std::vector<double> novelty(frameCount, 0.0);
+    double noveltyTotal = 0.0;
+    for (size_t index = 1; index < frameCount; ++index)
+    {
+        const double difference = energy[index] - energy[index - 1];
+        if (difference > 0.0)
+        {
+            novelty[index] = difference;
+            noveltyTotal += difference;
+        }
+    }
+
+    if (noveltyTotal <= 0.001)
+    {
+        return std::nullopt;
+    }
+
+    std::vector<double> smoothed = novelty;
+    for (size_t index = 1; index + 1 < frameCount; ++index)
+    {
+        smoothed[index] = (novelty[index - 1] + novelty[index] + novelty[index + 1]) / 3.0;
+    }
+
+    const double noveltyRate = static_cast<double>(sampleRate) / hopSize;
+    const int minLag = std::max(1, static_cast<int>((noveltyRate * 60.0 / 220.0) + 0.5));
+    const int maxLag = std::min(static_cast<int>(frameCount / 2), static_cast<int>((noveltyRate * 60.0 / 55.0) + 0.5));
+    if (maxLag <= minLag)
+    {
+        return std::nullopt;
+    }
+
+    auto correlationAtLag = [&](int lag)
+    {
+        double score = 0.0;
+        int count = 0;
+        for (size_t index = static_cast<size_t>(lag); index < frameCount; ++index)
+        {
+            score += smoothed[index] * smoothed[index - lag];
+            ++count;
+        }
+        return count > 0 ? score / count : 0.0;
+    };
+
+    int bestLag = 0;
+    double bestScore = 0.0;
+    for (int lag = minLag; lag <= maxLag; ++lag)
+    {
+        double score = correlationAtLag(lag);
+        if (lag * 2 <= maxLag)
+        {
+            score += correlationAtLag(lag * 2) * 0.35;
+        }
+        if (lag / 2 >= minLag)
+        {
+            score += correlationAtLag(lag / 2) * 0.15;
+        }
+
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestLag = lag;
+        }
+    }
+
+    if (bestLag <= 0 || bestScore <= 0.000001)
+    {
+        return std::nullopt;
+    }
+
+    return 60.0 * noveltyRate / bestLag;
+}
+
+double NormalizeBpm(double bpm)
+{
+    while (bpm < 70.0 && bpm * 2.0 <= 220.0)
+    {
+        bpm *= 2.0;
+    }
+    while (bpm > 180.0 && bpm / 2.0 >= 55.0)
+    {
+        bpm /= 2.0;
+    }
+    return bpm;
+}
+
+std::optional<double> EstimateBpm(const std::vector<float>& samples, int sampleRate)
+{
+    if (samples.size() < static_cast<size_t>(sampleRate * 8))
+    {
+        return std::nullopt;
+    }
+
+    std::vector<double> candidates;
+    if (auto fullSample = EstimateBpmCore(samples, sampleRate))
+    {
+        candidates.push_back(NormalizeBpm(*fullSample));
+    }
+
+    const size_t windowSize = static_cast<size_t>(sampleRate * 45);
+    if (samples.size() >= windowSize + static_cast<size_t>(sampleRate * 10))
+    {
+        const size_t hopSize = static_cast<size_t>(sampleRate * 22);
+        for (size_t start = 0; start + windowSize <= samples.size(); start += hopSize)
+        {
+            std::vector<float> window(samples.begin() + static_cast<std::ptrdiff_t>(start),
+                                      samples.begin() + static_cast<std::ptrdiff_t>(start + windowSize));
+            if (auto windowBpm = EstimateBpmCore(window, sampleRate))
+            {
+                candidates.push_back(NormalizeBpm(*windowBpm));
+            }
+        }
+    }
+
+    if (candidates.empty())
+    {
+        return std::nullopt;
+    }
+
+    std::sort(candidates.begin(), candidates.end());
+    double median = candidates[candidates.size() / 2];
+    if (candidates.size() % 2 == 0)
+    {
+        median = (candidates[candidates.size() / 2 - 1] + median) / 2.0;
+    }
+    return median;
+}
+
+std::optional<std::wstring> EstimateMusicalKey(const std::vector<float>& samples, int sampleRate)
+{
+    if (samples.size() < static_cast<size_t>(sampleRate * 8))
+    {
+        return std::nullopt;
+    }
+
+    constexpr int frameSize = 4096;
+    constexpr int hopSize = 4096;
+    constexpr double pi = 3.14159265358979323846;
+    const size_t frameCount = samples.size() > frameSize ? (samples.size() - frameSize) / hopSize : 0;
+    if (frameCount < 8)
+    {
+        return std::nullopt;
+    }
+
+    std::array<double, frameSize> window {};
+    for (int index = 0; index < frameSize; ++index)
+    {
+        window[static_cast<size_t>(index)] = 0.5 - 0.5 * std::cos((2.0 * pi * index) / (frameSize - 1));
+    }
+
+    std::array<double, 12> chroma {};
+    int framesUsed = 0;
+    for (size_t frame = 0; frame < frameCount; ++frame)
+    {
+        const size_t start = frame * hopSize;
+        double frameEnergy = 0.0;
+        for (int offset = 0; offset < frameSize; ++offset)
+        {
+            const double sample = samples[start + offset];
+            frameEnergy += sample * sample;
+        }
+        if (frameEnergy / frameSize < 0.00001)
+        {
+            continue;
+        }
+
+        for (int midi = 36; midi <= 84; ++midi)
+        {
+            const double frequency = 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+            const double coefficient = 2.0 * std::cos(2.0 * pi * frequency / sampleRate);
+            double q1 = 0.0;
+            double q2 = 0.0;
+            for (int offset = 0; offset < frameSize; ++offset)
+            {
+                const double q0 = samples[start + offset] * window[static_cast<size_t>(offset)] + coefficient * q1 - q2;
+                q2 = q1;
+                q1 = q0;
+            }
+
+            const double magnitude = std::max(0.0, q1 * q1 + q2 * q2 - coefficient * q1 * q2);
+            chroma[static_cast<size_t>(midi % 12)] += std::sqrt(magnitude);
+        }
+        ++framesUsed;
+    }
+
+    if (framesUsed < 8)
+    {
+        return std::nullopt;
+    }
+
+    double chromaTotal = 0.0;
+    for (double value : chroma)
+    {
+        chromaTotal += value;
+    }
+    if (chromaTotal <= 0.0)
+    {
+        return std::nullopt;
+    }
+
+    static constexpr std::array<double, 12> majorProfile {
+        6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88
+    };
+    static constexpr std::array<double, 12> minorProfile {
+        6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17
+    };
+    static constexpr std::array<const wchar_t*, 12> keyNames {
+        L"C", L"C#", L"D", L"Eb", L"E", L"F", L"F#", L"G", L"Ab", L"A", L"Bb", L"B"
+    };
+
+    auto scoreProfile = [&](int tonic, const std::array<double, 12>& profile)
+    {
+        std::array<double, 12> values {};
+        double valueMean = 0.0;
+        double profileMean = 0.0;
+        for (int index = 0; index < 12; ++index)
+        {
+            values[static_cast<size_t>(index)] = std::log1p(chroma[static_cast<size_t>((tonic + index) % 12)]);
+            valueMean += values[static_cast<size_t>(index)];
+            profileMean += profile[static_cast<size_t>(index)];
+        }
+        valueMean /= 12.0;
+        profileMean /= 12.0;
+
+        double numerator = 0.0;
+        double valueEnergy = 0.0;
+        double profileEnergy = 0.0;
+        for (int index = 0; index < 12; ++index)
+        {
+            const double value = values[static_cast<size_t>(index)] - valueMean;
+            const double profileValue = profile[static_cast<size_t>(index)] - profileMean;
+            numerator += value * profileValue;
+            valueEnergy += value * value;
+            profileEnergy += profileValue * profileValue;
+        }
+
+        if (valueEnergy <= 0.0 || profileEnergy <= 0.0)
+        {
+            return 0.0;
+        }
+        return numerator / std::sqrt(valueEnergy * profileEnergy);
+    };
+
+    int bestTonic = 0;
+    bool bestIsMinor = false;
+    double bestScore = -2.0;
+    for (int tonic = 0; tonic < 12; ++tonic)
+    {
+        const double majorScore = scoreProfile(tonic, majorProfile);
+        if (majorScore > bestScore)
+        {
+            bestScore = majorScore;
+            bestTonic = tonic;
+            bestIsMinor = false;
+        }
+
+        const double minorScore = scoreProfile(tonic, minorProfile);
+        if (minorScore > bestScore)
+        {
+            bestScore = minorScore;
+            bestTonic = tonic;
+            bestIsMinor = true;
+        }
+    }
+
+    if (bestScore < 0.05)
+    {
+        return std::nullopt;
+    }
+
+    return std::wstring(keyNames[static_cast<size_t>(bestTonic)]) + (bestIsMinor ? L" minor" : L" major");
+}
+
+struct LocalMusicAnalysis
+{
+    std::wstring musicalKey;
+    std::wstring bpm;
+    std::wstring source;
+    double bpmValue = 0.0;
+    double keyStrength = 0.0;
+    double keyWeight = 1.0;
+    int keyVotes = 0;
+    int keyCandidateCount = 0;
+    bool fullTrack = false;
+};
+
+struct MusicAnalysisWindow
+{
+    int startSeconds = 0;
+    int durationSeconds = 120;
+    bool fullTrack = false;
+    double keyWeight = 1.0;
+};
+
+MusicAnalysisWindow ChooseMusicAnalysisWindow(double durationSeconds, bool preferFullTrack)
+{
+    constexpr int kFullTrackLimitSeconds = 8 * 60;
+    constexpr int kEssentiaSampleSeconds = 4 * 60;
+    constexpr int kFallbackSampleSeconds = 3 * 60;
+    const int maxSampleSeconds = preferFullTrack ? kEssentiaSampleSeconds : kFallbackSampleSeconds;
+
+    if (durationSeconds <= 0.0)
+    {
+        return { 0, maxSampleSeconds, false };
+    }
+
+    const int roundedDuration = std::max(1, static_cast<int>(durationSeconds + 0.5));
+    if (preferFullTrack && roundedDuration <= kFullTrackLimitSeconds)
+    {
+        return { 0, roundedDuration, true };
+    }
+
+    const int sampleSeconds = std::min(maxSampleSeconds, roundedDuration);
+    const int maxStart = std::max(0, roundedDuration - sampleSeconds);
+    int startSeconds = 0;
+    if (maxStart > 0)
+    {
+        const int introBuffer = roundedDuration > 180
+            ? std::max(30, static_cast<int>(roundedDuration * 0.2))
+            : (roundedDuration > 70 ? 10 : 0);
+        startSeconds = std::min(introBuffer, maxStart);
+    }
+
+    return { startSeconds, std::max(1, sampleSeconds), false };
+}
+
+std::wstring EssentiaSourceLabel(const MusicAnalysisWindow& window)
+{
+    return window.fullTrack ? L"Essentia full-track analysis" : L"Essentia sample analysis";
+}
+
+void AddAnalysisWindow(
+    std::vector<MusicAnalysisWindow>& windows,
+    int startSeconds,
+    int durationSeconds,
+    int trackDurationSeconds,
+    bool fullTrack,
+    double keyWeight)
+{
+    if (durationSeconds < 20)
+    {
+        return;
+    }
+
+    if (trackDurationSeconds > 0)
+    {
+        durationSeconds = std::min(durationSeconds, trackDurationSeconds);
+        startSeconds = std::clamp(startSeconds, 0, std::max(0, trackDurationSeconds - durationSeconds));
+    }
+    else
+    {
+        startSeconds = std::max(0, startSeconds);
+    }
+
+    for (const MusicAnalysisWindow& window : windows)
+    {
+        if (std::abs(window.startSeconds - startSeconds) <= 8 &&
+            std::abs(window.durationSeconds - durationSeconds) <= 12)
+        {
+            return;
+        }
+    }
+
+    windows.push_back({ startSeconds, std::max(20, durationSeconds), fullTrack, keyWeight });
+}
+
+std::vector<MusicAnalysisWindow> BuildEssentiaAnalysisWindows(double durationSeconds)
+{
+    std::vector<MusicAnalysisWindow> windows;
+    if (durationSeconds <= 0.0)
+    {
+        AddAnalysisWindow(windows, 0, 180, 0, false, 1.0);
+        return windows;
+    }
+
+    const int trackSeconds = std::max(1, static_cast<int>(durationSeconds + 0.5));
+    if (trackSeconds <= 90)
+    {
+        AddAnalysisWindow(windows, 0, trackSeconds, trackSeconds, true, 1.2);
+        return windows;
+    }
+
+    if (trackSeconds <= 300)
+    {
+        AddAnalysisWindow(windows, 0, trackSeconds, trackSeconds, true, 0.9);
+    }
+
+    const int sectionSeconds = trackSeconds <= 240 ? 75 : (trackSeconds <= 480 ? 90 : 120);
+    const std::array<double, 4> fractions { 0.18, 0.42, 0.62, 0.76 };
+    const int sectionCount = trackSeconds <= 300 ? 2 : (trackSeconds <= 480 ? 3 : 4);
+    for (int index = 0; index < sectionCount; ++index)
+    {
+        const int start = static_cast<int>((trackSeconds * fractions[static_cast<size_t>(index)]) + 0.5);
+        const double weight = index == 0 ? 1.0 : (index == 1 ? 1.25 : 1.1);
+        AddAnalysisWindow(windows, start, sectionSeconds, trackSeconds, false, weight);
+    }
+
+    return windows;
+}
+
+std::wstring FormatEssentiaKey(const std::wstring& key, const std::wstring& scale)
+{
+    std::wstring cleanKey = TrimCopy(key);
+    std::wstring cleanScale = ToLower(TrimCopy(scale));
+    if (cleanKey.empty() || ToLower(cleanKey) == L"none")
+    {
+        return {};
+    }
+    if (cleanScale.empty() || cleanScale == L"none")
+    {
+        return cleanKey;
+    }
+    return cleanKey + L" " + cleanScale;
+}
+
+std::optional<LocalMusicAnalysis> ParseEssentiaMusicJson(const std::wstring& json)
+{
+    if (json.empty())
+    {
+        return std::nullopt;
+    }
+
+    LocalMusicAnalysis analysis;
+    if (auto rhythm = JsonObjectValue(json, L"rhythm"))
+    {
+        if (auto bpm = JsonNumberValue(*rhythm, L"bpm"))
+        {
+            analysis.bpmValue = *bpm;
+            analysis.bpm = BpmLabel(*bpm);
+        }
+    }
+    if (analysis.bpm.empty())
+    {
+        if (auto bpm = JsonNumberValue(json, L"rhythm.bpm"))
+        {
+            analysis.bpmValue = *bpm;
+            analysis.bpm = BpmLabel(*bpm);
+        }
+        else if (auto bpmValue = FirstJsonStringOrNumberValue(json, { L"bpm" }))
+        {
+            analysis.bpm = *bpmValue;
+        }
+    }
+
+    if (auto tonal = JsonObjectValue(json, L"tonal"))
+    {
+        std::wstring bestKey;
+        const std::array<std::wstring, 4> keyAlgorithms {
+            L"key_edma",
+            L"key_krumhansl",
+            L"key_temperley",
+            L"key"
+        };
+
+        struct KeyCandidate
+        {
+            std::wstring label;
+            double strength = 0.0;
+            size_t preference = 0;
+        };
+        std::vector<KeyCandidate> candidates;
+
+        for (size_t index = 0; index < keyAlgorithms.size(); ++index)
+        {
+            const std::wstring& algorithm = keyAlgorithms[index];
+            if (auto keyObject = JsonObjectValue(*tonal, algorithm))
+            {
+                const std::wstring key = JsonStringValue(*keyObject, L"key").value_or(L"");
+                const std::wstring scale = JsonStringValue(*keyObject, L"scale").value_or(L"");
+                const double strength = JsonNumberValue(*keyObject, L"strength").value_or(0.0);
+                const std::wstring label = FormatEssentiaKey(key, scale);
+                if (!label.empty())
+                {
+                    candidates.push_back({ label, std::max(0.0, strength), index });
+                }
+            }
+        }
+
+        int bestVotes = 0;
+        double bestStrength = -1.0;
+        size_t bestPreference = keyAlgorithms.size();
+        for (const KeyCandidate& candidate : candidates)
+        {
+            const std::wstring normalizedLabel = ToLower(candidate.label);
+            int votes = 0;
+            double totalStrength = 0.0;
+            size_t preference = keyAlgorithms.size();
+            for (const KeyCandidate& other : candidates)
+            {
+                if (ToLower(other.label) == normalizedLabel)
+                {
+                    ++votes;
+                    totalStrength += other.strength;
+                    preference = std::min(preference, other.preference);
+                }
+            }
+
+            if (votes > bestVotes ||
+                (votes == bestVotes && preference < bestPreference) ||
+                (votes == bestVotes && preference == bestPreference && totalStrength > bestStrength))
+            {
+                bestVotes = votes;
+                bestStrength = totalStrength;
+                bestPreference = preference;
+                bestKey = candidate.label;
+            }
+        }
+
+        if (bestKey.empty())
+        {
+            const std::wstring key = JsonStringValue(*tonal, L"chords_key").value_or(L"");
+            const std::wstring scale = JsonStringValue(*tonal, L"chords_scale").value_or(L"");
+            bestKey = FormatEssentiaKey(key, scale);
+            if (!bestKey.empty())
+            {
+                bestVotes = 1;
+                bestStrength = 0.35;
+            }
+        }
+
+        analysis.musicalKey = bestKey;
+        analysis.keyVotes = bestKey.empty() ? 0 : bestVotes;
+        analysis.keyStrength = bestKey.empty() ? 0.0 : std::max(0.0, bestStrength);
+        analysis.keyCandidateCount = static_cast<int>(candidates.size());
+    }
+
+    if (analysis.bpm.empty() && analysis.musicalKey.empty())
+    {
+        return std::nullopt;
+    }
+
+    analysis.source = L"Essentia analysis";
+    return analysis;
+}
+
+std::optional<int> KeyNameToSemitone(std::wstring keyName)
+{
+    keyName = ToLower(TrimCopy(keyName));
+    if (keyName == L"c" || keyName == L"b#") return 0;
+    if (keyName == L"c#" || keyName == L"db") return 1;
+    if (keyName == L"d") return 2;
+    if (keyName == L"d#" || keyName == L"eb") return 3;
+    if (keyName == L"e" || keyName == L"fb") return 4;
+    if (keyName == L"f" || keyName == L"e#") return 5;
+    if (keyName == L"f#" || keyName == L"gb") return 6;
+    if (keyName == L"g") return 7;
+    if (keyName == L"g#" || keyName == L"ab") return 8;
+    if (keyName == L"a") return 9;
+    if (keyName == L"a#" || keyName == L"bb") return 10;
+    if (keyName == L"b" || keyName == L"cb") return 11;
+    return std::nullopt;
+}
+
+struct ParsedKeyLabel
+{
+    int semitone = 0;
+    bool minor = false;
+};
+
+std::optional<ParsedKeyLabel> ParseKeyLabel(const std::wstring& label)
+{
+    const std::wstring trimmed = TrimCopy(label);
+    const std::wstring lower = ToLower(trimmed);
+    const bool isMinor = lower.find(L"minor") != std::wstring::npos;
+    const bool isMajor = lower.find(L"major") != std::wstring::npos;
+    if (!isMinor && !isMajor)
+    {
+        return std::nullopt;
+    }
+
+    const size_t separator = trimmed.find(L' ');
+    const std::wstring keyName = separator == std::wstring::npos ? trimmed : trimmed.substr(0, separator);
+    if (auto semitone = KeyNameToSemitone(keyName))
+    {
+        return ParsedKeyLabel { *semitone, isMinor };
+    }
+    return std::nullopt;
+}
+
+bool AreRelativeKeys(const std::wstring& left, const std::wstring& right)
+{
+    const auto first = ParseKeyLabel(left);
+    const auto second = ParseKeyLabel(right);
+    if (!first || !second || first->minor == second->minor)
+    {
+        return false;
+    }
+
+    if (!first->minor)
+    {
+        return second->semitone == ((first->semitone + 9) % 12);
+    }
+    return second->semitone == ((first->semitone + 3) % 12);
+}
+
+struct KeyVoteSummary
+{
+    std::wstring label;
+    double score = 0.0;
+    int sections = 0;
+};
+
+std::wstring ConfidenceLabel(const KeyVoteSummary& best, double secondScore, int totalSections)
+{
+    const double ratio = secondScore > 0.0 ? best.score / secondScore : 99.0;
+    if (best.sections >= std::max(2, totalSections - 1) && ratio >= 1.35)
+    {
+        return L"high confidence";
+    }
+    if (best.sections >= 2 || ratio >= 1.2)
+    {
+        return L"medium confidence";
+    }
+    return L"low confidence";
+}
+
+std::optional<LocalMusicAnalysis> CombineEssentiaAnalyses(const std::vector<LocalMusicAnalysis>& analyses)
+{
+    if (analyses.empty())
+    {
+        return std::nullopt;
+    }
+
+    LocalMusicAnalysis combined;
+    std::vector<double> bpms;
+    std::map<std::wstring, KeyVoteSummary> keyVotes;
+
+    for (const LocalMusicAnalysis& analysis : analyses)
+    {
+        if (analysis.bpmValue > 0.0)
+        {
+            bpms.push_back(NormalizeBpm(analysis.bpmValue));
+        }
+
+        if (!analysis.musicalKey.empty())
+        {
+            const std::wstring normalizedKey = ToLower(analysis.musicalKey);
+            KeyVoteSummary& vote = keyVotes[normalizedKey];
+            if (vote.label.empty())
+            {
+                vote.label = analysis.musicalKey;
+            }
+
+            const double agreementBonus = std::min(3, std::max(1, analysis.keyVotes)) * 0.18;
+            const double strengthBonus = std::min(2.0, std::max(0.0, analysis.keyStrength)) * 0.22;
+            vote.score += analysis.keyWeight * (1.0 + agreementBonus + strengthBonus);
+            ++vote.sections;
+        }
+    }
+
+    if (!bpms.empty())
+    {
+        std::sort(bpms.begin(), bpms.end());
+        double bpm = bpms[bpms.size() / 2];
+        if (bpms.size() % 2 == 0)
+        {
+            bpm = (bpms[bpms.size() / 2 - 1] + bpm) / 2.0;
+        }
+        combined.bpmValue = bpm;
+        combined.bpm = BpmLabel(bpm);
+    }
+
+    std::vector<KeyVoteSummary> sortedKeys;
+    for (const auto& [_, vote] : keyVotes)
+    {
+        sortedKeys.push_back(vote);
+    }
+    std::sort(
+        sortedKeys.begin(),
+        sortedKeys.end(),
+        [](const KeyVoteSummary& left, const KeyVoteSummary& right)
+        {
+            if (std::abs(left.score - right.score) > 0.0001)
+            {
+                return left.score > right.score;
+            }
+            return left.sections > right.sections;
+        });
+
+    std::wstring confidence = L"BPM only";
+    if (!sortedKeys.empty())
+    {
+        const KeyVoteSummary& best = sortedKeys.front();
+        const double secondScore = sortedKeys.size() > 1 ? sortedKeys[1].score : 0.0;
+        bool relativeAmbiguity = false;
+        if (sortedKeys.size() > 1 &&
+            sortedKeys[1].score >= best.score * 0.72 &&
+            AreRelativeKeys(best.label, sortedKeys[1].label))
+        {
+            relativeAmbiguity = true;
+        }
+
+        if (relativeAmbiguity)
+        {
+            combined.musicalKey = best.label + L" / " + sortedKeys[1].label;
+            confidence = L"relative key ambiguity";
+        }
+        else
+        {
+            combined.musicalKey = best.label;
+            confidence = ConfidenceLabel(best, secondScore, static_cast<int>(analyses.size()));
+        }
+    }
+
+    if (combined.bpm.empty() && combined.musicalKey.empty())
+    {
+        return std::nullopt;
+    }
+
+    combined.source = L"Essentia deep scan: " + confidence +
+        L" (" + std::to_wstring(analyses.size()) + L" passes)";
+    return combined;
+}
+
+std::optional<LocalMusicAnalysis> AnalyzeMusicWithEssentia(
+    const std::wstring& streamUrl,
+    const ExternalToolStatus& tools,
+    const ProcessRunner& processRunner,
+    const std::atomic_bool& cancelRequested,
+    int sampleStart,
+    int sampleSeconds,
+    const std::wstring& sourceLabel,
+    double keyWeight,
+    bool fullTrack)
+{
+    if (!tools.essentiaFound || cancelRequested.load())
+    {
+        return std::nullopt;
+    }
+
+    const std::filesystem::path wavPath = TemporaryWavAudioPath();
+    const std::filesystem::path jsonPath = TemporaryJsonPath();
+    ProcessResult ffmpegResult = processRunner.Run(
+        tools.ffmpegPath,
+        {
+            L"-y",
+            L"-nostdin",
+            L"-hide_banner",
+            L"-loglevel",
+            L"error",
+            L"-ss",
+            std::to_wstring(sampleStart),
+            L"-i",
+            streamUrl,
+            L"-t",
+            std::to_wstring(sampleSeconds),
+            L"-vn",
+            L"-ac",
+            L"2",
+            L"-ar",
+            L"44100",
+            wavPath.wstring()
+        },
+        cancelRequested,
+        nullptr);
+
+    if (!ffmpegResult.cancelled && ffmpegResult.exitCode == 0)
+    {
+        const ProcessResult essentiaResult = processRunner.Run(
+            tools.essentiaPath,
+            {
+                wavPath.wstring(),
+                jsonPath.wstring()
+            },
+            cancelRequested,
+            nullptr);
+
+        if (!essentiaResult.cancelled && essentiaResult.exitCode == 0)
+        {
+            std::wstring json = ReadTextFileWide(jsonPath);
+            std::error_code cleanupError;
+            std::filesystem::remove(wavPath, cleanupError);
+            std::filesystem::remove(jsonPath, cleanupError);
+            auto analysis = ParseEssentiaMusicJson(json);
+            if (analysis && !sourceLabel.empty())
+            {
+                analysis->source = sourceLabel;
+            }
+            if (analysis)
+            {
+                analysis->keyWeight = keyWeight;
+                analysis->fullTrack = fullTrack;
+            }
+            return analysis;
+        }
+    }
+
+    std::error_code cleanupError;
+    std::filesystem::remove(wavPath, cleanupError);
+    std::filesystem::remove(jsonPath, cleanupError);
+    return std::nullopt;
+}
+
+std::optional<LocalMusicAnalysis> AnalyzeMusicWithEssentiaDeepScan(
+    const std::wstring& streamUrl,
+    const ExternalToolStatus& tools,
+    const ProcessRunner& processRunner,
+    const std::atomic_bool& cancelRequested,
+    double durationSeconds)
+{
+    if (!tools.essentiaFound || cancelRequested.load())
+    {
+        return std::nullopt;
+    }
+
+    const std::vector<MusicAnalysisWindow> windows = BuildEssentiaAnalysisWindows(durationSeconds);
+    std::vector<LocalMusicAnalysis> analyses;
+    for (const MusicAnalysisWindow& window : windows)
+    {
+        if (cancelRequested.load())
+        {
+            return std::nullopt;
+        }
+
+        if (auto analysis = AnalyzeMusicWithEssentia(
+            streamUrl,
+            tools,
+            processRunner,
+            cancelRequested,
+            window.startSeconds,
+            window.durationSeconds,
+            EssentiaSourceLabel(window),
+            window.keyWeight,
+            window.fullTrack))
+        {
+            analyses.push_back(*analysis);
+        }
+    }
+
+    return CombineEssentiaAnalyses(analyses);
+}
+
+std::optional<LocalMusicAnalysis> AnalyzeMusicFromAudioSample(
+    const std::wstring& url,
+    const ExternalToolStatus& tools,
+    const ProcessRunner& processRunner,
+    const std::atomic_bool& cancelRequested,
+    double durationSeconds)
+{
+    if (!tools.ytDlpFound || !tools.ffmpegFound || cancelRequested.load())
+    {
+        return std::nullopt;
+    }
+
+    const ProcessResult streamResult = processRunner.Run(
+        tools.ytDlpPath,
+        {
+            L"--no-warnings",
+            L"--no-playlist",
+            L"-f",
+            L"ba/bestaudio",
+            L"--get-url",
+            url
+        },
+        cancelRequested,
+        nullptr);
+    if (streamResult.cancelled || streamResult.exitCode != 0)
+    {
+        return std::nullopt;
+    }
+
+    const std::wstring streamUrl = FirstHttpLine(streamResult.output);
+    if (streamUrl.empty())
+    {
+        return std::nullopt;
+    }
+
+    if (auto essentiaAnalysis = AnalyzeMusicWithEssentiaDeepScan(
+        streamUrl,
+        tools,
+        processRunner,
+        cancelRequested,
+        durationSeconds))
+    {
+        return essentiaAnalysis;
+    }
+
+    const MusicAnalysisWindow fallbackWindow = ChooseMusicAnalysisWindow(durationSeconds, false);
+    const std::filesystem::path rawPath = TemporaryRawAudioPath();
+
+    ProcessResult ffmpegResult = processRunner.Run(
+        tools.ffmpegPath,
+        {
+            L"-y",
+            L"-nostdin",
+            L"-hide_banner",
+            L"-loglevel",
+            L"error",
+            L"-ss",
+            std::to_wstring(fallbackWindow.startSeconds),
+            L"-i",
+            streamUrl,
+            L"-t",
+            std::to_wstring(fallbackWindow.durationSeconds),
+            L"-vn",
+            L"-ac",
+            L"1",
+            L"-ar",
+            L"22050",
+            L"-f",
+            L"s16le",
+            rawPath.wstring()
+        },
+        cancelRequested,
+        nullptr);
+    if (ffmpegResult.cancelled || ffmpegResult.exitCode != 0)
+    {
+        std::error_code cleanupError;
+        std::filesystem::remove(rawPath, cleanupError);
+        return std::nullopt;
+    }
+
+    std::vector<float> samples = ReadPcm16Mono(rawPath);
+    std::error_code cleanupError;
+    std::filesystem::remove(rawPath, cleanupError);
+    if (samples.empty() || cancelRequested.load())
+    {
+        return std::nullopt;
+    }
+
+    LocalMusicAnalysis analysis;
+    if (auto bpm = EstimateBpm(samples, 22050))
+    {
+        analysis.bpm = BpmLabel(*bpm);
+    }
+    if (auto musicalKey = EstimateMusicalKey(samples, 22050))
+    {
+        analysis.musicalKey = *musicalKey;
+    }
+
+    if (analysis.bpm.empty() && analysis.musicalKey.empty())
+    {
+        return std::nullopt;
+    }
+
+    analysis.source = L"Built-in local estimate";
+    return analysis;
 }
 
 std::wstring ExtensionFor(MediaOutputFormat format)
@@ -611,6 +2067,60 @@ bool SupportedPlatformRegistry::IsSupportedUrl(const std::wstring& url)
     return DetectPlatform(url) != MediaPlatform::Unknown;
 }
 
+bool SupportedPlatformRegistry::IsLikelyDirectMediaUrl(const std::wstring& url)
+{
+    const MediaPlatform platform = DetectPlatform(url);
+    if (platform == MediaPlatform::Unknown)
+    {
+        return false;
+    }
+
+    const std::wstring lower = ToLower(url);
+    const std::wstring path = UrlPathOnly(url);
+    const std::vector<std::wstring> segments = UrlPathSegments(url);
+
+    if (platform == MediaPlatform::YouTube)
+    {
+        if (lower.find(L"youtu.be/") != std::wstring::npos)
+        {
+            return !segments.empty();
+        }
+        if (path == L"/watch")
+        {
+            return UrlQueryHasParameter(url, L"v");
+        }
+        if (!segments.empty() &&
+            (segments[0] == L"shorts" || segments[0] == L"live" || segments[0] == L"embed"))
+        {
+            return segments.size() >= 2 && !segments[1].empty();
+        }
+        return false;
+    }
+
+    if (platform == MediaPlatform::SoundCloud)
+    {
+        if (segments.size() < 2)
+        {
+            return false;
+        }
+
+        const std::wstring& section = segments[1];
+        if (section == L"sets" ||
+            section == L"albums" ||
+            section == L"tracks" ||
+            section == L"likes" ||
+            section == L"reposts" ||
+            section == L"popular-tracks")
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 std::wstring SupportedPlatformRegistry::PlatformLabel(MediaPlatform platform)
 {
     switch (platform)
@@ -658,6 +2168,26 @@ ExternalToolStatus ExternalToolService::CheckTools() const
     {
         status.ffmpegFound = true;
         status.ffmpegPath = *ffmpegNoExtension;
+    }
+
+    if (const auto essentia = FindBesideExecutable({
+        L"tools\\essentia_streaming_extractor_music.exe",
+        L"tools\\essentia\\essentia_streaming_extractor_music.exe",
+        L"essentia_streaming_extractor_music.exe"
+    }))
+    {
+        status.essentiaFound = true;
+        status.essentiaPath = *essentia;
+    }
+    else if (const auto essentiaOnPath = FindOnPath(L"essentia_streaming_extractor_music.exe"))
+    {
+        status.essentiaFound = true;
+        status.essentiaPath = *essentiaOnPath;
+    }
+    else if (const auto essentiaNoExtension = FindOnPath(L"essentia_streaming_extractor_music"))
+    {
+        status.essentiaFound = true;
+        status.essentiaPath = *essentiaNoExtension;
     }
 
     return status;
@@ -805,6 +2335,12 @@ std::optional<MediaDownloadJob> MediaMetadataService::Analyze(
         return std::nullopt;
     }
 
+    if (!SupportedPlatformRegistry::IsLikelyDirectMediaUrl(url))
+    {
+        errorMessage = L"That link looks like a profile, channel, playlist, or collection. Please paste a direct YouTube video or SoundCloud track link.";
+        return std::nullopt;
+    }
+
     if (!tools.ytDlpFound)
     {
         errorMessage = L"yt-dlp must be installed and available on PATH.";
@@ -828,7 +2364,14 @@ std::optional<MediaDownloadJob> MediaMetadataService::Analyze(
 
     if (result.exitCode != 0)
     {
-        errorMessage = result.output.empty() ? L"Could not analyze this URL." : result.output;
+        const MediaPlatform platform = SupportedPlatformRegistry::DetectPlatform(url);
+        errorMessage = FriendlyExternalToolMessage(result.output, platform, L"Could not analyze this URL.");
+        return std::nullopt;
+    }
+
+    if (LooksLikeCollectionMetadata(result.output))
+    {
+        errorMessage = L"That link looks like a profile, channel, playlist, or collection. Please paste a direct YouTube video or SoundCloud track link.";
         return std::nullopt;
     }
 
@@ -838,7 +2381,10 @@ std::optional<MediaDownloadJob> MediaMetadataService::Analyze(
     job.title = JsonStringValue(result.output, L"title").value_or(L"Untitled media");
     job.uploader = JsonStringValue(result.output, L"uploader").value_or(JsonStringValue(result.output, L"channel").value_or(L"Unknown"));
     job.thumbnailUrl = JsonStringValue(result.output, L"thumbnail").value_or(L"");
-    if (const auto duration = JsonNumberValue(result.output, L"duration"))
+    const auto duration = JsonNumberValue(result.output, L"duration");
+    const double durationSeconds = duration.value_or(0.0);
+    job.durationSeconds = durationSeconds;
+    if (duration)
     {
         job.duration = DurationLabel(*duration);
     }
@@ -867,6 +2413,12 @@ std::optional<MediaDownloadJob> MediaMetadataService::Analyze(
         job.mediaType = job.platform == MediaPlatform::YouTube ? MediaType::Video : MediaType::Unknown;
     }
 
+    if (!duration && job.mediaType == MediaType::Unknown)
+    {
+        errorMessage = L"That link does not appear to be a direct downloadable media item. Please paste a YouTube video or SoundCloud track link.";
+        return std::nullopt;
+    }
+
     job.status = MediaDownloadStatus::Ready;
     return job;
 }
@@ -883,6 +2435,55 @@ std::optional<MediaDownloadJob> MediaDownloadService::Analyze(
 {
     const ExternalToolStatus tools = CheckExternalTools();
     return metadataService_.Analyze(url, tools, cancelRequested, errorMessage);
+}
+
+MediaDownloadJob MediaDownloadService::AnalyzeMusic(
+    MediaDownloadJob job,
+    const std::atomic_bool& cancelRequested,
+    std::wstring& errorMessage) const
+{
+    if (!SupportedPlatformRegistry::IsSupportedUrl(job.url) ||
+        !SupportedPlatformRegistry::IsLikelyDirectMediaUrl(job.url))
+    {
+        job.status = MediaDownloadStatus::Ready;
+        errorMessage = L"Analyze a direct YouTube video or SoundCloud track first.";
+        job.errorMessage = errorMessage;
+        return job;
+    }
+
+    const ExternalToolStatus tools = CheckExternalTools();
+    const std::wstring missingTools = JoinMissingToolsMessage(tools);
+    if (!missingTools.empty())
+    {
+        job.status = MediaDownloadStatus::Ready;
+        errorMessage = missingTools;
+        job.errorMessage = errorMessage;
+        return job;
+    }
+
+    if (auto analysis = AnalyzeMusicFromAudioSample(job.url, tools, processRunner_, cancelRequested, job.durationSeconds))
+    {
+        if (!analysis->musicalKey.empty())
+        {
+            job.musicalKey = analysis->musicalKey;
+        }
+        if (!analysis->bpm.empty())
+        {
+            job.bpm = analysis->bpm;
+        }
+        job.musicMetadataSource = analysis->source.empty() ? L"Local estimate" : analysis->source;
+        job.errorMessage.clear();
+    }
+    else
+    {
+        errorMessage = cancelRequested.load()
+            ? L"Music analysis cancelled."
+            : L"Could not estimate BPM/key from this audio.";
+        job.errorMessage = errorMessage;
+    }
+
+    job.status = MediaDownloadStatus::Ready;
+    return job;
 }
 
 MediaDownloadJob MediaDownloadService::Download(
@@ -904,6 +2505,13 @@ MediaDownloadJob MediaDownloadService::Download(
     {
         job.status = MediaDownloadStatus::Failed;
         job.errorMessage = L"Unsupported URL. Please enter a YouTube or SoundCloud link.";
+        return job;
+    }
+
+    if (!SupportedPlatformRegistry::IsLikelyDirectMediaUrl(job.url))
+    {
+        job.status = MediaDownloadStatus::Failed;
+        job.errorMessage = L"That link looks like a profile, channel, playlist, or collection. Please paste a direct YouTube video or SoundCloud track link.";
         return job;
     }
 
@@ -1001,7 +2609,7 @@ MediaDownloadJob MediaDownloadService::Download(
     if (result.exitCode != 0)
     {
         job.status = MediaDownloadStatus::Failed;
-        job.errorMessage = result.output.empty() ? L"Download failed." : result.output;
+        job.errorMessage = FriendlyExternalToolMessage(result.output, job.platform, L"Download failed.");
         return job;
     }
 

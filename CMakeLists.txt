@@ -31,6 +31,7 @@ target_link_libraries(RexToolkit PRIVATE
     UxTheme
     Windowscodecs
     Winhttp
+    Wininet
     Winmm
     Urlmon
 )
@@ -54,6 +55,27 @@ if (EXISTS "${BUNDLED_FFMPEG}")
             "${BUNDLED_FFMPEG}"
             "$<TARGET_FILE_DIR:RexToolkit>/tools/ffmpeg.exe"
         COMMENT "Copying bundled FFmpeg"
+    )
+endif()
+
+set(BUNDLED_ESSENTIA "${CMAKE_CURRENT_SOURCE_DIR}/tools/essentia_streaming_extractor_music.exe")
+if (EXISTS "${BUNDLED_ESSENTIA}")
+    add_custom_command(TARGET RexToolkit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RexToolkit>/tools"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${BUNDLED_ESSENTIA}"
+            "$<TARGET_FILE_DIR:RexToolkit>/tools/essentia_streaming_extractor_music.exe"
+        COMMENT "Copying bundled Essentia music extractor"
+    )
+endif()
+
+set(BUNDLED_ESSENTIA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tools/essentia")
+if (EXISTS "${BUNDLED_ESSENTIA_DIR}")
+    add_custom_command(TARGET RexToolkit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${BUNDLED_ESSENTIA_DIR}"
+            "$<TARGET_FILE_DIR:RexToolkit>/tools/essentia"
+        COMMENT "Copying bundled Essentia folder"
     )
 endif()
 

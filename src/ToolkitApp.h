@@ -42,6 +42,12 @@ enum class OutputMouseButton
     Middle
 };
 
+enum class OutputInputKind
+{
+    Keyboard,
+    MouseButton
+};
+
 enum class ActivationInputKind
 {
     Keyboard,
@@ -103,7 +109,11 @@ enum class ClockFormat
 enum class AppTheme
 {
     Dark,
-    Light
+    Light,
+    Midnight,
+    Forest,
+    Rose,
+    HighContrast
 };
 
 struct ToolDefinition
@@ -121,7 +131,13 @@ struct AutoClickerState
     ActivationInputKind activationKind = ActivationInputKind::Keyboard;
     UINT activationKey = VK_F6;
     ActivationMouseButton activationMouseButton = ActivationMouseButton::X1;
+    OutputInputKind outputKind = OutputInputKind::MouseButton;
+    UINT outputKey = VK_SPACE;
     OutputMouseButton outputButton = OutputMouseButton::Left;
+    OutputInputKind alternateOutputKind = OutputInputKind::MouseButton;
+    UINT alternateOutputKey = VK_RETURN;
+    OutputMouseButton alternateOutputButton = OutputMouseButton::Right;
+    bool alternateOutputEnabled = false;
     bool running = false;
 };
 
@@ -153,6 +169,8 @@ private:
     void LoadLogoResource();
     std::unique_ptr<Gdiplus::Bitmap> LoadPngResource(int resourceId) const;
     void LoadToolIconResources();
+    std::unique_ptr<Gdiplus::Bitmap> CreateTintedBitmap(Gdiplus::Bitmap* bitmap, COLORREF tint) const;
+    void RefreshTintedIconResources();
     void LoadFavorites();
     void SaveFavorites() const;
     void LoadWindowSettings();
@@ -185,6 +203,7 @@ private:
     void PaintBitmap(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds);
     void PaintBitmapTinted(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds, COLORREF tint);
     void PaintBitmapCover(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds, int radius);
+    void PaintResizePlaceholder(HDC hdc);
     void PaintContent(HDC hdc);
     void PaintNavItem(HDC hdc, const RECT& bounds, const wchar_t* label, bool selected);
     void PaintEmptyState(HDC hdc, const wchar_t* title, const wchar_t* subtitle);
@@ -209,12 +228,14 @@ private:
     void OnLeftButtonUp(POINT point);
     void OnMouseWheel(int delta, POINT screenPoint);
     void OnMouseButtonForBinding(OutputMouseButton button);
+    void OnKeyboardForOutputBinding(UINT virtualKey);
     void OnMouseButtonForActivationBinding(ActivationMouseButton button);
     void UpdateAutoClickerSpeedFromPoint(int x);
     void SetAutoClickerRunning(bool running);
     void UpdateAutoClickerTimer();
     void AutoClickerLoop();
     void PerformAutoClick();
+    void PaintCheckbox(HDC hdc, const RECT& bounds, bool checked, const wchar_t* label);
     void SetActivationKey(UINT virtualKey);
     void SetActivationMouseButton(ActivationMouseButton button);
     void AddFilesToConverterQueue(const std::vector<std::filesystem::path>& paths);
@@ -239,6 +260,7 @@ private:
     void BrowseMediaOutputFolder();
     void BrowseDefaultOutputFolder();
     void AnalyzeMediaUrl();
+    void StartMediaMusicAnalysis();
     void StartMediaDownload();
     void CancelMediaDownload();
     void FinishMediaThread();
@@ -261,8 +283,10 @@ private:
     void CreateAnimeTrackerControls();
     void UpdateAnimeTrackerControls();
     void StartAnimeSearch(bool appendResults);
+    void StartAnimeImport();
     void FinishAnimeThread();
     void ApplyAnimeSearchResponse(const AnimeSearchResponse& response, const std::wstring& message, bool appendResults);
+    void ApplyAnimeImportResult(const AnimeImportResult& result, const std::wstring& userName, const std::wstring& message);
     void AddAnimeFromSearch(size_t index);
     void AddAnimeFromRelation(size_t index);
     void RefreshAnimeEntry(size_t index);
@@ -328,6 +352,11 @@ private:
     std::unique_ptr<Gdiplus::Bitmap> mediaDownloaderIcon_;
     std::unique_ptr<Gdiplus::Bitmap> allToolsIcon_;
     std::unique_ptr<Gdiplus::Bitmap> settingsIcon_;
+    std::unique_ptr<Gdiplus::Bitmap> autoClickerIconTinted_;
+    std::unique_ptr<Gdiplus::Bitmap> fileConverterIconTinted_;
+    std::unique_ptr<Gdiplus::Bitmap> mediaDownloaderIconTinted_;
+    std::unique_ptr<Gdiplus::Bitmap> allToolsIconTinted_;
+    std::unique_ptr<Gdiplus::Bitmap> settingsIconTinted_;
     HHOOK keyboardHook_ = nullptr;
     HHOOK mouseHook_ = nullptr;
     Page currentPage_ = Page::Favorites;
@@ -351,6 +380,7 @@ private:
     std::map<std::wstring, std::unique_ptr<Gdiplus::Bitmap>> animeCoverCache_;
     std::vector<ImageFormat> supportedOutputFormats_;
     int selectedConversionJob_ = -1;
+    int selectedAnimeSearchIndex_ = -1;
     std::wstring fileConverterSummary_;
     bool fileConverterConverting_ = false;
     std::thread conversionThread_;
@@ -364,8 +394,16 @@ private:
     std::condition_variable autoClickCondition_;
     std::atomic_bool autoClickThreadStop_ = true;
     std::atomic<int> autoClickerCps_ = 8;
+    std::atomic<int> autoClickerOutputKind_ = static_cast<int>(OutputInputKind::MouseButton);
+    std::atomic<unsigned int> autoClickerOutputKey_ = VK_SPACE;
     std::atomic<int> autoClickerOutputButton_ = static_cast<int>(OutputMouseButton::Left);
+    std::atomic<int> autoClickerAlternateOutputKind_ = static_cast<int>(OutputInputKind::MouseButton);
+    std::atomic<unsigned int> autoClickerAlternateOutputKey_ = VK_RETURN;
+    std::atomic<int> autoClickerAlternateOutputButton_ = static_cast<int>(OutputMouseButton::Right);
+    std::atomic_bool autoClickerAlternateOutputEnabled_ = false;
+    std::atomic_bool autoClickerUseAlternateNext_ = false;
     bool mediaAnalyzing_ = false;
+    bool mediaMusicAnalyzing_ = false;
     bool mediaDownloading_ = false;
     std::wstring mediaStatusText_;
     UpdateCheckResult updateResult_;
@@ -373,6 +411,7 @@ private:
     bool updateInstalling_ = false;
     bool animeSearching_ = false;
     bool animeRefreshing_ = false;
+    bool animeImporting_ = false;
     bool animeSearchHasRun_ = false;
     bool animeCanLoadMore_ = false;
     bool animeAppendSearch_ = false;
@@ -400,6 +439,8 @@ private:
     RECT startStopButtonRect_ {};
     RECT activationKeyButtonRect_ {};
     RECT outputButtonButtonRect_ {};
+    RECT alternateOutputToggleRect_ {};
+    RECT alternateOutputButtonRect_ {};
     RECT speedSliderTrackRect_ {};
     RECT speedSliderThumbRect_ {};
     RECT converterDropZoneRect_ {};
@@ -421,6 +462,8 @@ private:
     RECT mediaAnalyzeButtonRect_ {};
     RECT mediaClearButtonRect_ {};
     RECT mediaMetadataRect_ {};
+    RECT mediaMusicPanelRect_ {};
+    RECT mediaMusicAnalyzeButtonRect_ {};
     RECT mediaFormatButtonRect_ {};
     RECT mediaQualityButtonRect_ {};
     RECT mediaOutputFolderRect_ {};
@@ -450,12 +493,17 @@ private:
     RECT animeSearchEditRect_ {};
     RECT animeSearchButtonRect_ {};
     RECT animeLoadMoreButtonRect_ {};
+    RECT animeSearchDetailBackButtonRect_ {};
+    RECT animeSearchDetailAddButtonRect_ {};
+    RECT animeSearchDetailOpenButtonRect_ {};
     RECT animeResultsRect_ {};
     RECT animeListRect_ {};
     RECT animeUpcomingRect_ {};
     RECT animeSequelsRect_ {};
     RECT animeRefreshAllButtonRect_ {};
     RECT animeFilterButtonRect_ {};
+    RECT animeImportEditRect_ {};
+    RECT animeImportButtonRect_ {};
     RECT animeStatusButtonRect_ {};
     RECT animeEpisodeMinusButtonRect_ {};
     RECT animeEpisodePlusButtonRect_ {};
@@ -478,6 +526,7 @@ private:
     HWND mediaUrlEdit_ = nullptr;
     HWND mediaFileNameEdit_ = nullptr;
     HWND animeSearchEdit_ = nullptr;
+    HWND animeImportEdit_ = nullptr;
     HWND animeNotesEdit_ = nullptr;
     HBRUSH editBackgroundBrush_ = nullptr;
     HDC backBufferDc_ = nullptr;
@@ -486,11 +535,15 @@ private:
     SIZE backBufferSize_ {};
     int hoverNavIndex_ = -1;
     int hoverToolIndex_ = -1;
+    int hoverAnimeSearchResultIndex_ = -1;
     bool speedSliderDragging_ = false;
     bool converterQualityDragging_ = false;
     bool scrollBarDragging_ = false;
+    bool liveResize_ = false;
+    bool resizeLayoutPending_ = false;
     int scrollBarDragOffsetY_ = 0;
     int scrollOffsetY_ = 0;
+    int animeSearchResultsScrollOffset_ = 0;
     int maxScrollOffsetY_ = 0;
     int scrollContentHeight_ = 0;
     bool fileConverterAdvancedOpen_ = false;
@@ -498,6 +551,7 @@ private:
     bool testButtonHeld_ = false;
     bool awaitingActivationKey_ = false;
     bool awaitingOutputButton_ = false;
+    bool awaitingAlternateOutputButton_ = false;
 
     HFONT titleFont_ = nullptr;
     HFONT navFont_ = nullptr;

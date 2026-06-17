@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <winhttp.h>
+#include <wininet.h>
 
 #include <algorithm>
 #include <array>
@@ -13,6 +14,7 @@
 #include <fstream>
 #include <iomanip>
 #include <map>
+#include <set>
 #include <sstream>
 #include <system_error>
 
@@ -20,6 +22,23 @@ namespace
 {
 constexpr DWORD kAniListTimeoutMs = 12000;
 constexpr size_t kMaxAniListResponseBytes = 4 * 1024 * 1024;
+
+std::wstring AniListHttpErrorMessage(DWORD statusCode)
+{
+    if (statusCode == 400)
+    {
+        return L"AniList rejected the search request. Please try again in a moment.";
+    }
+    if (statusCode == 403)
+    {
+        return L"AniList blocked the request. Please try again later.";
+    }
+    if (statusCode >= 500)
+    {
+        return L"AniList is having trouble right now. Please try again later.";
+    }
+    return L"AniList returned HTTP " + std::to_wstring(statusCode) + L". Please try again later.";
+}
 
 struct WinHttpHandle
 {
@@ -42,6 +61,143 @@ struct WinHttpHandle
         return handle;
     }
 };
+
+struct InternetHandle
+{
+    HINTERNET handle = nullptr;
+
+    explicit InternetHandle(HINTERNET value = nullptr) : handle(value) {}
+    ~InternetHandle()
+    {
+        if (handle)
+        {
+            InternetCloseHandle(handle);
+        }
+    }
+
+    InternetHandle(const InternetHandle&) = delete;
+    InternetHandle& operator=(const InternetHandle&) = delete;
+
+    operator HINTERNET() const
+    {
+        return handle;
+    }
+};
+
+bool ReadInternetResponse(HINTERNET request, std::string& responseBody, std::wstring& errorMessage)
+{
+    responseBody.clear();
+    for (;;)
+    {
+        char buffer[8192] {};
+        DWORD read = 0;
+        if (!InternetReadFile(request, buffer, static_cast<DWORD>(sizeof(buffer)), &read))
+        {
+            errorMessage = L"Could not read the AniList response.";
+            return false;
+        }
+        if (read == 0)
+        {
+            break;
+        }
+        if (responseBody.size() + read > kMaxAniListResponseBytes)
+        {
+            errorMessage = L"AniList returned too much data. Try a narrower search.";
+            return false;
+        }
+        responseBody.append(buffer, buffer + read);
+    }
+    return true;
+}
+
+bool ExecuteGraphQlWithWinInet(const std::string& requestBody, std::string& responseBody, std::wstring& errorMessage)
+{
+    InternetHandle session(InternetOpenW(
+        L"RexToolkitAnimeTracker/1.0",
+        INTERNET_OPEN_TYPE_PRECONFIG,
+        nullptr,
+        nullptr,
+        0));
+    if (!session)
+    {
+        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
+        return false;
+    }
+
+    DWORD timeout = kAniListTimeoutMs;
+    InternetSetOptionW(session, INTERNET_OPTION_CONNECT_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOptionW(session, INTERNET_OPTION_SEND_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOptionW(session, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
+
+    InternetHandle connection(InternetConnectW(
+        session,
+        L"graphql.anilist.co",
+        INTERNET_DEFAULT_HTTPS_PORT,
+        nullptr,
+        nullptr,
+        INTERNET_SERVICE_HTTP,
+        0,
+        0));
+    if (!connection)
+    {
+        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
+        return false;
+    }
+
+    const wchar_t* acceptTypes[] = { L"application/json", nullptr };
+    InternetHandle request(HttpOpenRequestW(
+        connection,
+        L"POST",
+        L"/",
+        nullptr,
+        nullptr,
+        acceptTypes,
+        INTERNET_FLAG_SECURE | INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE,
+        0));
+    if (!request)
+    {
+        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
+        return false;
+    }
+
+    const wchar_t headers[] = L"Content-Type: application/json\r\nAccept: application/json\r\n";
+    if (!HttpSendRequestW(
+            request,
+            headers,
+            static_cast<DWORD>(-1),
+            const_cast<char*>(requestBody.data()),
+            static_cast<DWORD>(requestBody.size())))
+    {
+        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
+        return false;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusCodeSize = sizeof(statusCode);
+    if (!HttpQueryInfoW(
+            request,
+            HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
+            &statusCode,
+            &statusCodeSize,
+            nullptr))
+    {
+        errorMessage = L"Could not read the AniList response.";
+        return false;
+    }
+
+    if (statusCode == 429)
+    {
+        errorMessage = L"AniList is rate limiting requests. Please wait a moment and try again.";
+        return false;
+    }
+    if (statusCode < 200 || statusCode >= 300)
+    {
+        errorMessage = AniListHttpErrorMessage(statusCode);
+        return false;
+    }
+
+    return ReadInternetResponse(request, responseBody, errorMessage);
+}
 
 std::wstring Utf8ToWide(const std::string& text)
 {
@@ -657,6 +813,77 @@ AnimeRelation ParseRelation(const Json::Value& edgeValue)
     return relation;
 }
 
+AnimePersonInfo ParsePersonInfo(const Json::Value* value)
+{
+    AnimePersonInfo person;
+    if (!value)
+    {
+        return person;
+    }
+
+    person.anilistId = Json::Int(Json::At(*value, "id"));
+    const Json::Value* name = Json::At(*value, "name");
+    if (name)
+    {
+        person.name = Json::String(Json::At(*name, "full"));
+        person.nativeName = Json::String(Json::At(*name, "native"));
+    }
+    const Json::Value* image = Json::At(*value, "image");
+    if (image)
+    {
+        person.imageUrl = ValueOrFallback(Json::String(Json::At(*image, "medium")), Json::String(Json::At(*image, "large")));
+    }
+    person.siteUrl = Json::String(Json::At(*value, "siteUrl"));
+    return person;
+}
+
+AnimeCharacterInfo ParseCharacterInfo(const Json::Value& edgeValue)
+{
+    AnimeCharacterInfo character;
+    character.role = Json::String(Json::At(edgeValue, "role"));
+    character.character = ParsePersonInfo(Json::At(edgeValue, "node"));
+
+    const Json::Value* voiceActors = Json::At(edgeValue, "voiceActors");
+    if (voiceActors && voiceActors->type == Json::Type::Array && !voiceActors->arrayValue.empty())
+    {
+        character.voiceActor = ParsePersonInfo(&voiceActors->arrayValue.front());
+    }
+
+    return character;
+}
+
+std::vector<AnimeScoreBucket> ParseDistribution(const Json::Value* values, const char* labelKey)
+{
+    std::vector<AnimeScoreBucket> buckets;
+    if (!values || values->type != Json::Type::Array)
+    {
+        return buckets;
+    }
+
+    for (const Json::Value& item : values->arrayValue)
+    {
+        AnimeScoreBucket bucket;
+        bucket.amount = Json::Int(Json::At(item, "amount"));
+        if (const Json::Value* label = Json::At(item, labelKey))
+        {
+            if (label->type == Json::Type::String)
+            {
+                bucket.label = Json::String(label);
+            }
+            else if (label->type == Json::Type::Number)
+            {
+                bucket.label = std::to_wstring(Json::Int(label));
+            }
+        }
+        if (!bucket.label.empty() || bucket.amount > 0)
+        {
+            buckets.push_back(std::move(bucket));
+        }
+    }
+
+    return buckets;
+}
+
 AnimeSearchResult ParseMedia(const Json::Value& mediaValue)
 {
     AnimeSearchResult result;
@@ -689,6 +916,9 @@ AnimeSearchResult ParseMedia(const Json::Value& mediaValue)
     result.seasonYear = Json::Int(Json::At(mediaValue, "seasonYear"));
     result.startDate = ParseDate(Json::At(mediaValue, "startDate"));
     result.endDate = ParseDate(Json::At(mediaValue, "endDate"));
+    result.source = Json::String(Json::At(mediaValue, "source"));
+    result.countryOfOrigin = Json::String(Json::At(mediaValue, "countryOfOrigin"));
+    result.hashtag = Json::String(Json::At(mediaValue, "hashtag"));
     result.averageScore = Json::Int(Json::At(mediaValue, "averageScore"));
     result.popularity = Json::Int(Json::At(mediaValue, "popularity"));
     result.siteUrl = Json::String(Json::At(mediaValue, "siteUrl"));
@@ -704,6 +934,60 @@ AnimeSearchResult ParseMedia(const Json::Value& mediaValue)
                 result.genres.push_back(Utf8ToWide(genre.stringValue));
             }
         }
+    }
+
+    const Json::Value* studios = Json::At(mediaValue, "studios");
+    const Json::Value* studioNodes = studios ? Json::At(*studios, "nodes") : nullptr;
+    if (studioNodes && studioNodes->type == Json::Type::Array)
+    {
+        for (const Json::Value& studio : studioNodes->arrayValue)
+        {
+            std::wstring name = Json::String(Json::At(studio, "name"));
+            if (!name.empty())
+            {
+                result.studios.push_back(std::move(name));
+            }
+        }
+    }
+
+    const Json::Value* tags = Json::At(mediaValue, "tags");
+    if (tags && tags->type == Json::Type::Array)
+    {
+        for (const Json::Value& tagValue : tags->arrayValue)
+        {
+            if (Json::Bool(Json::At(tagValue, "isMediaSpoiler")))
+            {
+                continue;
+            }
+            AnimeTagInfo tag;
+            tag.name = Json::String(Json::At(tagValue, "name"));
+            tag.rank = Json::Int(Json::At(tagValue, "rank"));
+            if (!tag.name.empty())
+            {
+                result.tags.push_back(std::move(tag));
+            }
+        }
+    }
+
+    const Json::Value* characters = Json::At(mediaValue, "characters");
+    const Json::Value* characterEdges = characters ? Json::At(*characters, "edges") : nullptr;
+    if (characterEdges && characterEdges->type == Json::Type::Array)
+    {
+        for (const Json::Value& edge : characterEdges->arrayValue)
+        {
+            AnimeCharacterInfo character = ParseCharacterInfo(edge);
+            if (character.character.anilistId != 0 || !character.character.name.empty())
+            {
+                result.characters.push_back(std::move(character));
+            }
+        }
+    }
+
+    const Json::Value* stats = Json::At(mediaValue, "stats");
+    if (stats)
+    {
+        result.scoreDistribution = ParseDistribution(Json::At(*stats, "scoreDistribution"), "score");
+        result.statusDistribution = ParseDistribution(Json::At(*stats, "statusDistribution"), "status");
     }
 
     const Json::Value* relations = Json::At(mediaValue, "relations");
@@ -744,10 +1028,36 @@ std::string AnimeQuery()
       startDate { year month day }
       endDate { year month day }
       genres
+      studios(isMain: true) { nodes { name } }
+      tags { name rank isMediaSpoiler }
+      source
+      countryOfOrigin
+      hashtag
       averageScore
       popularity
       siteUrl
       nextAiringEpisode { airingAt timeUntilAiring episode }
+      stats {
+        scoreDistribution { score amount }
+        statusDistribution { status amount }
+      }
+      characters(sort: [ROLE, RELEVANCE], perPage: 8) {
+        edges {
+          role
+          node {
+            id
+            name { full native }
+            image { medium }
+            siteUrl
+          }
+          voiceActors(language: JAPANESE) {
+            id
+            name { full native }
+            image { medium }
+            siteUrl
+          }
+        }
+      }
       relations {
         edges {
           relationType
@@ -763,6 +1073,54 @@ std::string AnimeQuery()
             coverImage { large medium }
             siteUrl
             nextAiringEpisode { airingAt timeUntilAiring episode }
+          }
+        }
+      }
+    }
+  }
+})";
+}
+
+std::string AnimeImportQuery()
+{
+    return R"(query ($userName: String) {
+  MediaListCollection(userName: $userName, type: ANIME) {
+    lists {
+      name
+      status
+      entries {
+        status
+        progress
+        media {
+          id
+          idMal
+          title { romaji english native userPreferred }
+          coverImage { large medium }
+          format
+          status
+          episodes
+          season
+          seasonYear
+          startDate { year month day }
+          siteUrl
+          nextAiringEpisode { airingAt timeUntilAiring episode }
+          relations {
+            edges {
+              relationType
+              node {
+                id
+                title { userPreferred english romaji }
+                format
+                status
+                episodes
+                season
+                seasonYear
+                startDate { year month day }
+                coverImage { large medium }
+                siteUrl
+                nextAiringEpisode { airingAt timeUntilAiring episode }
+              }
+            }
           }
         }
       }
@@ -791,6 +1149,36 @@ std::string BuildIdBody(int anilistId)
         << "\"perPage\":1"
         << "}}";
     return body.str();
+}
+
+std::string BuildImportBody(const std::wstring& userName)
+{
+    std::ostringstream body;
+    body << "{\"query\":" << JsonEscape(Utf8ToWide(AnimeImportQuery())) << ",\"variables\":{"
+        << "\"userName\":" << JsonEscape(userName)
+        << "}}";
+    return body.str();
+}
+
+AnimeUserStatus UserStatusFromAniListStatus(const std::wstring& status)
+{
+    if (status == L"CURRENT" || status == L"REPEATING")
+    {
+        return AnimeUserStatus::Watching;
+    }
+    if (status == L"COMPLETED")
+    {
+        return AnimeUserStatus::Completed;
+    }
+    if (status == L"PAUSED")
+    {
+        return AnimeUserStatus::OnHold;
+    }
+    if (status == L"DROPPED")
+    {
+        return AnimeUserStatus::Dropped;
+    }
+    return AnimeUserStatus::Planned;
 }
 
 std::string SerializeAiringInfo(const AiringInfo& info, const char* indent)
@@ -987,8 +1375,100 @@ std::optional<AnimeSearchResult> AniListApiClient::FetchAnimeById(int anilistId,
     return ParseMedia(media->arrayValue.front());
 }
 
+AnimeImportResult AniListApiClient::ImportPublicAnimeList(const std::wstring& userName, std::wstring& errorMessage) const
+{
+    AnimeImportResult importResult;
+    std::string responseBody;
+    if (!ExecuteGraphQl(BuildImportBody(userName), responseBody, errorMessage))
+    {
+        return importResult;
+    }
+
+    Json::Value root;
+    Json::Parser parser(responseBody);
+    if (!parser.Parse(root))
+    {
+        errorMessage = L"Could not read the AniList import response.";
+        return importResult;
+    }
+
+    if (Json::At(root, "errors"))
+    {
+        errorMessage = L"Could not import that AniList profile. Make sure the username is correct and the anime list is public.";
+        return importResult;
+    }
+
+    const Json::Value* data = Json::At(root, "data");
+    const Json::Value* collection = data ? Json::At(*data, "MediaListCollection") : nullptr;
+    const Json::Value* lists = collection ? Json::At(*collection, "lists") : nullptr;
+    if (!lists || lists->type != Json::Type::Array)
+    {
+        errorMessage = L"AniList did not return a public anime list for that username.";
+        return importResult;
+    }
+
+    std::set<int> importedIds;
+    for (const Json::Value& listValue : lists->arrayValue)
+    {
+        const std::wstring listStatus = Json::String(Json::At(listValue, "status"));
+        const Json::Value* entries = Json::At(listValue, "entries");
+        if (!entries || entries->type != Json::Type::Array)
+        {
+            continue;
+        }
+
+        for (const Json::Value& entryValue : entries->arrayValue)
+        {
+            const Json::Value* media = Json::At(entryValue, "media");
+            if (!media)
+            {
+                continue;
+            }
+
+            AnimeSearchResult mediaResult = ParseMedia(*media);
+            if (mediaResult.anilistId == 0 || importedIds.find(mediaResult.anilistId) != importedIds.end())
+            {
+                continue;
+            }
+
+            AnimeEntry entry = AnimeTrackerService::EntryFromSearchResult(mediaResult);
+            const std::wstring entryStatus = ValueOrFallback(Json::String(Json::At(entryValue, "status")), listStatus);
+            entry.userStatus = UserStatusFromAniListStatus(entryStatus);
+            entry.currentEpisode = Json::Int(Json::At(entryValue, "progress"));
+            if (entry.totalEpisodes > 0 && entry.currentEpisode > entry.totalEpisodes)
+            {
+                entry.currentEpisode = entry.totalEpisodes;
+            }
+
+            importedIds.insert(mediaResult.anilistId);
+            importResult.entries.push_back(std::move(entry));
+        }
+    }
+
+    importResult.totalEntries = static_cast<int>(importResult.entries.size());
+    if (importResult.entries.empty())
+    {
+        errorMessage = L"That public AniList profile did not have any anime entries to import.";
+    }
+    return importResult;
+}
+
 bool AniListApiClient::ExecuteGraphQl(const std::string& requestBody, std::string& responseBody, std::wstring& errorMessage) const
 {
+    auto tryWinInetFallback = [&]() -> bool
+    {
+        std::wstring fallbackError;
+        if (ExecuteGraphQlWithWinInet(requestBody, responseBody, fallbackError))
+        {
+            errorMessage.clear();
+            return true;
+        }
+        errorMessage = fallbackError.empty()
+            ? L"Could not reach AniList. Check your internet connection and try again."
+            : fallbackError;
+        return false;
+    };
+
     WinHttpHandle session(WinHttpOpen(
         L"RexToolkitAnimeTracker/1.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
@@ -997,8 +1477,7 @@ bool AniListApiClient::ExecuteGraphQl(const std::string& requestBody, std::strin
         0));
     if (!session)
     {
-        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
-        return false;
+        return tryWinInetFallback();
     }
 
     WinHttpSetTimeouts(session, kAniListTimeoutMs, kAniListTimeoutMs, kAniListTimeoutMs, kAniListTimeoutMs);
@@ -1006,8 +1485,7 @@ bool AniListApiClient::ExecuteGraphQl(const std::string& requestBody, std::strin
     WinHttpHandle connection(WinHttpConnect(session, L"graphql.anilist.co", INTERNET_DEFAULT_HTTPS_PORT, 0));
     if (!connection)
     {
-        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
-        return false;
+        return tryWinInetFallback();
     }
 
     WinHttpHandle request(WinHttpOpenRequest(
@@ -1020,8 +1498,7 @@ bool AniListApiClient::ExecuteGraphQl(const std::string& requestBody, std::strin
         WINHTTP_FLAG_SECURE));
     if (!request)
     {
-        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
-        return false;
+        return tryWinInetFallback();
     }
 
     const wchar_t headers[] = L"Content-Type: application/json\r\nAccept: application/json\r\n";
@@ -1035,8 +1512,7 @@ bool AniListApiClient::ExecuteGraphQl(const std::string& requestBody, std::strin
             0) ||
         !WinHttpReceiveResponse(request, nullptr))
     {
-        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
-        return false;
+        return tryWinInetFallback();
     }
 
     DWORD statusCode = 0;
@@ -1049,8 +1525,7 @@ bool AniListApiClient::ExecuteGraphQl(const std::string& requestBody, std::strin
             &statusCodeSize,
             WINHTTP_NO_HEADER_INDEX))
     {
-        errorMessage = L"Could not read the AniList response.";
-        return false;
+        return tryWinInetFallback();
     }
 
     if (statusCode == 429)
@@ -1060,7 +1535,7 @@ bool AniListApiClient::ExecuteGraphQl(const std::string& requestBody, std::strin
     }
     if (statusCode < 200 || statusCode >= 300)
     {
-        errorMessage = L"Could not reach AniList. Check your internet connection and try again.";
+        errorMessage = AniListHttpErrorMessage(statusCode);
         return false;
     }
 
@@ -1279,6 +1754,11 @@ AnimeSearchResponse AnimeTrackerService::SearchAnime(const std::wstring& searchT
 std::optional<AnimeSearchResult> AnimeTrackerService::RefreshAnime(int anilistId, std::wstring& errorMessage) const
 {
     return apiClient_.FetchAnimeById(anilistId, errorMessage);
+}
+
+AnimeImportResult AnimeTrackerService::ImportPublicAnimeList(const std::wstring& userName, std::wstring& errorMessage) const
+{
+    return apiClient_.ImportPublicAnimeList(userName, errorMessage);
 }
 
 AnimeEntry AnimeTrackerService::EntryFromSearchResult(const AnimeSearchResult& result)

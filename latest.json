@@ -1,11 +1,11 @@
 {
-  "latestVersion": "0.3.0",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.3.0/RexsToolkit_v0.3.0.zip",
+  "latestVersion": "0.4.0",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.4.0/RexsToolkit_v0.4.0.zip",
   "releaseNotes": [
-    "Added Anime Tracker with AniList search, local watchlist tracking, episode progress, airing schedules, sequels, cover images, and autosaved notes.",
-    "Added Settings with startup page, default output folder, date/time format, theme switching, updates, and about sections.",
-    "Added light mode and improved global theming for controls, icons, dropdowns, buttons, and scrollbars.",
-    "Improved File Converter, Auto Clicker, and Media Downloader layouts, scrolling behavior, and input handling.",
-    "Reduced repaint work for the live clock to avoid once-per-second UI stutter."
+    "Added public AniList import for Anime Tracker using a username or profile link, with safe merging that keeps local notes and favorites.",
+    "Expanded Anime Tracker details with richer search results, detail pages, characters, voice actors, score/status data, episodes, and improved watchlist layout.",
+    "Improved Media Downloader validation, metadata display, download actions, and the beta BPM & Key Finder with bundled Essentia support.",
+    "Improved File Converter advanced options layout, queue spacing, drag-and-drop area, and save flow.",
+    "Added Auto Clicker alternating outputs and keyboard output bindings, plus many UI spacing, scrolling, dropdown, theme, and performance improvements."
   ]
 }

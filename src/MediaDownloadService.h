@@ -70,8 +70,10 @@ struct ExternalToolStatus
 {
     bool ytDlpFound = false;
     bool ffmpegFound = false;
+    bool essentiaFound = false;
     std::filesystem::path ytDlpPath;
     std::filesystem::path ffmpegPath;
+    std::filesystem::path essentiaPath;
 };
 
 struct MediaDownloadOptions
@@ -92,7 +94,11 @@ struct MediaDownloadJob
     std::wstring title;
     std::wstring uploader;
     std::wstring duration;
+    double durationSeconds = 0.0;
     std::wstring thumbnailUrl;
+    std::wstring musicalKey;
+    std::wstring bpm;
+    std::wstring musicMetadataSource;
     MediaType mediaType = MediaType::Unknown;
     int maxVideoHeight = 0;
     MediaOutputFormat outputFormat = MediaOutputFormat::Mp4;
@@ -119,6 +125,7 @@ class SupportedPlatformRegistry
 public:
     static MediaPlatform DetectPlatform(const std::wstring& url);
     static bool IsSupportedUrl(const std::wstring& url);
+    static bool IsLikelyDirectMediaUrl(const std::wstring& url);
     static std::wstring PlatformLabel(MediaPlatform platform);
 };
 
@@ -162,6 +169,10 @@ public:
     ExternalToolStatus CheckExternalTools() const;
     std::optional<MediaDownloadJob> Analyze(
         const std::wstring& url,
+        const std::atomic_bool& cancelRequested,
+        std::wstring& errorMessage) const;
+    MediaDownloadJob AnalyzeMusic(
+        MediaDownloadJob job,
         const std::atomic_bool& cancelRequested,
         std::wstring& errorMessage) const;
     MediaDownloadJob Download(

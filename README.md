@@ -47,8 +47,9 @@ The Media Downloader supports authorized YouTube and SoundCloud links and can sa
 
 - `yt-dlp` for metadata and media retrieval
 - `FFmpeg` for merging, audio extraction, and conversion
+- `Essentia` for optional BPM and musical key analysis
 
-`yt-dlp.exe` and `ffmpeg.exe` are bundled with the app and copied to the build output under the `tools` folder. To update either helper later, replace the matching file in `tools`.
+`yt-dlp.exe`, `ffmpeg.exe`, and the Essentia music extractor are bundled with the app and copied to the build output under the `tools` folder. To update a helper later, replace the matching file in `tools`.
 
 The app first looks for bundled media helpers beside the app, then falls back to tools available on `PATH`. If a dependency is missing, it shows a setup message instead of crashing.
 

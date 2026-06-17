@@ -45,6 +45,34 @@ struct AnimeRelation
     AiringInfo nextAiringEpisode;
 };
 
+struct AnimePersonInfo
+{
+    int anilistId = 0;
+    std::wstring name;
+    std::wstring nativeName;
+    std::wstring imageUrl;
+    std::wstring siteUrl;
+};
+
+struct AnimeCharacterInfo
+{
+    AnimePersonInfo character;
+    AnimePersonInfo voiceActor;
+    std::wstring role;
+};
+
+struct AnimeScoreBucket
+{
+    std::wstring label;
+    int amount = 0;
+};
+
+struct AnimeTagInfo
+{
+    std::wstring name;
+    int rank = 0;
+};
+
 struct AnimeSearchResult
 {
     int anilistId = 0;
@@ -64,6 +92,14 @@ struct AnimeSearchResult
     AnimeDate startDate;
     AnimeDate endDate;
     std::vector<std::wstring> genres;
+    std::vector<std::wstring> studios;
+    std::vector<AnimeTagInfo> tags;
+    std::vector<AnimeCharacterInfo> characters;
+    std::vector<AnimeScoreBucket> scoreDistribution;
+    std::vector<AnimeScoreBucket> statusDistribution;
+    std::wstring source;
+    std::wstring countryOfOrigin;
+    std::wstring hashtag;
     int averageScore = 0;
     int popularity = 0;
     std::wstring siteUrl;
@@ -103,6 +139,12 @@ struct AnimeSearchResponse
     bool hasNextPage = false;
 };
 
+struct AnimeImportResult
+{
+    std::vector<AnimeEntry> entries;
+    int totalEntries = 0;
+};
+
 struct AnimeOperationResult
 {
     bool success = false;
@@ -114,6 +156,7 @@ class AniListApiClient
 public:
     AnimeSearchResponse SearchAnime(const std::wstring& searchText, int page, int perPage, std::wstring& errorMessage) const;
     std::optional<AnimeSearchResult> FetchAnimeById(int anilistId, std::wstring& errorMessage) const;
+    AnimeImportResult ImportPublicAnimeList(const std::wstring& userName, std::wstring& errorMessage) const;
 
 private:
     bool ExecuteGraphQl(const std::string& requestBody, std::string& responseBody, std::wstring& errorMessage) const;
@@ -143,6 +186,7 @@ public:
 
     AnimeSearchResponse SearchAnime(const std::wstring& searchText, int page, int perPage, std::wstring& errorMessage) const;
     std::optional<AnimeSearchResult> RefreshAnime(int anilistId, std::wstring& errorMessage) const;
+    AnimeImportResult ImportPublicAnimeList(const std::wstring& userName, std::wstring& errorMessage) const;
 
     static AnimeEntry EntryFromSearchResult(const AnimeSearchResult& result);
     static void ApplyMetadata(AnimeEntry& entry, const AnimeSearchResult& result);
