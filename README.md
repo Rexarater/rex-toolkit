@@ -13,6 +13,8 @@ The current version provides:
 - A real image-focused `File Converter`
 - A media-focused `YouTube & SoundCloud Downloader`
 - An AniList-powered `Anime Tracker`
+- A local `Reminders` tool
+- A `Smart File Transfer` tool with LAN, Direct Host, and manual WebRTC P2P fallback
 - A sectioned Settings page with startup, output folder, clock, theme, update, and about options
 - Empty states where no favorites or tools are available
 - A clear tool registration section for future expansion
@@ -72,6 +74,18 @@ The Anime Tracker lets you search AniList, add anime to a local watchlist, track
 
 It does not require a login, does not scrape streaming sites, and does not include piracy or playback features. Watchlist data is saved locally in `%APPDATA%\RexsToolkit\anime_tracker.json`.
 
+### Reminders
+
+The Reminders tool lets you create, edit, complete, snooze, delete, filter, and sort local reminders. Reminders support title, due date/time, all-day mode, notes, category, priority, recurrence, alert timing, and birthday-style yearly reminders.
+
+When reminders are due soon, due now, or overdue, Rex's Toolkit can show a thin alert banner above the main content with Snooze, Complete, View, and close actions. Reminder data is saved locally in `%APPDATA%\RexToolkit\reminders.json`.
+
+### Smart File Transfer
+
+Smart File Transfer sends selected files directly between Rex's Toolkit users. It tries LAN first, then Direct Host if the sender enables temporary UPnP port mapping. If both direct HTTP routes fail, the app can guide both users through manual WebRTC P2P pairing with sender and receiver response codes.
+
+Manual P2P uses WebRTC data channels through bundled `libdatachannel`, with public STUN servers only. There is no cloud storage, no paid signaling server, and no TURN relay in this version. Files are streamed in chunks and receivers write `.part` files before finalizing completed downloads.
+
 ## Manual Update Checks
 
 Rex's Toolkit checks this file when you click `Check for Updates` on the Settings page:
@@ -119,6 +133,14 @@ cmake --build --preset windows-release
 Open this folder in Visual Studio, then select the `windows-debug` or `windows-release` CMake preset.
 
 If Visual Studio previously configured the project with the wrong generator, delete the old generated `build` folder and reconfigure with one of the presets above.
+
+## Bundled Native Dependencies
+
+- `yt-dlp`, `FFmpeg`, and `Essentia` power the Media Downloader.
+- `libdatachannel` powers Smart File Transfer's manual WebRTC P2P fallback.
+- Static OpenSSL libraries are bundled under `third_party/openssl-x64-windows-static` for the libdatachannel build.
+
+`libdatachannel` is MPL-2.0 licensed. OpenSSL license files are included in the bundled vcpkg package folders under `third_party/openssl-x64-windows-static/share/openssl`.
 
 ## Adding Tools Later
 

@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <ctime>
 #include <cwchar>
 #include <cwctype>
 #include <cstring>
@@ -68,6 +69,18 @@ constexpr UINT kAnimeSearchFinishedMessage = WM_APP + 107;
 constexpr UINT kAnimeRefreshFinishedMessage = WM_APP + 108;
 constexpr UINT kAnimeRefreshAllFinishedMessage = WM_APP + 109;
 constexpr UINT kAnimeImportFinishedMessage = WM_APP + 110;
+constexpr UINT kTrayIconMessage = WM_APP + 130;
+constexpr UINT kExternalLaunchRestoreMessage = WM_APP + 131;
+constexpr UINT kSmartTransferConnectFinishedMessage = WM_APP + 132;
+constexpr UINT kSmartTransferDownloadProgressMessage = WM_APP + 133;
+constexpr UINT kSmartTransferDownloadFinishedMessage = WM_APP + 134;
+constexpr UINT kSmartTransferPairingFinishedMessage = WM_APP + 135;
+constexpr UINT kSmartTransferResponseFinishedMessage = WM_APP + 136;
+constexpr UINT kSmartTransferApplyResponseFinishedMessage = WM_APP + 137;
+constexpr UINT kTrayIconId = 1;
+constexpr UINT kTrayMenuOpenCommand = 45001;
+constexpr UINT kTrayMenuExitCommand = 45002;
+constexpr wchar_t kSingleInstanceMutexName[] = L"Local\\RexToolkitSingleInstance";
 constexpr int kMinClicksPerSecond = 1;
 constexpr int kMaxClicksPerSecond = 100;
 constexpr UINT_PTR kClockTimerId = 1002;
@@ -75,6 +88,10 @@ constexpr UINT_PTR kAnimeNotesAutosaveTimerId = 1003;
 constexpr UINT kAnimeNotesAutosaveDelayMs = 850;
 constexpr UINT_PTR kResizeTimerId = 1004;
 constexpr UINT kResizeRedrawMs = 66;
+constexpr UINT_PTR kReminderTimerId = 1005;
+constexpr UINT kReminderCheckMs = 30000;
+constexpr UINT_PTR kSmartTransferTimerId = 1006;
+constexpr UINT kSmartTransferRefreshMs = 500;
 constexpr int kBackBufferGrowthStep = 256;
 constexpr ULONG_PTR kAutoClickExtraInfo = 0x5254584B;
 constexpr int kAnimeSearchResultCardWidthDip = 216;
@@ -316,6 +333,24 @@ struct AnimeImportThreadResult
     std::wstring userName;
     std::wstring message;
     std::vector<std::pair<std::wstring, std::wstring>> coverFiles;
+};
+
+struct SmartTransferConnectThreadResult
+{
+    SmartTransferConnectResult result;
+};
+
+struct SmartTransferDownloadThreadResult
+{
+    bool success = false;
+    std::wstring message;
+};
+
+struct SmartTransferWebRtcThreadResult
+{
+    bool success = false;
+    std::wstring code;
+    std::wstring message;
 };
 
 class WinHttpScopedHandle
@@ -674,6 +709,117 @@ std::wstring TrimWhitespace(std::wstring value)
     return std::wstring(first, last);
 }
 
+std::wstring LowercaseText(std::wstring value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch)
+    {
+        return static_cast<wchar_t>(towlower(ch));
+    });
+    return value;
+}
+
+std::tm LocalTimeParts(std::chrono::system_clock::time_point value)
+{
+    const std::time_t timeValue = std::chrono::system_clock::to_time_t(value);
+    std::tm local {};
+    localtime_s(&local, &timeValue);
+    return local;
+}
+
+std::wstring DateForEdit(std::chrono::system_clock::time_point value)
+{
+    const std::tm local = LocalTimeParts(value);
+    wchar_t buffer[16] {};
+    wcsftime(buffer, std::size(buffer), L"%Y/%m/%d", &local);
+    return buffer;
+}
+
+std::wstring TimeForEdit(std::chrono::system_clock::time_point value)
+{
+    const std::tm local = LocalTimeParts(value);
+    wchar_t buffer[16] {};
+    wcsftime(buffer, std::size(buffer), L"%I:%M", &local);
+    std::wstring text = buffer;
+    if (!text.empty() && text.front() == L'0')
+    {
+        text.erase(text.begin());
+    }
+    return text;
+}
+
+bool IsPmForEdit(std::chrono::system_clock::time_point value)
+{
+    return LocalTimeParts(value).tm_hour >= 12;
+}
+
+int ReminderDaysInMonth(int year, int month)
+{
+    static constexpr int days[] { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    if (month == 2)
+    {
+        const bool leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+        return leap ? 29 : 28;
+    }
+    if (month < 1 || month > 12)
+    {
+        return 31;
+    }
+    return days[month - 1];
+}
+
+int ReminderFirstWeekday(int year, int month)
+{
+    std::tm local {};
+    local.tm_year = year - 1900;
+    local.tm_mon = month - 1;
+    local.tm_mday = 1;
+    local.tm_isdst = -1;
+    std::mktime(&local);
+    return local.tm_wday;
+}
+
+bool SameReminderLocalDate(
+    std::chrono::system_clock::time_point left,
+    std::chrono::system_clock::time_point right)
+{
+    const std::tm leftLocal = LocalTimeParts(left);
+    const std::tm rightLocal = LocalTimeParts(right);
+    return leftLocal.tm_year == rightLocal.tm_year &&
+        leftLocal.tm_mon == rightLocal.tm_mon &&
+        leftLocal.tm_mday == rightLocal.tm_mday;
+}
+
+std::chrono::system_clock::time_point ReminderPresetTarget(int preset)
+{
+    const auto now = ReminderService::Now();
+    if (preset == 1)
+    {
+        return now + std::chrono::hours(3);
+    }
+    if (preset == 2)
+    {
+        std::tm local = LocalTimeParts(now + std::chrono::hours(24));
+        local.tm_hour = 9;
+        local.tm_min = 0;
+        local.tm_sec = 0;
+        local.tm_isdst = -1;
+        return std::chrono::system_clock::from_time_t(std::mktime(&local));
+    }
+    if (preset == 3)
+    {
+        return now + std::chrono::hours(1);
+    }
+    if (preset == 4)
+    {
+        return now + std::chrono::hours(3);
+    }
+    if (preset == 5)
+    {
+        return now + std::chrono::hours(24 * 7);
+    }
+    return now;
+}
+
 std::wstring NormalizeAniListImportInput(const std::wstring& value)
 {
     std::wstring text = TrimWhitespace(value);
@@ -865,6 +1011,20 @@ std::vector<ToolDefinition> CreateToolRegistry()
             L"Track anime progress, upcoming episodes, and sequel releases.",
             false,
             ToolKind::AnimeTracker
+        },
+        {
+            L"reminders",
+            L"Reminders",
+            L"Set reminders for tasks, events, birthdays, and anything else.",
+            false,
+            ToolKind::Reminders
+        },
+        {
+            L"smart_file_transfer",
+            L"Smart File Transfer",
+            L"Send files directly to another Rex's Toolkit user using a transfer code.",
+            false,
+            ToolKind::SmartFileTransfer
         }
     };
 }
@@ -967,6 +1127,15 @@ void DrawTextLine(HDC hdc, const wchar_t* text, RECT rect, HFONT font, COLORREF 
     SelectObject(hdc, oldFont);
 }
 
+int MeasureTextWidth(HDC hdc, const wchar_t* text, HFONT font)
+{
+    HFONT oldFont = static_cast<HFONT>(SelectObject(hdc, font));
+    SIZE textSize {};
+    GetTextExtentPoint32W(hdc, text, static_cast<int>(wcslen(text)), &textSize);
+    SelectObject(hdc, oldFont);
+    return textSize.cx;
+}
+
 std::wstring GetWindowTextString(HWND hwnd)
 {
     if (!hwnd)
@@ -990,6 +1159,248 @@ void SetWindowTextIfChanged(HWND hwnd, const std::wstring& text)
     {
         SetWindowTextW(hwnd, text.c_str());
     }
+}
+
+std::wstring ProposedEditText(HWND hwnd, wchar_t ch)
+{
+    std::wstring text = GetWindowTextString(hwnd);
+    DWORD selectionStart = 0;
+    DWORD selectionEnd = 0;
+    SendMessageW(hwnd, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
+    const size_t start = std::min<size_t>(selectionStart, text.size());
+    const size_t end = std::min<size_t>(selectionEnd, text.size());
+    if (start < end)
+    {
+        text.erase(start, end - start);
+    }
+    if (ch == VK_BACK)
+    {
+        if (start > 0)
+        {
+            text.erase(start - 1, 1);
+        }
+        return text;
+    }
+    text.insert(text.begin() + static_cast<std::ptrdiff_t>(start), ch);
+    return text;
+}
+
+bool IsReminderDatePrefix(const std::wstring& text)
+{
+    if (text.size() > 10)
+    {
+        return false;
+    }
+    for (size_t index = 0; index < text.size(); ++index)
+    {
+        const wchar_t ch = text[index];
+        if (index == 4 || index == 7)
+        {
+            if (ch != L'/')
+            {
+                return false;
+            }
+        }
+        else if (iswdigit(ch) == 0)
+        {
+            return false;
+        }
+    }
+    if (text.size() >= 7)
+    {
+        const int month = _wtoi(text.substr(5, 2).c_str());
+        if (month < 1 || month > 12)
+        {
+            return false;
+        }
+    }
+    if (text.size() == 10)
+    {
+        const int year = _wtoi(text.substr(0, 4).c_str());
+        const int month = _wtoi(text.substr(5, 2).c_str());
+        const int day = _wtoi(text.substr(8, 2).c_str());
+        if (year < 1970 || day < 1 || day > ReminderDaysInMonth(year, month))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool IsReminderTimePrefix(const std::wstring& text)
+{
+    if (text.empty())
+    {
+        return true;
+    }
+    if (text.size() > 5)
+    {
+        return false;
+    }
+    const size_t colon = text.find(L':');
+    if (colon != std::wstring::npos && text.find(L':', colon + 1) != std::wstring::npos)
+    {
+        return false;
+    }
+    for (wchar_t ch : text)
+    {
+        if (iswdigit(ch) == 0 && ch != L':')
+        {
+            return false;
+        }
+    }
+    const std::wstring hourText = colon == std::wstring::npos ? text : text.substr(0, colon);
+    if (hourText.empty() || hourText.size() > 2)
+    {
+        return false;
+    }
+    const int hour = _wtoi(hourText.c_str());
+    if (hour < 1 || hour > 12)
+    {
+        return false;
+    }
+    if (colon == std::wstring::npos)
+    {
+        return true;
+    }
+    const std::wstring minuteText = text.substr(colon + 1);
+    if (minuteText.size() > 2)
+    {
+        return false;
+    }
+    if (minuteText.size() == 2)
+    {
+        const int minute = _wtoi(minuteText.c_str());
+        if (minute > 59)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::optional<std::wstring> ClipboardUnicodeText(HWND owner)
+{
+    if (!OpenClipboard(owner))
+    {
+        return std::nullopt;
+    }
+
+    std::optional<std::wstring> text;
+    HANDLE data = GetClipboardData(CF_UNICODETEXT);
+    if (data)
+    {
+        const wchar_t* clipboardText = static_cast<const wchar_t*>(GlobalLock(data));
+        if (clipboardText)
+        {
+            text = clipboardText;
+            GlobalUnlock(data);
+        }
+    }
+    CloseClipboard();
+    return text;
+}
+
+bool SetClipboardUnicodeText(HWND owner, const std::wstring& text)
+{
+    if (text.empty() || !OpenClipboard(owner))
+    {
+        return false;
+    }
+
+    EmptyClipboard();
+    const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
+    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
+    if (!memory)
+    {
+        CloseClipboard();
+        return false;
+    }
+
+    bool copied = false;
+    void* data = GlobalLock(memory);
+    if (data)
+    {
+        std::memcpy(data, text.c_str(), bytes);
+        GlobalUnlock(memory);
+        SetClipboardData(CF_UNICODETEXT, memory);
+        memory = nullptr;
+        copied = true;
+    }
+    if (memory)
+    {
+        GlobalFree(memory);
+    }
+    CloseClipboard();
+    return copied;
+}
+
+std::wstring NormalizeReminderDateText(std::wstring text)
+{
+    text = TrimWhitespace(text);
+    std::replace(text.begin(), text.end(), L'-', L'/');
+    return text;
+}
+
+bool IsReminderDateComplete(const std::wstring& text)
+{
+    return text.size() == 10 && IsReminderDatePrefix(text);
+}
+
+bool IsReminderTimeComplete(const std::wstring& text)
+{
+    if (!IsReminderTimePrefix(text))
+    {
+        return false;
+    }
+    const size_t colon = text.find(L':');
+    if (colon == std::wstring::npos)
+    {
+        return !text.empty();
+    }
+    return colon > 0 && text.size() - colon - 1 == 2;
+}
+
+bool ShouldBlockReminderTimeCharacter(HWND edit, wchar_t ch)
+{
+    if (ch == 0x01 || ch == 0x03 || ch == 0x16 || ch == 0x18)
+    {
+        return false;
+    }
+    if (ch == VK_BACK || ch == L':')
+    {
+        return !IsReminderTimePrefix(ProposedEditText(edit, ch));
+    }
+    if (iswdigit(ch) == 0)
+    {
+        return true;
+    }
+
+    std::wstring text = GetWindowTextString(edit);
+    DWORD selectionStart = 0;
+    DWORD selectionEnd = 0;
+    SendMessageW(edit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
+    const size_t start = std::min<size_t>(selectionStart, text.size());
+    const size_t end = std::min<size_t>(selectionEnd, text.size());
+    if (start < end)
+    {
+        text.erase(start, end - start);
+    }
+
+    if (text.find(L':') == std::wstring::npos && start == text.size() && text.size() == 2)
+    {
+        text.push_back(L':');
+        text.push_back(ch);
+        if (!IsReminderTimePrefix(text))
+        {
+            return true;
+        }
+        SetWindowTextW(edit, text.c_str());
+        SendMessageW(edit, EM_SETSEL, text.size(), text.size());
+        return true;
+    }
+
+    return !IsReminderTimePrefix(ProposedEditText(edit, ch));
 }
 
 std::wstring KeyLabel(UINT virtualKey)
@@ -1140,6 +1551,35 @@ DWORD MouseUpFlag(OutputMouseButton button)
 
     return MOUSEEVENTF_LEFTUP;
 }
+
+bool NotifyExistingToolkitInstance()
+{
+    for (int attempt = 0; attempt < 25; ++attempt)
+    {
+        HWND existingWindow = FindWindowW(kWindowClassName, nullptr);
+        if (existingWindow)
+        {
+            DWORD existingProcessId = 0;
+            GetWindowThreadProcessId(existingWindow, &existingProcessId);
+            if (existingProcessId != 0 && existingProcessId != GetCurrentProcessId())
+            {
+                AllowSetForegroundWindow(existingProcessId);
+                PostMessageW(existingWindow, kExternalLaunchRestoreMessage, 0, 0);
+                return true;
+            }
+        }
+
+        Sleep(80);
+    }
+
+    return false;
+}
+
+long long CurrentEpochSeconds()
+{
+    return std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}
 }
 
 ToolkitApp::ToolkitApp(HINSTANCE instance)
@@ -1179,12 +1619,67 @@ ToolkitApp::ToolkitApp(HINSTANCE instance)
     mediaDownloadJob_.outputFolder = mediaDownloadOptions_.outputFolder;
     mediaStatusText_ = MediaSetupMessage().empty() ? L"Ready." : MediaSetupMessage();
     LoadAnimeTrackerData();
+    LoadRemindersData();
+}
+
+bool ToolkitApp::ActivateExistingInstanceIfRunning()
+{
+    HANDLE existingMutex = OpenMutexW(SYNCHRONIZE, FALSE, kSingleInstanceMutexName);
+    if (!existingMutex)
+    {
+        return false;
+    }
+
+    CloseHandle(existingMutex);
+    return NotifyExistingToolkitInstance();
+}
+
+bool ToolkitApp::ClaimSingleInstance()
+{
+    if (singleInstanceMutex_)
+    {
+        return true;
+    }
+
+    HANDLE mutex = CreateMutexW(nullptr, TRUE, kSingleInstanceMutexName);
+    if (!mutex)
+    {
+        return true;
+    }
+
+    if (GetLastError() == ERROR_ALREADY_EXISTS)
+    {
+        CloseHandle(mutex);
+        NotifyExistingToolkitInstance();
+        return false;
+    }
+
+    singleInstanceMutex_ = mutex;
+    return true;
+}
+
+void ToolkitApp::ReleaseSingleInstance()
+{
+    if (!singleInstanceMutex_)
+    {
+        return;
+    }
+
+    ReleaseMutex(singleInstanceMutex_);
+    CloseHandle(singleInstanceMutex_);
+    singleInstanceMutex_ = nullptr;
 }
 
 int ToolkitApp::Run(int showCommand)
 {
+    if (!ClaimSingleInstance())
+    {
+        return 0;
+    }
+
     if (!RegisterWindowClass() || !CreateMainWindow(showCommand))
     {
+        ReleaseSingleInstance();
         return 1;
     }
 
@@ -1195,7 +1690,7 @@ int ToolkitApp::Run(int showCommand)
             message.wParam == 'A' &&
             (GetKeyState(VK_CONTROL) & 0x8000) != 0)
         {
-            for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_, animeSearchEdit_, animeImportEdit_, animeNotesEdit_ })
+            for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_, smartTransferNameEdit_, smartTransferCodeEdit_, animeSearchEdit_, animeImportEdit_, animeNotesEdit_, reminderTitleEdit_, reminderDateEdit_, reminderTimeEdit_, reminderCategoryEdit_, reminderNotesEdit_, reminderSearchEdit_ })
             {
                 if (message.hwnd == edit)
                 {
@@ -1204,6 +1699,90 @@ int ToolkitApp::Run(int showCommand)
                 }
             }
         }
+
+        if (message.message == WM_CHAR && message.hwnd == reminderDateEdit_)
+        {
+            const wchar_t ch = static_cast<wchar_t>(message.wParam);
+            if (ch == 0x01 || ch == 0x03 || ch == 0x16 || ch == 0x18)
+            {
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+                continue;
+            }
+            if (!(iswdigit(ch) != 0 || ch == L'/' || ch == VK_BACK) ||
+                !IsReminderDatePrefix(ProposedEditText(reminderDateEdit_, ch)))
+            {
+                continue;
+            }
+        }
+
+        if (message.message == WM_PASTE && message.hwnd == reminderDateEdit_)
+        {
+            const auto clipboardText = ClipboardUnicodeText(hwnd_);
+            if (!clipboardText)
+            {
+                continue;
+            }
+            const std::wstring dateText = NormalizeReminderDateText(*clipboardText);
+            if (IsReminderDateComplete(dateText))
+            {
+                SetWindowTextW(reminderDateEdit_, dateText.c_str());
+                SendMessageW(reminderDateEdit_, EM_SETSEL, dateText.size(), dateText.size());
+            }
+            continue;
+        }
+
+        if (message.message == WM_CHAR && message.hwnd == reminderTimeEdit_)
+        {
+            const wchar_t ch = static_cast<wchar_t>(message.wParam);
+            if (ShouldBlockReminderTimeCharacter(reminderTimeEdit_, ch))
+            {
+                continue;
+            }
+        }
+
+        if (message.message == WM_PASTE && message.hwnd == reminderTimeEdit_)
+        {
+            const auto clipboardText = ClipboardUnicodeText(hwnd_);
+            if (!clipboardText)
+            {
+                continue;
+            }
+            std::wstring timeText = LowercaseText(TrimWhitespace(*clipboardText));
+            bool pastedPm = reminderFormPm_;
+            if (timeText.find(L"pm") != std::wstring::npos)
+            {
+                pastedPm = true;
+            }
+            else if (timeText.find(L"am") != std::wstring::npos)
+            {
+                pastedPm = false;
+            }
+            timeText.erase(
+                std::remove_if(timeText.begin(), timeText.end(), [](wchar_t ch)
+                {
+                    return ch == L'a' || ch == L'p' || ch == L'm' || iswspace(ch) != 0;
+                }),
+                timeText.end());
+            if (IsReminderTimeComplete(timeText))
+            {
+                SetWindowTextW(reminderTimeEdit_, timeText.c_str());
+                SendMessageW(reminderTimeEdit_, EM_SETSEL, timeText.size(), timeText.size());
+                reminderFormPm_ = pastedPm;
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            }
+            continue;
+        }
+
+    if (message.message == WM_KEYDOWN &&
+        message.wParam == VK_RETURN &&
+        message.hwnd == reminderTitleEdit_ &&
+        currentPage_ == Page::Tool &&
+        currentTool_ == ToolKind::Reminders)
+    {
+        SaveReminderFromForm();
+        continue;
+    }
 
     if (message.message == WM_KEYDOWN &&
         message.wParam == VK_RETURN &&
@@ -1245,7 +1824,9 @@ int ToolkitApp::Run(int showCommand)
         ;
     }
 
-    return static_cast<int>(message.wParam);
+    const int exitCode = static_cast<int>(message.wParam);
+    ReleaseSingleInstance();
+    return exitCode;
 }
 
 bool ToolkitApp::RegisterWindowClass()
@@ -1380,12 +1961,17 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         LoadLogoResource();
         LoadToolIconResources();
         CreateMediaDownloaderControls();
+        CreateSmartFileTransferControls();
         CreateAnimeTrackerControls();
+        CreateReminderControls();
         ApplyDarkTitleBar();
         DragAcceptFiles(hwnd_, TRUE);
         RecalculateLayout();
         SetTimer(hwnd_, kClockTimerId, 1000, nullptr);
+        SetTimer(hwnd_, kReminderTimerId, kReminderCheckMs, nullptr);
+        UpdateReminderBanner();
         InstallInputHooks();
+        StartUpdateCheck(true);
         return 0;
     }
 
@@ -1407,7 +1993,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         searchInputFont_ = CreateUiFont(dpi_, 12, FW_NORMAL);
         monospaceFont_ = CreateUiFont(dpi_, 10, FW_NORMAL, L"Cascadia Mono");
 
-        for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_ })
+    for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_, smartTransferNameEdit_, smartTransferCodeEdit_, reminderTitleEdit_, reminderDateEdit_, reminderTimeEdit_, reminderCategoryEdit_, reminderSearchEdit_ })
         {
             if (!edit)
             {
@@ -1431,6 +2017,11 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             SendMessageW(animeNotesEdit_, WM_SETFONT, reinterpret_cast<WPARAM>(monospaceFont_), TRUE);
             SendMessageW(animeNotesEdit_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(Dips(4), Dips(4)));
         }
+        if (reminderNotesEdit_)
+        {
+            SendMessageW(reminderNotesEdit_, WM_SETFONT, reinterpret_cast<WPARAM>(monospaceFont_), TRUE);
+            SendMessageW(reminderNotesEdit_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(Dips(4), Dips(4)));
+        }
 
         const RECT* suggested = reinterpret_cast<RECT*>(lParam);
         SetWindowPos(
@@ -1450,7 +2041,9 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         liveResize_ = true;
         resizeLayoutPending_ = false;
         UpdateMediaDownloaderControls();
+        UpdateSmartFileTransferControls();
         UpdateAnimeTrackerControls();
+        UpdateReminderControls();
         SetTimer(hwnd_, kResizeTimerId, kResizeRedrawMs, nullptr);
         return 0;
 
@@ -1510,6 +2103,13 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
 
     case WM_COMMAND:
+        if (reinterpret_cast<HWND>(lParam) == reminderTitleEdit_ &&
+            (HIWORD(wParam) == EN_CHANGE || HIWORD(wParam) == EN_SETFOCUS || HIWORD(wParam) == EN_KILLFOCUS))
+        {
+            UpdateReminderControls();
+            InvalidateRect(hwnd_, &reminderTitleEditRect_, FALSE);
+            return 0;
+        }
         if (reinterpret_cast<HWND>(lParam) == animeSearchEdit_ && HIWORD(wParam) == EN_CHANGE)
         {
             if (GetWindowTextString(animeSearchEdit_).empty() &&
@@ -1540,6 +2140,12 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 RECT repaint = PaddedRect(animeNotesEditRect_, Dips(48));
                 InvalidateRect(hwnd_, &repaint, FALSE);
             }
+            return 0;
+        }
+        if (reinterpret_cast<HWND>(lParam) == reminderSearchEdit_ && HIWORD(wParam) == EN_CHANGE)
+        {
+            RecalculateLayout();
+            InvalidateRect(hwnd_, nullptr, FALSE);
             return 0;
         }
         break;
@@ -1685,6 +2291,34 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
             return 0;
         }
+        if (wParam == kReminderTimerId)
+        {
+            UpdateReminderBanner();
+            if (currentPage_ == Page::Tool && currentTool_ == ToolKind::Reminders)
+            {
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            }
+            return 0;
+        }
+        if (wParam == kSmartTransferTimerId)
+        {
+            smartTransferHostSnapshot_ = smartFileTransferService_.HostSnapshot();
+            PollSmartTransferWebRtc();
+            smartTransferHosting_ =
+                smartTransferHostSnapshot_.status == SmartTransferHostStatus::Hosting ||
+                smartTransferHostSnapshot_.status == SmartTransferHostStatus::WaitingForApproval ||
+                smartTransferHostSnapshot_.status == SmartTransferHostStatus::Sending;
+            if (!smartTransferHosting_ && !smartTransferWebRtcReceiverActive_ && !smartTransferWebRtcBusy_)
+            {
+                KillTimer(hwnd_, kSmartTransferTimerId);
+            }
+            if (currentPage_ == Page::Tool && currentTool_ == ToolKind::SmartFileTransfer)
+            {
+                RecalculateLayout();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            }
+            return 0;
+        }
         break;
 
     case WM_KEYDOWN:
@@ -1736,6 +2370,12 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             IsPointInRect(converterDropZoneRect_, dropPoint))
         {
             AddFilesToConverterQueue(droppedPaths);
+        }
+        else if (currentPage_ == Page::Tool && currentTool_ == ToolKind::SmartFileTransfer &&
+            smartTransferTab_ == SmartTransferTab::Send &&
+            IsPointInRect(smartTransferDropZoneRect_, dropPoint))
+        {
+            AddFilesToSmartTransferQueue(droppedPaths);
         }
         else if (currentPage_ == Page::Tool && currentTool_ == ToolKind::MediaDownloader)
         {
@@ -1838,6 +2478,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         InvalidateRect(hwnd_, nullptr, FALSE);
         if (result && result->success)
         {
+            forceClose_ = true;
             PostMessageW(hwnd_, WM_CLOSE, 0, 0);
         }
         return 0;
@@ -1946,6 +2587,111 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         return 0;
     }
 
+    case kSmartTransferConnectFinishedMessage:
+    {
+        std::unique_ptr<SmartTransferConnectThreadResult> result(reinterpret_cast<SmartTransferConnectThreadResult*>(lParam));
+        smartTransferConnecting_ = false;
+        if (result)
+        {
+            ApplySmartTransferConnectResult(result->result);
+        }
+        FinishSmartTransferThread();
+        UpdateSmartFileTransferControls();
+        RecalculateLayout();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
+    }
+
+    case kSmartTransferDownloadProgressMessage:
+    {
+        std::unique_ptr<SmartTransferDownloadProgress> progress(reinterpret_cast<SmartTransferDownloadProgress*>(lParam));
+        if (progress)
+        {
+            ApplySmartTransferDownloadProgress(*progress);
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
+    }
+
+    case kSmartTransferDownloadFinishedMessage:
+    {
+        std::unique_ptr<SmartTransferDownloadThreadResult> result(reinterpret_cast<SmartTransferDownloadThreadResult*>(lParam));
+        smartTransferDownloading_ = false;
+        FinishSmartTransferThread();
+        if (result)
+        {
+            smartTransferReceiveStatusMessage_ = result->message;
+            smartTransferDownloadProgress_.status = result->success
+                ? SmartTransferClientStatus::Complete
+                : SmartTransferClientStatus::Failed;
+            smartTransferDownloadProgress_.message = result->message;
+        }
+        UpdateSmartFileTransferControls();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
+    }
+
+    case kSmartTransferPairingFinishedMessage:
+    {
+        std::unique_ptr<SmartTransferWebRtcThreadResult> result(reinterpret_cast<SmartTransferWebRtcThreadResult*>(lParam));
+        smartTransferWebRtcBusy_ = false;
+        FinishSmartTransferThread();
+        if (result)
+        {
+            if (result->success)
+            {
+                smartTransferSenderPairingCode_ = result->code;
+                SetClipboardUnicodeText(hwnd_, smartTransferSenderPairingCode_);
+                smartTransferHostSnapshot_ = smartFileTransferService_.HostSnapshot();
+            }
+            smartTransferStatusMessage_ = result->message;
+        }
+        SetTimer(hwnd_, kSmartTransferTimerId, kSmartTransferRefreshMs, nullptr);
+        UpdateSmartFileTransferControls();
+        RecalculateLayout();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
+    }
+
+    case kSmartTransferResponseFinishedMessage:
+    {
+        std::unique_ptr<SmartTransferWebRtcThreadResult> result(reinterpret_cast<SmartTransferWebRtcThreadResult*>(lParam));
+        smartTransferWebRtcBusy_ = false;
+        FinishSmartTransferThread();
+        if (result)
+        {
+            if (result->success)
+            {
+                smartTransferReceiverResponseCode_ = result->code;
+                smartTransferWebRtcReceiverActive_ = true;
+                smartTransferReceiveInvite_.activeUrl = L"webrtc://manual";
+                SetClipboardUnicodeText(hwnd_, smartTransferReceiverResponseCode_);
+            }
+            smartTransferReceiveStatusMessage_ = result->message;
+        }
+        SetTimer(hwnd_, kSmartTransferTimerId, kSmartTransferRefreshMs, nullptr);
+        UpdateSmartFileTransferControls();
+        RecalculateLayout();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
+    }
+
+    case kSmartTransferApplyResponseFinishedMessage:
+    {
+        std::unique_ptr<SmartTransferWebRtcThreadResult> result(reinterpret_cast<SmartTransferWebRtcThreadResult*>(lParam));
+        smartTransferWebRtcBusy_ = false;
+        FinishSmartTransferThread();
+        if (result)
+        {
+            smartTransferStatusMessage_ = result->message;
+            smartTransferHostSnapshot_ = smartFileTransferService_.HostSnapshot();
+        }
+        SetTimer(hwnd_, kSmartTransferTimerId, kSmartTransferRefreshMs, nullptr);
+        UpdateSmartFileTransferControls();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
+    }
+
     case WM_PAINT:
     {
         PAINTSTRUCT paint {};
@@ -1958,32 +2704,71 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
     case WM_ERASEBKGND:
         return 1;
 
+    case WM_CLOSE:
+        if (appSettings_.minimizeToTrayOnClose && !forceClose_)
+        {
+            MinimizeToTray();
+            return 0;
+        }
+        DestroyWindow(hwnd_);
+        return 0;
+
+    case kTrayIconMessage:
+        if (lParam == WM_LBUTTONUP || lParam == WM_LBUTTONDBLCLK)
+        {
+            RestoreFromTray();
+        }
+        else if (lParam == WM_RBUTTONUP || lParam == WM_CONTEXTMENU)
+        {
+            POINT point {};
+            GetCursorPos(&point);
+            ShowTrayMenu(point);
+        }
+        return 0;
+
+    case kExternalLaunchRestoreMessage:
+        RestoreFromTray();
+        return 0;
+
     case WM_DESTROY:
         conversionCancelRequested_ = true;
         mediaCancelRequested_ = true;
+        smartTransferCancelRequested_ = true;
         FinishConversionThread();
         FinishMediaThread();
         FinishUpdateThread();
         FinishAnimeThread();
-        SaveWindowSettings();
+        FinishSmartTransferThread();
+        smartFileTransferService_.StopHosting();
+        if (!minimizedToTray_)
+        {
+            SaveWindowSettings();
+        }
         SaveAppSettings();
         SaveMediaDownloadSettings();
         SaveAutoClickerSettings();
         SaveAnimeTrackerData();
+        SaveRemindersData();
         SetAutoClickerRunning(false);
         KillTimer(hwnd_, kClockTimerId);
         KillTimer(hwnd_, kAnimeNotesAutosaveTimerId);
         KillTimer(hwnd_, kResizeTimerId);
+        KillTimer(hwnd_, kReminderTimerId);
+        KillTimer(hwnd_, kSmartTransferTimerId);
+        RemoveTrayIcon();
         RemoveInputHooks();
         logo_.reset();
         autoClickerIcon_.reset();
         fileConverterIcon_.reset();
         mediaDownloaderIcon_.reset();
+        remindersIcon_.reset();
         allToolsIcon_.reset();
         settingsIcon_.reset();
         autoClickerIconTinted_.reset();
         fileConverterIconTinted_.reset();
         mediaDownloaderIconTinted_.reset();
+        remindersIconTinted_.reset();
+        smartFileTransferIconTinted_.reset();
         allToolsIconTinted_.reset();
         settingsIconTinted_.reset();
         ReleaseBackBuffer();
@@ -2018,6 +2803,131 @@ void ToolkitApp::ApplyDarkTitleBar()
         darkModeAttribute,
         &useDarkMode,
         sizeof(useDarkMode));
+}
+
+void ToolkitApp::MinimizeToTray()
+{
+    if (!hwnd_)
+    {
+        return;
+    }
+
+    trayRestoreMaximized_ = IsZoomed(hwnd_) != FALSE;
+    SaveWindowSettings();
+    AddTrayIcon();
+    minimizedToTray_ = true;
+
+    if (trayIconVisible_)
+    {
+        ShowWindow(hwnd_, SW_HIDE);
+    }
+    else
+    {
+        ShowWindow(hwnd_, SW_MINIMIZE);
+    }
+}
+
+void ToolkitApp::RestoreFromTray()
+{
+    if (!hwnd_)
+    {
+        return;
+    }
+
+    const bool wasMinimizedToTray = minimizedToTray_;
+    const bool shouldRestoreMaximized = wasMinimizedToTray && trayRestoreMaximized_;
+    minimizedToTray_ = false;
+    if (shouldRestoreMaximized)
+    {
+        ShowWindow(hwnd_, SW_MAXIMIZE);
+    }
+    else if (wasMinimizedToTray || IsIconic(hwnd_))
+    {
+        ShowWindow(hwnd_, SW_RESTORE);
+    }
+    else
+    {
+        ShowWindow(hwnd_, SW_SHOW);
+    }
+    SetForegroundWindow(hwnd_);
+    SetActiveWindow(hwnd_);
+    SetFocus(hwnd_);
+    RemoveTrayIcon();
+    RecalculateLayout();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::AddTrayIcon()
+{
+    if (!hwnd_ || trayIconVisible_)
+    {
+        return;
+    }
+
+    NOTIFYICONDATAW iconData {};
+    iconData.cbSize = sizeof(iconData);
+    iconData.hWnd = hwnd_;
+    iconData.uID = kTrayIconId;
+    iconData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    iconData.uCallbackMessage = kTrayIconMessage;
+    iconData.hIcon = LoadIconW(instance_, MAKEINTRESOURCEW(IDI_REX_TOOLKIT_ICON));
+    if (!iconData.hIcon)
+    {
+        iconData.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    }
+    wcscpy_s(iconData.szTip, L"Rex's Toolkit");
+
+    trayIconVisible_ = Shell_NotifyIconW(NIM_ADD, &iconData) != FALSE;
+}
+
+void ToolkitApp::RemoveTrayIcon()
+{
+    if (!hwnd_ || !trayIconVisible_)
+    {
+        return;
+    }
+
+    NOTIFYICONDATAW iconData {};
+    iconData.cbSize = sizeof(iconData);
+    iconData.hWnd = hwnd_;
+    iconData.uID = kTrayIconId;
+    Shell_NotifyIconW(NIM_DELETE, &iconData);
+    trayIconVisible_ = false;
+}
+
+void ToolkitApp::ShowTrayMenu(POINT screenPoint)
+{
+    HMENU menu = CreatePopupMenu();
+    if (!menu)
+    {
+        return;
+    }
+
+    AppendMenuW(menu, MF_STRING, kTrayMenuOpenCommand, L"Open Rex's Toolkit");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kTrayMenuExitCommand, L"Exit");
+
+    SetForegroundWindow(hwnd_);
+    const UINT command = TrackPopupMenu(
+        menu,
+        TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
+        screenPoint.x,
+        screenPoint.y,
+        0,
+        hwnd_,
+        nullptr);
+    DestroyMenu(menu);
+    PostMessageW(hwnd_, WM_NULL, 0, 0);
+
+    if (command == kTrayMenuOpenCommand)
+    {
+        RestoreFromTray();
+    }
+    else if (command == kTrayMenuExitCommand)
+    {
+        forceClose_ = true;
+        DestroyWindow(hwnd_);
+    }
 }
 
 void ToolkitApp::LoadLogoResource()
@@ -2080,6 +2990,8 @@ void ToolkitApp::LoadToolIconResources()
     autoClickerIcon_ = LoadPngResource(IDR_AUTO_CLICKER_ICON);
     fileConverterIcon_ = LoadPngResource(IDR_FILE_CONVERTER_ICON);
     mediaDownloaderIcon_ = LoadPngResource(IDR_MEDIA_DOWNLOADER_ICON);
+    remindersIcon_ = LoadPngResource(IDR_REMINDERS_ICON);
+    smartFileTransferIcon_ = LoadPngResource(IDR_SMART_FILE_TRANSFER_ICON);
     allToolsIcon_ = LoadPngResource(IDR_ALL_TOOLS_ICON);
     settingsIcon_ = LoadPngResource(IDR_SETTINGS_ICON);
     RefreshTintedIconResources();
@@ -2134,6 +3046,8 @@ void ToolkitApp::RefreshTintedIconResources()
     autoClickerIconTinted_ = CreateTintedBitmap(autoClickerIcon_.get(), kTextPrimary);
     fileConverterIconTinted_ = CreateTintedBitmap(fileConverterIcon_.get(), kTextPrimary);
     mediaDownloaderIconTinted_ = CreateTintedBitmap(mediaDownloaderIcon_.get(), kTextPrimary);
+    remindersIconTinted_ = CreateTintedBitmap(remindersIcon_.get(), kTextPrimary);
+    smartFileTransferIconTinted_ = CreateTintedBitmap(smartFileTransferIcon_.get(), kTextPrimary);
     allToolsIconTinted_ = CreateTintedBitmap(allToolsIcon_.get(), kTextPrimary);
     settingsIconTinted_ = CreateTintedBitmap(settingsIcon_.get(), kTextPrimary);
 }
@@ -2280,6 +3194,11 @@ void ToolkitApp::LoadAppSettings()
     appSettings_.startPage = DefaultStartPage::Favorites;
     appSettings_.clockFormat = ClockFormat::MonthDay24;
     appSettings_.theme = AppTheme::Dark;
+    appSettings_.minimizeToTrayOnClose = false;
+    appSettings_.smartTransferWebRtcFallback = true;
+    appSettings_.smartTransferWebRtcDiagnostics = false;
+    appSettings_.smartTransferStunServers = L"stun:stun.l.google.com:19302";
+    appSettings_.updateNotificationDismissedUntil = 0;
 
     std::wifstream file(AppSettingsFilePath());
     if (!file)
@@ -2352,6 +3271,33 @@ void ToolkitApp::LoadAppSettings()
                 appSettings_.theme = AppTheme::Dark;
             }
         }
+        else if (key == L"minimizeToTrayOnClose")
+        {
+            appSettings_.minimizeToTrayOnClose = value == L"1" || value == L"true";
+        }
+        else if (key == L"smartTransferWebRtcFallback")
+        {
+            appSettings_.smartTransferWebRtcFallback = value == L"1" || value == L"true";
+        }
+        else if (key == L"smartTransferWebRtcDiagnostics")
+        {
+            appSettings_.smartTransferWebRtcDiagnostics = value == L"1" || value == L"true";
+        }
+        else if (key == L"smartTransferStunServers")
+        {
+            appSettings_.smartTransferStunServers = value.empty() ? L"stun:stun.l.google.com:19302" : value;
+        }
+        else if (key == L"updateNotificationDismissedUntil")
+        {
+            try
+            {
+                appSettings_.updateNotificationDismissedUntil = std::max<long long>(0, std::stoll(value));
+            }
+            catch (...)
+            {
+                appSettings_.updateNotificationDismissedUntil = 0;
+            }
+        }
     }
 }
 
@@ -2406,7 +3352,12 @@ void ToolkitApp::SaveAppSettings() const
     file << L"defaultOutputFolder=" << appSettings_.defaultOutputFolder.wstring() << L'\n'
         << L"startPage=" << (appSettings_.startPage == DefaultStartPage::AllTools ? L"all_tools" : L"favorites") << L'\n'
         << L"clockFormat=" << clock << L'\n'
-        << L"theme=" << theme << L'\n';
+        << L"theme=" << theme << L'\n'
+        << L"minimizeToTrayOnClose=" << (appSettings_.minimizeToTrayOnClose ? L"1" : L"0") << L'\n'
+        << L"smartTransferWebRtcFallback=" << (appSettings_.smartTransferWebRtcFallback ? L"1" : L"0") << L'\n'
+        << L"smartTransferWebRtcDiagnostics=" << (appSettings_.smartTransferWebRtcDiagnostics ? L"1" : L"0") << L'\n'
+        << L"smartTransferStunServers=" << appSettings_.smartTransferStunServers << L'\n'
+        << L"updateNotificationDismissedUntil=" << appSettings_.updateNotificationDismissedUntil << L'\n';
 }
 
 void ToolkitApp::LoadMediaDownloadSettings()
@@ -2632,9 +3583,37 @@ void ToolkitApp::RecalculateLayout()
         headerRect_.bottom
     };
 
+    const bool showReminderBanner = reminderAlert_.hasValue;
+    const bool showUpdateBanner = !showReminderBanner &&
+        updateNotificationVisible_ &&
+        hasUpdateResult_ &&
+        updateResult_.status == UpdateCheckStatus::UpdateAvailable;
+    const bool showNotificationBanner = showReminderBanner || showUpdateBanner;
+    const int notificationBannerHeight = showNotificationBanner ? Dips(54) : 0;
+    reminderBannerRect_ = showNotificationBanner
+        ? RECT {
+            clientRect_.left,
+            headerRect_.bottom,
+            clientRect_.right,
+            headerRect_.bottom + notificationBannerHeight
+        }
+        : RECT {};
+    reminderBannerCloseButtonRect_ = showReminderBanner
+        ? RECT { reminderBannerRect_.right - Dips(42), reminderBannerRect_.top + Dips(10), reminderBannerRect_.right - Dips(14), reminderBannerRect_.bottom - Dips(10) }
+        : RECT {};
+    reminderBannerViewButtonRect_ = {};
+    reminderBannerCompleteButtonRect_ = {};
+    reminderBannerSnoozeButtonRect_ = {};
+    updateBannerCloseButtonRect_ = showUpdateBanner
+        ? RECT { reminderBannerRect_.right - Dips(42), reminderBannerRect_.top + Dips(10), reminderBannerRect_.right - Dips(14), reminderBannerRect_.bottom - Dips(10) }
+        : RECT {};
+    updateBannerUpdateButtonRect_ = showUpdateBanner
+        ? RECT { updateBannerCloseButtonRect_.left - Dips(142), reminderBannerRect_.top + Dips(9), updateBannerCloseButtonRect_.left - Dips(12), reminderBannerRect_.bottom - Dips(9) }
+        : RECT {};
+
     contentRect_ = {
         clientRect_.left,
-        headerRect_.bottom,
+        headerRect_.bottom + notificationBannerHeight,
         clientRect_.right,
         clientRect_.bottom
     };
@@ -2952,6 +3931,266 @@ void ToolkitApp::RecalculateLayout()
         mediaOpenFolderButtonRect_.bottom
     };
 
+    const int transferLeft = contentRect_.left + contentMargin;
+    const int transferRight = contentRect_.right - contentMargin;
+    const int transferTop = contentTop + Dips(kToolBodyTopDip);
+    smartTransferSendTabRect_ = {
+        transferLeft,
+        transferTop + Dips(28),
+        transferLeft + Dips(136),
+        transferTop + Dips(68)
+    };
+    smartTransferReceiveTabRect_ = {
+        smartTransferSendTabRect_.right + Dips(10),
+        smartTransferSendTabRect_.top,
+        smartTransferSendTabRect_.right + Dips(154),
+        smartTransferSendTabRect_.bottom
+    };
+    const int transferBodyTop = smartTransferSendTabRect_.bottom + Dips(58);
+    smartTransferDropZoneRect_ = {
+        transferLeft,
+        transferBodyTop,
+        transferRight,
+        transferBodyTop + Dips(132)
+    };
+    smartTransferBrowseButtonRect_ = {
+        smartTransferDropZoneRect_.right - Dips(152),
+        smartTransferDropZoneRect_.top + Dips(44),
+        smartTransferDropZoneRect_.right - Dips(18),
+        smartTransferDropZoneRect_.top + Dips(84)
+    };
+    smartTransferSendFileListRect_ = {
+        transferLeft,
+        smartTransferDropZoneRect_.bottom + Dips(18),
+        transferRight,
+        smartTransferDropZoneRect_.bottom + Dips(204)
+    };
+    smartTransferClearButtonRect_ = {
+        smartTransferSendFileListRect_.right - Dips(124),
+        smartTransferSendFileListRect_.top + Dips(14),
+        smartTransferSendFileListRect_.right - Dips(16),
+        smartTransferSendFileListRect_.top + Dips(52)
+    };
+    const int transferSettingsTop = smartTransferSendFileListRect_.bottom + Dips(20);
+    const int transferHalf = std::max(Dips(280), ((transferRight - transferLeft) - Dips(18)) / 2);
+    smartTransferNameEditRect_ = {
+        transferLeft,
+        transferSettingsTop + Dips(44),
+        transferLeft + transferHalf,
+        transferSettingsTop + Dips(84)
+    };
+    smartTransferExpirationButtonRect_ = {
+        transferLeft + transferHalf + Dips(18),
+        smartTransferNameEditRect_.top,
+        transferLeft + transferHalf + Dips(258),
+        smartTransferNameEditRect_.bottom
+    };
+    const int optionGap = Dips(18);
+    const int optionWidth = std::max(Dips(260), ((transferRight - transferLeft) - optionGap) / 2);
+    smartTransferApprovalToggleRect_ = {
+        transferLeft,
+        smartTransferNameEditRect_.bottom + Dips(24),
+        std::min(transferRight, transferLeft + optionWidth),
+        smartTransferNameEditRect_.bottom + Dips(60)
+    };
+    smartTransferStopAfterToggleRect_ = {
+        smartTransferApprovalToggleRect_.right + optionGap,
+        smartTransferApprovalToggleRect_.top,
+        transferRight,
+        smartTransferApprovalToggleRect_.bottom
+    };
+    smartTransferMultiReceiverToggleRect_ = {
+        transferLeft,
+        smartTransferApprovalToggleRect_.bottom + Dips(12),
+        smartTransferApprovalToggleRect_.right,
+        smartTransferApprovalToggleRect_.bottom + Dips(48)
+    };
+    smartTransferDirectHostToggleRect_ = {
+        smartTransferMultiReceiverToggleRect_.right + optionGap,
+        smartTransferMultiReceiverToggleRect_.top,
+        transferRight,
+        smartTransferMultiReceiverToggleRect_.bottom
+    };
+    smartTransferCreateButtonRect_ = {
+        transferLeft,
+        smartTransferDirectHostToggleRect_.bottom + Dips(42),
+        transferLeft + Dips(170),
+        smartTransferDirectHostToggleRect_.bottom + Dips(86)
+    };
+    smartTransferStopButtonRect_ = {
+        smartTransferCreateButtonRect_.right + Dips(12),
+        smartTransferCreateButtonRect_.top,
+        smartTransferCreateButtonRect_.right + Dips(150),
+        smartTransferCreateButtonRect_.bottom
+    };
+    smartTransferCopyCodeButtonRect_ = {
+        smartTransferStopButtonRect_.right + Dips(12),
+        smartTransferCreateButtonRect_.top,
+        smartTransferStopButtonRect_.right + Dips(182),
+        smartTransferCreateButtonRect_.bottom
+    };
+    smartTransferCodeBoxRect_ = {
+        transferLeft,
+        smartTransferCreateButtonRect_.bottom + Dips(18),
+        transferRight,
+        smartTransferCreateButtonRect_.bottom + Dips(144)
+    };
+    const bool showSendWebRtcPanel =
+        smartTransferHosting_ ||
+        !smartTransferSenderPairingCode_.empty() ||
+        smartTransferHostSnapshot_.webRtcDependencyAvailable;
+    if (showSendWebRtcPanel)
+    {
+        smartTransferWebRtcSendPanelRect_ = {
+            transferLeft,
+            smartTransferCodeBoxRect_.bottom + Dips(66),
+            transferRight,
+            smartTransferCodeBoxRect_.bottom + Dips(284)
+        };
+        smartTransferCopyPairingButtonRect_ = {
+            smartTransferWebRtcSendPanelRect_.left + Dips(18),
+            smartTransferWebRtcSendPanelRect_.top + Dips(52),
+            smartTransferWebRtcSendPanelRect_.left + Dips(214),
+            smartTransferWebRtcSendPanelRect_.top + Dips(94)
+        };
+        smartTransferReceiverResponseEditRect_ = {
+            smartTransferWebRtcSendPanelRect_.left + Dips(18),
+            smartTransferCopyPairingButtonRect_.bottom + Dips(34),
+            smartTransferWebRtcSendPanelRect_.right - Dips(190),
+            smartTransferWebRtcSendPanelRect_.bottom - Dips(18)
+        };
+        smartTransferApplyResponseButtonRect_ = {
+            smartTransferReceiverResponseEditRect_.right + Dips(14),
+            smartTransferReceiverResponseEditRect_.top,
+            smartTransferWebRtcSendPanelRect_.right - Dips(18),
+            smartTransferReceiverResponseEditRect_.top + Dips(42)
+        };
+    }
+    else
+    {
+        smartTransferWebRtcSendPanelRect_ = {};
+        smartTransferCopyPairingButtonRect_ = {};
+        smartTransferReceiverResponseEditRect_ = {};
+        smartTransferApplyResponseButtonRect_ = {};
+    }
+    const int sendBottomAnchor = HasArea(smartTransferWebRtcSendPanelRect_)
+        ? smartTransferWebRtcSendPanelRect_.bottom
+        : smartTransferCodeBoxRect_.bottom;
+    smartTransferAllowButtonRect_ = {
+        transferRight - Dips(250),
+        sendBottomAnchor + Dips(18),
+        transferRight - Dips(132),
+        sendBottomAnchor + Dips(58)
+    };
+    smartTransferDenyButtonRect_ = {
+        transferRight - Dips(120),
+        smartTransferAllowButtonRect_.top,
+        transferRight,
+        smartTransferAllowButtonRect_.bottom
+    };
+
+    smartTransferReceiveCodeEditRect_ = {
+        transferLeft,
+        transferBodyTop,
+        transferRight,
+        transferBodyTop + Dips(118)
+    };
+    smartTransferConnectButtonRect_ = {
+        transferLeft,
+        smartTransferReceiveCodeEditRect_.bottom + Dips(16),
+        transferLeft + Dips(140),
+        smartTransferReceiveCodeEditRect_.bottom + Dips(58)
+    };
+    smartTransferClearCodeButtonRect_ = {
+        smartTransferConnectButtonRect_.right + Dips(12),
+        smartTransferConnectButtonRect_.top,
+        smartTransferConnectButtonRect_.right + Dips(132),
+        smartTransferConnectButtonRect_.bottom
+    };
+    const bool showReceiveWebRtcPanel =
+        smartTransferWebRtcFallbackOffered_ ||
+        smartTransferWebRtcReceiverActive_ ||
+        !smartTransferReceiverResponseCode_.empty();
+    if (showReceiveWebRtcPanel)
+    {
+        smartTransferWebRtcReceivePanelRect_ = {
+            transferLeft,
+            smartTransferConnectButtonRect_.bottom + Dips(20),
+            transferRight,
+            smartTransferConnectButtonRect_.bottom + Dips(272)
+        };
+        smartTransferSenderPairingEditRect_ = {
+            smartTransferWebRtcReceivePanelRect_.left + Dips(18),
+            smartTransferWebRtcReceivePanelRect_.top + Dips(78),
+            smartTransferWebRtcReceivePanelRect_.right - Dips(190),
+            smartTransferWebRtcReceivePanelRect_.top + Dips(158)
+        };
+        smartTransferGenerateResponseButtonRect_ = {
+            smartTransferSenderPairingEditRect_.right + Dips(14),
+            smartTransferSenderPairingEditRect_.top,
+            smartTransferWebRtcReceivePanelRect_.right - Dips(18),
+            smartTransferSenderPairingEditRect_.top + Dips(42)
+        };
+        smartTransferCopyResponseButtonRect_ = {
+            smartTransferGenerateResponseButtonRect_.left,
+            smartTransferGenerateResponseButtonRect_.bottom + Dips(12),
+            smartTransferGenerateResponseButtonRect_.right,
+            smartTransferGenerateResponseButtonRect_.bottom + Dips(54)
+        };
+    }
+    else
+    {
+        smartTransferWebRtcReceivePanelRect_ = {};
+        smartTransferSenderPairingEditRect_ = {};
+        smartTransferGenerateResponseButtonRect_ = {};
+        smartTransferCopyResponseButtonRect_ = {};
+    }
+    const int manifestTop = HasArea(smartTransferWebRtcReceivePanelRect_)
+        ? smartTransferWebRtcReceivePanelRect_.bottom + Dips(20)
+        : smartTransferConnectButtonRect_.bottom + Dips(20);
+    smartTransferManifestRect_ = {
+        transferLeft,
+        manifestTop,
+        transferRight,
+        manifestTop + Dips(264)
+    };
+    smartTransferSaveFolderRect_ = {
+        transferLeft,
+        smartTransferManifestRect_.bottom + Dips(46),
+        transferRight - Dips(150),
+        smartTransferManifestRect_.bottom + Dips(86)
+    };
+    smartTransferBrowseSaveButtonRect_ = {
+        smartTransferSaveFolderRect_.right + Dips(12),
+        smartTransferSaveFolderRect_.top,
+        transferRight,
+        smartTransferSaveFolderRect_.bottom
+    };
+    smartTransferDownloadButtonRect_ = {
+        transferLeft,
+        smartTransferSaveFolderRect_.bottom + Dips(22),
+        transferLeft + Dips(176),
+        smartTransferSaveFolderRect_.bottom + Dips(66)
+    };
+    smartTransferCancelButtonRect_ = {
+        smartTransferDownloadButtonRect_.right + Dips(12),
+        smartTransferDownloadButtonRect_.top,
+        smartTransferDownloadButtonRect_.right + Dips(120),
+        smartTransferDownloadButtonRect_.bottom
+    };
+    smartTransferOpenFolderButtonRect_ = {
+        smartTransferCancelButtonRect_.right + Dips(12),
+        smartTransferDownloadButtonRect_.top,
+        smartTransferCancelButtonRect_.right + Dips(156),
+        smartTransferDownloadButtonRect_.bottom
+    };
+    smartTransferProgressRect_ = {
+        transferLeft,
+        smartTransferDownloadButtonRect_.bottom + Dips(20),
+        transferRight,
+        smartTransferDownloadButtonRect_.bottom + Dips(28)
+    };
+
     const int settingsLeft = contentRect_.left + contentMargin;
     const int settingsTop = contentTop + Dips(132);
     const int settingsRailWidth = Dips(220);
@@ -2963,11 +4202,17 @@ void ToolkitApp::RecalculateLayout()
         settingsLeft + settingsRailWidth - Dips(14),
         settingsTop + Dips(18) + settingsRailItemHeight
     };
-    settingsAppearanceTabRect_ = {
+    settingsSmartTransferTabRect_ = {
         settingsGeneralTabRect_.left,
         settingsGeneralTabRect_.bottom + settingsRailGap,
         settingsGeneralTabRect_.right,
         settingsGeneralTabRect_.bottom + settingsRailGap + settingsRailItemHeight
+    };
+    settingsAppearanceTabRect_ = {
+        settingsGeneralTabRect_.left,
+        settingsSmartTransferTabRect_.bottom + settingsRailGap,
+        settingsGeneralTabRect_.right,
+        settingsSmartTransferTabRect_.bottom + settingsRailGap + settingsRailItemHeight
     };
     settingsUpdatesTabRect_ = {
         settingsGeneralTabRect_.left,
@@ -3003,6 +4248,30 @@ void ToolkitApp::RecalculateLayout()
         settingsDefaultFolderRect_.bottom + Dips(72),
         settingsControlLeft + Dips(240),
         settingsDefaultFolderRect_.bottom + Dips(112)
+    };
+    settingsMinimizeToTrayToggleRect_ = {
+        settingsControlLeft,
+        settingsStartPageButtonRect_.bottom + Dips(62),
+        settingsControlLeft + Dips(340),
+        settingsStartPageButtonRect_.bottom + Dips(98)
+    };
+    settingsWebRtcFallbackToggleRect_ = {
+        settingsControlLeft,
+        settingsTop + Dips(134),
+        settingsControlRight,
+        settingsTop + Dips(170)
+    };
+    settingsWebRtcDiagnosticsToggleRect_ = {
+        settingsControlLeft,
+        settingsWebRtcFallbackToggleRect_.bottom + Dips(70),
+        settingsControlRight,
+        settingsWebRtcFallbackToggleRect_.bottom + Dips(106)
+    };
+    settingsWebRtcStunServersRect_ = {
+        settingsControlLeft,
+        settingsWebRtcDiagnosticsToggleRect_.bottom + Dips(76),
+        settingsControlRight,
+        settingsWebRtcDiagnosticsToggleRect_.bottom + Dips(142)
     };
     settingsThemeButtonRect_ = {
         settingsControlLeft,
@@ -3242,6 +4511,169 @@ void ToolkitApp::RecalculateLayout()
         animeSectionTop + Dips(156)
     };
 
+    const int reminderLeft = contentRect_.left + contentMargin;
+    const int reminderRight = contentRect_.right - contentMargin;
+    const int reminderTop = contentTop + Dips(kToolBodyTopDip);
+    reminderNewButtonRect_ = {
+        reminderRight - Dips(166),
+        contentTop + Dips(kToolHeaderTopDip),
+        reminderRight,
+        contentTop + Dips(kToolHeaderTopDip + 38)
+    };
+    reminderQuickPanelRect_ = {
+        reminderLeft,
+        reminderTop,
+        reminderRight,
+        reminderTop + Dips(reminderMoreOptionsOpen_ ? 620 : 350)
+    };
+    reminderAddButtonRect_ = {
+        reminderQuickPanelRect_.right - Dips(154),
+        reminderQuickPanelRect_.top + Dips(96),
+        reminderQuickPanelRect_.right - Dips(22),
+        reminderQuickPanelRect_.top + Dips(136)
+    };
+    reminderTitleEditRect_ = {
+        reminderQuickPanelRect_.left + Dips(22),
+        reminderQuickPanelRect_.top + Dips(96),
+        reminderAddButtonRect_.left - Dips(12),
+        reminderQuickPanelRect_.top + Dips(136)
+    };
+    const int reminderColumnGap = Dips(12);
+    const int reminderFieldTop = reminderTitleEditRect_.bottom + Dips(42);
+    const int reminderAvailableWidth = reminderQuickPanelRect_.right - reminderQuickPanelRect_.left - Dips(44);
+    const int reminderFieldWidth = std::max(Dips(190), (reminderAvailableWidth - reminderColumnGap * 2) / 3);
+    reminderDateEditRect_ = {
+        reminderQuickPanelRect_.left + Dips(22),
+        reminderFieldTop,
+        reminderQuickPanelRect_.left + Dips(22) + reminderFieldWidth,
+        reminderFieldTop + Dips(38)
+    };
+    reminderDatePickerButtonRect_ = {
+        reminderDateEditRect_.right - Dips(42),
+        reminderDateEditRect_.top + Dips(3),
+        reminderDateEditRect_.right - Dips(4),
+        reminderDateEditRect_.bottom - Dips(3)
+    };
+    reminderTimeEditRect_ = {
+        reminderDateEditRect_.right + reminderColumnGap,
+        reminderFieldTop,
+        reminderDateEditRect_.right + reminderColumnGap + reminderFieldWidth - Dips(104),
+        reminderFieldTop + Dips(38)
+    };
+    reminderTimeAmPmButtonRect_ = {
+        reminderTimeEditRect_.right + Dips(8),
+        reminderTimeEditRect_.top,
+        reminderDateEditRect_.right + reminderColumnGap + reminderFieldWidth,
+        reminderTimeEditRect_.bottom
+    };
+    reminderAlertButtonRect_ = {
+        reminderTimeAmPmButtonRect_.right + reminderColumnGap,
+        reminderFieldTop,
+        reminderQuickPanelRect_.right - Dips(22),
+        reminderFieldTop + Dips(38)
+    };
+    reminderMoreOptionsToggleRect_ = {
+        reminderQuickPanelRect_.left + Dips(22),
+        reminderDateEditRect_.bottom + Dips(38),
+        reminderQuickPanelRect_.right - Dips(22),
+        reminderDateEditRect_.bottom + Dips(78)
+    };
+
+    const int reminderAdvancedTop = reminderMoreOptionsToggleRect_.bottom + Dips(44);
+    reminderPresetButtonRect_ = {
+        reminderQuickPanelRect_.left + Dips(22),
+        reminderAdvancedTop,
+        reminderQuickPanelRect_.left + Dips(22) + reminderFieldWidth,
+        reminderAdvancedTop + Dips(38)
+    };
+    reminderPriorityButtonRect_ = {
+        reminderPresetButtonRect_.right + reminderColumnGap,
+        reminderPresetButtonRect_.top,
+        reminderPresetButtonRect_.right + reminderColumnGap + reminderFieldWidth,
+        reminderPresetButtonRect_.bottom
+    };
+    reminderRepeatButtonRect_ = {
+        reminderPriorityButtonRect_.right + reminderColumnGap,
+        reminderPriorityButtonRect_.top,
+        reminderQuickPanelRect_.right - Dips(22),
+        reminderPriorityButtonRect_.bottom
+    };
+    const int reminderAdvancedSecondRowTop = reminderPriorityButtonRect_.bottom + Dips(42);
+    reminderCategoryEditRect_ = {
+        reminderQuickPanelRect_.left + Dips(22),
+        reminderAdvancedSecondRowTop,
+        reminderQuickPanelRect_.left + Dips(280),
+        reminderAdvancedSecondRowTop + Dips(38)
+    };
+    reminderAllDayToggleRect_ = {
+        reminderCategoryEditRect_.right + Dips(18),
+        reminderCategoryEditRect_.top + Dips(3),
+        reminderCategoryEditRect_.right + Dips(150),
+        reminderCategoryEditRect_.bottom - Dips(3)
+    };
+    reminderBirthdayToggleRect_ = {
+        reminderAllDayToggleRect_.right + Dips(18),
+        reminderAllDayToggleRect_.top,
+        reminderAllDayToggleRect_.right + Dips(160),
+        reminderAllDayToggleRect_.bottom
+    };
+    reminderNotesEditRect_ = {
+        reminderQuickPanelRect_.left + Dips(22),
+        reminderCategoryEditRect_.bottom + Dips(42),
+        reminderQuickPanelRect_.right - Dips(22),
+        reminderCategoryEditRect_.bottom + Dips(100)
+    };
+    const int reminderListTop = reminderQuickPanelRect_.bottom + Dips(18);
+    const int reminderListRows = std::max(2, static_cast<int>(VisibleReminderIndexes().size()));
+    reminderListRect_ = {
+        reminderLeft,
+        reminderListTop,
+        reminderRight,
+        reminderListTop + Dips(122) + reminderListRows * Dips(78)
+    };
+    reminderSearchEditRect_ = {
+        reminderListRect_.left + Dips(22),
+        reminderListRect_.top + Dips(54),
+        reminderListRect_.left + Dips(360),
+        reminderListRect_.top + Dips(92)
+    };
+    reminderFilterButtonRect_ = {
+        reminderSearchEditRect_.right + Dips(12),
+        reminderSearchEditRect_.top,
+        reminderSearchEditRect_.right + Dips(168),
+        reminderSearchEditRect_.bottom
+    };
+    reminderSortButtonRect_ = {
+        reminderFilterButtonRect_.right + Dips(12),
+        reminderFilterButtonRect_.top,
+        reminderFilterButtonRect_.right + Dips(178),
+        reminderFilterButtonRect_.bottom
+    };
+    reminderCalendarRect_ = {
+        reminderDateEditRect_.left,
+        reminderDateEditRect_.bottom + Dips(8),
+        reminderDateEditRect_.left + Dips(318),
+        reminderDateEditRect_.bottom + Dips(318)
+    };
+    if (reminderCalendarRect_.right > contentRect_.right - contentMargin)
+    {
+        const int shift = reminderCalendarRect_.right - (contentRect_.right - contentMargin);
+        reminderCalendarRect_.left -= shift;
+        reminderCalendarRect_.right -= shift;
+    }
+    reminderCalendarPrevButtonRect_ = {
+        reminderCalendarRect_.left + Dips(14),
+        reminderCalendarRect_.top + Dips(12),
+        reminderCalendarRect_.left + Dips(48),
+        reminderCalendarRect_.top + Dips(46)
+    };
+    reminderCalendarNextButtonRect_ = {
+        reminderCalendarRect_.right - Dips(48),
+        reminderCalendarRect_.top + Dips(12),
+        reminderCalendarRect_.right - Dips(14),
+        reminderCalendarRect_.top + Dips(46)
+    };
+
     int desiredContentHeight = contentRect_.bottom - contentRect_.top;
     if (currentPage_ == Page::Tool && currentTool_ == ToolKind::MediaDownloader)
     {
@@ -3256,6 +4688,20 @@ void ToolkitApp::RecalculateLayout()
             ? static_cast<int>(animeResultsRect_.bottom)
             : static_cast<int>(animeNotesEditRect_.bottom);
         desiredContentHeight = std::max(Dips(620), animePageBottom + Dips(48) - contentTop);
+    }
+    else if (currentPage_ == Page::Tool && currentTool_ == ToolKind::Reminders)
+    {
+        desiredContentHeight = std::max(Dips(720), static_cast<int>(reminderListRect_.bottom + Dips(48) - contentTop));
+    }
+    else if (currentPage_ == Page::Tool && currentTool_ == ToolKind::SmartFileTransfer)
+    {
+        const int sendPageBottom = std::max<int>(
+            smartTransferHostSnapshot_.approvalPending ? smartTransferAllowButtonRect_.bottom : smartTransferCodeBoxRect_.bottom,
+            HasArea(smartTransferWebRtcSendPanelRect_) ? smartTransferWebRtcSendPanelRect_.bottom : smartTransferCodeBoxRect_.bottom);
+        const int transferPageBottom = smartTransferTab_ == SmartTransferTab::Send
+            ? static_cast<int>(sendPageBottom + Dips(58))
+            : static_cast<int>(smartTransferProgressRect_.bottom + Dips(58));
+        desiredContentHeight = std::max(Dips(760), transferPageBottom - contentTop);
     }
     else if (currentPage_ == Page::Tool && currentTool_ == ToolKind::FileConverter)
     {
@@ -3320,7 +4766,9 @@ void ToolkitApp::RecalculateLayout()
     }
 
     UpdateMediaDownloaderControls();
+    UpdateSmartFileTransferControls();
     UpdateAnimeTrackerControls();
+    UpdateReminderControls();
 }
 
 void ToolkitApp::ClampScrollOffset()
@@ -3337,6 +4785,7 @@ void ToolkitApp::SetScrollOffset(int offset)
     }
 
     scrollOffsetY_ = clampedOffset;
+    reminderCalendarOpen_ = false;
     hoverAnimeSearchResultIndex_ = -1;
     hasHoveredButton_ = false;
     hoveredButtonRect_ = {};
@@ -3377,13 +4826,16 @@ void ToolkitApp::SelectPage(Page page)
     hasHoveredButton_ = false;
     hasPressedButton_ = false;
     activeDropdown_ = DropdownKind::None;
+    reminderCalendarOpen_ = false;
     awaitingActivationKey_ = false;
     awaitingOutputButton_ = false;
     awaitingAlternateOutputButton_ = false;
     scrollOffsetY_ = 0;
     scrollBarDragging_ = false;
     UpdateMediaDownloaderControls();
+    UpdateSmartFileTransferControls();
     UpdateAnimeTrackerControls();
+    UpdateReminderControls();
     RecalculateLayout();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -3397,6 +4849,7 @@ void ToolkitApp::OpenTool(ToolKind tool)
     hasHoveredButton_ = false;
     hasPressedButton_ = false;
     activeDropdown_ = DropdownKind::None;
+    reminderCalendarOpen_ = false;
     awaitingActivationKey_ = false;
     awaitingOutputButton_ = false;
     awaitingAlternateOutputButton_ = false;
@@ -3404,6 +4857,7 @@ void ToolkitApp::OpenTool(ToolKind tool)
     scrollBarDragging_ = false;
     UpdateMediaDownloaderControls();
     UpdateAnimeTrackerControls();
+    UpdateReminderControls();
     RecalculateLayout();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -3491,6 +4945,11 @@ void ToolkitApp::Paint(HDC hdc, const RECT& paintRect)
     {
         PaintHeader(backBufferDc_);
     }
+    if (RectsOverlap(clippedPaint, reminderBannerRect_))
+    {
+        PaintReminderBanner(backBufferDc_);
+        PaintUpdateBanner(backBufferDc_);
+    }
     if (RectsOverlap(clippedPaint, contentRect_))
     {
         const int contentDc = SaveDC(backBufferDc_);
@@ -3508,6 +4967,10 @@ void ToolkitApp::Paint(HDC hdc, const RECT& paintRect)
     if (!liveResize_ && RectsOverlap(clippedPaint, scrollBarTrackRect_))
     {
         PaintScrollBar(backBufferDc_);
+    }
+    if (!liveResize_ && reminderCalendarOpen_ && RectsOverlap(clippedPaint, reminderCalendarRect_))
+    {
+        PaintReminderCalendar(backBufferDc_);
     }
     RECT versionRect {
         clientRect_.right - Dips(190),
@@ -3879,6 +5342,18 @@ void ToolkitApp::PaintContent(HDC hdc)
     if (currentPage_ == Page::Tool && currentTool_ == ToolKind::AnimeTracker)
     {
         PaintAnimeTracker(hdc);
+        return;
+    }
+
+    if (currentPage_ == Page::Tool && currentTool_ == ToolKind::Reminders)
+    {
+        PaintReminders(hdc);
+        return;
+    }
+
+    if (currentPage_ == Page::Tool && currentTool_ == ToolKind::SmartFileTransfer)
+    {
+        PaintSmartFileTransfer(hdc);
         return;
     }
 
@@ -4265,6 +5740,37 @@ void ToolkitApp::PaintChevron(HDC hdc, const RECT& bounds, bool down, COLORREF c
     DeleteObject(brush);
 }
 
+void ToolkitApp::PaintXIcon(HDC hdc, const RECT& bounds, COLORREF color)
+{
+    if (!HasArea(bounds))
+    {
+        return;
+    }
+
+    Gdiplus::Graphics graphics(hdc);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+
+    Gdiplus::Color lineColor;
+    lineColor.SetFromCOLORREF(color);
+    Gdiplus::Pen pen(lineColor, static_cast<Gdiplus::REAL>(std::max(1, Dips(2))));
+    pen.SetStartCap(Gdiplus::LineCapRound);
+    pen.SetEndCap(Gdiplus::LineCapRound);
+    pen.SetLineJoin(Gdiplus::LineJoinRound);
+
+    const Gdiplus::REAL left = static_cast<Gdiplus::REAL>(bounds.left);
+    const Gdiplus::REAL top = static_cast<Gdiplus::REAL>(bounds.top);
+    const Gdiplus::REAL width = static_cast<Gdiplus::REAL>(bounds.right - bounds.left);
+    const Gdiplus::REAL height = static_cast<Gdiplus::REAL>(bounds.bottom - bounds.top);
+    const Gdiplus::REAL x1 = left + (width * 0.265625f);
+    const Gdiplus::REAL x2 = left + (width * 0.734375f);
+    const Gdiplus::REAL y1 = top + (height * 0.265625f);
+    const Gdiplus::REAL y2 = top + (height * 0.734375f);
+
+    graphics.DrawLine(&pen, x2, y1, x1, y2);
+    graphics.DrawLine(&pen, x1, y1, x2, y2);
+}
+
 void ToolkitApp::PaintBackButton(HDC hdc, const RECT& bounds)
 {
     PaintButton(hdc, bounds, L"", false);
@@ -4612,7 +6118,7 @@ void ToolkitApp::PaintFileConverter(HDC hdc)
         DrawTextLine(hdc, StatusLabel(job.status).c_str(), statusRect, monospaceFont_, job.status == ConversionStatus::Failed ? RGB(240, 120, 120) : kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
 
         RECT removeRect { row.right - Dips(38), row.top + Dips(6), row.right - Dips(10), row.bottom - Dips(6) };
-        DrawTextLine(hdc, L"X", removeRect, navFont_, kTextSecondary, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        PaintXIcon(hdc, ShrinkRect(removeRect, Dips(6), Dips(4)), kTextSecondary);
 
         rowTop += rowHeight;
     }
@@ -6248,6 +7754,914 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
     }
 }
 
+void ToolkitApp::PaintReminders(HDC hdc)
+{
+    const int contentTop = contentRect_.top - scrollOffsetY_;
+    const ToolDefinition* tool = FindTool(ToolKind::Reminders);
+
+    PaintBackButton(hdc, backButtonRect_);
+    PaintButton(hdc, reminderNewButtonRect_, L"New Reminder", false);
+
+    RECT titleRect {
+        backButtonRect_.right + Dips(20),
+        contentTop + Dips(kToolHeaderTopDip - 2),
+        reminderNewButtonRect_.left - Dips(18),
+        contentTop + Dips(kToolHeaderTopDip + 30)
+    };
+    DrawTextLine(
+        hdc,
+        tool ? tool->name.c_str() : L"Reminders",
+        titleRect,
+        headingFont_,
+        kTextPrimary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    RECT subtitleRect = titleRect;
+    subtitleRect.top = titleRect.bottom + Dips(2);
+    subtitleRect.bottom = subtitleRect.top + Dips(24);
+    DrawTextLine(
+        hdc,
+        L"Smart titles can set times. Due reminders play a notification sound.",
+        subtitleRect,
+        bodyFont_,
+        kTextSecondary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    FillRoundRect(hdc, reminderQuickPanelRect_, Dips(16), kPanelBackground);
+    StrokeRoundRect(hdc, reminderQuickPanelRect_, Dips(16), kBorder);
+
+    RECT quickTitle {
+        reminderQuickPanelRect_.left + Dips(22),
+        reminderQuickPanelRect_.top + Dips(18),
+        reminderQuickPanelRect_.right - Dips(22),
+        reminderQuickPanelRect_.top + Dips(46)
+    };
+    DrawTextLine(
+        hdc,
+        editingReminder_ ? L"Edit reminder" : L"Quick reminder",
+        quickTitle,
+        navFont_,
+        kTextPrimary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+
+    auto paintLabel = [&](const RECT& rect, const wchar_t* label)
+    {
+        RECT labelRect {
+            rect.left,
+            rect.top - Dips(25),
+            rect.right,
+            rect.top - Dips(5)
+        };
+        DrawTextLine(hdc, label, labelRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    };
+
+    paintLabel(reminderTitleEditRect_, L"Title");
+    FillRoundRect(hdc, reminderTitleEditRect_, Dips(11), kInputBackground);
+    StrokeRoundRect(hdc, reminderTitleEditRect_, Dips(11), kBorder);
+    if (GetFocus() != reminderTitleEdit_ && GetWindowTextString(reminderTitleEdit_).empty())
+    {
+        RECT placeholderRect = reminderTitleEditRect_;
+        placeholderRect.left += Dips(12);
+        placeholderRect.right -= Dips(12);
+        DrawTextLine(
+            hdc,
+            L"e.g. in an hour and 30 minutes; tomorrow at 8; next Friday at 3:30",
+            placeholderRect,
+            searchInputFont_,
+            kDisabledText,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    }
+    PaintButton(hdc, reminderAddButtonRect_, editingReminder_ ? L"Save" : L"Add", true);
+
+    paintLabel(reminderDateEditRect_, L"Date");
+    paintLabel(reminderTimeEditRect_, L"Time");
+    paintLabel(reminderAlertButtonRect_, L"Alert");
+    for (const RECT& editRect : { reminderDateEditRect_, reminderTimeEditRect_ })
+    {
+        FillRoundRect(hdc, editRect, Dips(11), kInputBackground);
+        StrokeRoundRect(hdc, editRect, Dips(11), kBorder);
+    }
+    PaintButton(hdc, reminderDatePickerButtonRect_, L"", false);
+    RECT calendarGlyph = ShrinkRect(reminderDatePickerButtonRect_, Dips(10), Dips(8));
+    StrokeRoundRect(hdc, calendarGlyph, Dips(3), kTextSecondary);
+    RECT calendarTopBar { calendarGlyph.left, calendarGlyph.top, calendarGlyph.right, calendarGlyph.top + Dips(5) };
+    FillSolidRect(hdc, calendarTopBar, kTextSecondary);
+    PaintDropdownButton(hdc, reminderTimeAmPmButtonRect_, reminderFormPm_ ? L"PM" : L"AM", true);
+    PaintDropdownButton(hdc, reminderAlertButtonRect_, ReminderAlertSummaryLabel().c_str(), true);
+
+    PaintDropdownButton(
+        hdc,
+        reminderMoreOptionsToggleRect_,
+        L"More options",
+        true,
+        true);
+
+    if (reminderMoreOptionsOpen_)
+    {
+        paintLabel(reminderPresetButtonRect_, L"Preset");
+        paintLabel(reminderPriorityButtonRect_, L"Priority");
+        paintLabel(reminderRepeatButtonRect_, L"Repeat");
+        PaintDropdownButton(hdc, reminderPresetButtonRect_, L"Quick preset", true);
+        PaintDropdownButton(hdc, reminderPriorityButtonRect_, ReminderService::PriorityLabel(reminderFormPriority_).c_str(), true);
+        PaintDropdownButton(hdc, reminderRepeatButtonRect_, ReminderService::RepeatTypeLabel(reminderFormRepeat_).c_str(), true);
+
+        paintLabel(reminderCategoryEditRect_, L"Category");
+        FillRoundRect(hdc, reminderCategoryEditRect_, Dips(11), kInputBackground);
+        StrokeRoundRect(hdc, reminderCategoryEditRect_, Dips(11), kBorder);
+        PaintCheckbox(hdc, reminderAllDayToggleRect_, reminderFormAllDay_, L"All-day");
+        PaintCheckbox(hdc, reminderBirthdayToggleRect_, reminderFormBirthday_, L"Birthday");
+        paintLabel(reminderNotesEditRect_, L"Notes");
+        FillRoundRect(hdc, reminderNotesEditRect_, Dips(11), kInputBackground);
+        StrokeRoundRect(hdc, reminderNotesEditRect_, Dips(11), kBorder);
+    }
+
+    RECT quickStatus {
+        reminderQuickPanelRect_.left + Dips(22),
+        reminderQuickPanelRect_.bottom - Dips(32),
+        reminderQuickPanelRect_.right - Dips(22),
+        reminderQuickPanelRect_.bottom - Dips(10)
+    };
+    DrawTextLine(
+        hdc,
+        reminderStatusMessage_.empty() ? L"Ready." : reminderStatusMessage_.c_str(),
+        quickStatus,
+        bodyFont_,
+        kTextSecondary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    FillRoundRect(hdc, reminderListRect_, Dips(16), kPanelBackground);
+    StrokeRoundRect(hdc, reminderListRect_, Dips(16), kBorder);
+
+    const std::vector<size_t> visibleReminders = VisibleReminderIndexes();
+    RECT listTitle {
+        reminderListRect_.left + Dips(22),
+        reminderListRect_.top + Dips(16),
+        reminderListRect_.right - Dips(22),
+        reminderListRect_.top + Dips(44)
+    };
+    DrawTextLine(hdc, L"Reminder list", listTitle, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+
+    RECT countRect = listTitle;
+    countRect.left = countRect.right - Dips(220);
+    std::wstring countText = std::to_wstring(visibleReminders.size()) + L" shown / " +
+        std::to_wstring(reminderList_.reminders.size()) + L" saved";
+    DrawTextLine(hdc, countText.c_str(), countRect, bodyFont_, kTextSecondary, DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
+
+    FillRoundRect(hdc, reminderSearchEditRect_, Dips(11), kInputBackground);
+    StrokeRoundRect(hdc, reminderSearchEditRect_, Dips(11), kBorder);
+    PaintDropdownButton(hdc, reminderFilterButtonRect_, ReminderFilterLabel().c_str(), true);
+    PaintDropdownButton(hdc, reminderSortButtonRect_, ReminderSortLabel().c_str(), true);
+
+    if (visibleReminders.empty())
+    {
+        RECT emptyRect {
+            reminderListRect_.left + Dips(22),
+            reminderSearchEditRect_.bottom + Dips(24),
+            reminderListRect_.right - Dips(22),
+            reminderListRect_.bottom - Dips(22)
+        };
+        const bool hasSearch = !TrimWhitespace(GetWindowTextString(reminderSearchEdit_)).empty();
+        DrawTextLine(
+            hdc,
+            hasSearch ? L"No matching reminders." : L"No reminders yet.",
+            emptyRect,
+            navFont_,
+            kTextPrimary,
+            DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        emptyRect.top += Dips(34);
+        DrawTextLine(
+            hdc,
+            hasSearch ? L"Clear the search or change the filter to see more." : L"Add one above and it will show up here.",
+            emptyRect,
+            bodyFont_,
+            kTextSecondary,
+            DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        return;
+    }
+
+    const auto now = ReminderService::Now();
+    for (size_t visibleIndex = 0; visibleIndex < visibleReminders.size(); ++visibleIndex)
+    {
+        const size_t reminderIndex = visibleReminders[visibleIndex];
+        if (reminderIndex >= reminderList_.reminders.size())
+        {
+            continue;
+        }
+
+        const Reminder& reminder = reminderList_.reminders[reminderIndex];
+        const ReminderStatus status = ReminderScheduler::StatusFor(reminder, now);
+        RECT row = ReminderRowRect(visibleIndex);
+        const bool selected = selectedReminderIndex_ == static_cast<int>(reminderIndex);
+        FillRoundRect(hdc, row, Dips(12), selected ? kAccentSoft : kButtonBackground);
+        StrokeRoundRect(hdc, row, Dips(12), selected ? kAccent : kBorder);
+
+        RECT editRect = ReminderActionRect(visibleIndex, 0);
+        RECT deleteRect = ReminderActionRect(visibleIndex, 1);
+        RECT textRect {
+            row.left + Dips(14),
+            row.top + Dips(8),
+            editRect.left - Dips(14),
+            row.top + Dips(32)
+        };
+        DrawTextLine(hdc, reminder.title.c_str(), textRect, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+        RECT detailRect = textRect;
+        detailRect.top = textRect.bottom + Dips(2);
+        detailRect.bottom = row.bottom - Dips(8);
+        std::wstring details = ReminderService::DueLabel(reminder, now) + L" / " +
+            ReminderService::CountdownLabel(reminder, now) + L" / " +
+            ReminderService::PriorityLabel(reminder.priority) + L" / " +
+            (reminder.category.empty() ? L"General" : reminder.category);
+        if (reminder.repeat.type != ReminderRepeatType::None)
+        {
+            details += L" / " + ReminderService::RepeatTypeLabel(reminder.repeat.type);
+        }
+        DrawTextLine(hdc, details.c_str(), detailRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+        RECT pill {
+            std::max(textRect.left, editRect.left - Dips(112)),
+            row.top + Dips(9),
+            editRect.left - Dips(12),
+            row.top + Dips(31)
+        };
+        COLORREF pillColor = kInputBackground;
+        if (status == ReminderStatus::Overdue)
+        {
+            pillColor = RGB(118, 58, 53);
+        }
+        else if (status == ReminderStatus::DueNow || status == ReminderStatus::DueSoon)
+        {
+            pillColor = kAccentSoft;
+        }
+        else if (status == ReminderStatus::Completed)
+        {
+            pillColor = RGB(46, 93, 62);
+        }
+        FillRoundRect(hdc, pill, Dips(10), pillColor);
+        DrawTextLine(hdc, ReminderService::StatusLabel(status).c_str(), pill, bodyFont_, kTextPrimary, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+        PaintButton(hdc, editRect, L"Edit", false);
+        PaintButton(hdc, deleteRect, L"", false);
+        PaintXIcon(hdc, ShrinkRect(deleteRect, Dips(10), Dips(8)), kTextSecondary);
+    }
+}
+
+void ToolkitApp::PaintReminderBanner(HDC hdc)
+{
+    if (!reminderAlert_.hasValue || !HasArea(reminderBannerRect_))
+    {
+        return;
+    }
+
+    COLORREF background = kAccentSoft;
+    COLORREF border = kAccent;
+    if (reminderAlert_.severity == ReminderAlertSeverity::Overdue)
+    {
+        background = RGB(112, 55, 50);
+        border = RGB(196, 92, 82);
+    }
+    else if (reminderAlert_.severity == ReminderAlertSeverity::DueNow)
+    {
+        background = kAccent;
+        border = kAccent;
+    }
+    else if (reminderAlert_.severity == ReminderAlertSeverity::DueSoon)
+    {
+        background = kAccentSoft;
+        border = kAccent;
+    }
+
+    FillSolidRect(hdc, reminderBannerRect_, background);
+    RECT divider {
+        reminderBannerRect_.left,
+        reminderBannerRect_.bottom - Dips(1),
+        reminderBannerRect_.right,
+        reminderBannerRect_.bottom
+    };
+    FillSolidRect(hdc, divider, border);
+
+    RECT iconRect {
+        reminderBannerRect_.left + Dips(42),
+        reminderBannerRect_.top + Dips(11),
+        reminderBannerRect_.left + Dips(74),
+        reminderBannerRect_.bottom - Dips(11)
+    };
+    if (remindersIconTinted_)
+    {
+        PaintBitmap(hdc, remindersIconTinted_.get(), iconRect);
+    }
+    else
+    {
+        PaintReminderIcon(hdc, iconRect);
+    }
+
+    RECT messageRect {
+        iconRect.right + Dips(14),
+        reminderBannerRect_.top + Dips(7),
+        reminderBannerCloseButtonRect_.left - Dips(14),
+        reminderBannerRect_.top + Dips(28)
+    };
+    DrawTextLine(hdc, reminderAlert_.message.c_str(), messageRect, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    RECT subtextRect = messageRect;
+    subtextRect.top = messageRect.bottom;
+    subtextRect.bottom = reminderBannerRect_.bottom - Dips(7);
+    DrawTextLine(hdc, reminderAlert_.subtext.c_str(), subtextRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    const bool closeHovered = hasHoveredButton_ && EqualRect(&reminderBannerCloseButtonRect_, &hoveredButtonRect_);
+    const bool closePressed = hasPressedButton_ && EqualRect(&reminderBannerCloseButtonRect_, &pressedButtonRect_);
+    RECT closeIconRect = ShrinkRect(reminderBannerCloseButtonRect_, Dips(6), Dips(6));
+    if (closePressed)
+    {
+        OffsetRect(&closeIconRect, 0, Dips(1));
+    }
+    PaintXIcon(hdc, closeIconRect, closeHovered || closePressed ? kTextPrimary : kTextSecondary);
+}
+
+void ToolkitApp::PaintUpdateBanner(HDC hdc)
+{
+    if (reminderAlert_.hasValue ||
+        !updateNotificationVisible_ ||
+        !hasUpdateResult_ ||
+        updateResult_.status != UpdateCheckStatus::UpdateAvailable ||
+        !HasArea(reminderBannerRect_))
+    {
+        return;
+    }
+
+    FillSolidRect(hdc, reminderBannerRect_, kAccentSoft);
+    RECT divider {
+        reminderBannerRect_.left,
+        reminderBannerRect_.bottom - Dips(1),
+        reminderBannerRect_.right,
+        reminderBannerRect_.bottom
+    };
+    FillSolidRect(hdc, divider, kAccent);
+
+    RECT iconRect {
+        reminderBannerRect_.left + Dips(42),
+        reminderBannerRect_.top + Dips(11),
+        reminderBannerRect_.left + Dips(74),
+        reminderBannerRect_.bottom - Dips(11)
+    };
+    if (settingsIconTinted_)
+    {
+        PaintBitmap(hdc, settingsIconTinted_.get(), iconRect);
+    }
+    else
+    {
+        PaintReminderIcon(hdc, iconRect);
+    }
+
+    std::wstring title = L"Update available";
+    if (!updateResult_.latestVersion.empty())
+    {
+        title += L": version ";
+        title += updateResult_.latestVersion;
+    }
+    if (updateInstalling_)
+    {
+        title = L"Updating Rex's Toolkit...";
+    }
+
+    RECT messageRect {
+        iconRect.right + Dips(14),
+        reminderBannerRect_.top + Dips(7),
+        updateBannerUpdateButtonRect_.left - Dips(16),
+        reminderBannerRect_.top + Dips(28)
+    };
+    DrawTextLine(hdc, title.c_str(), messageRect, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    std::wstring subtext = L"Download and install the latest release now.";
+    if (!updateInstallStatus_.empty())
+    {
+        subtext = updateInstallStatus_;
+    }
+    else if (!updateResult_.releaseNotes.empty())
+    {
+        subtext = updateResult_.releaseNotes.front();
+    }
+
+    RECT subtextRect = messageRect;
+    subtextRect.top = messageRect.bottom;
+    subtextRect.bottom = reminderBannerRect_.bottom - Dips(7);
+    DrawTextLine(hdc, subtext.c_str(), subtextRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    PaintButton(
+        hdc,
+        updateBannerUpdateButtonRect_,
+        updateInstalling_ ? L"Updating..." : L"Update Now",
+        true,
+        updateInstalling_,
+        !updateInstalling_);
+
+    const bool closeHovered = hasHoveredButton_ && EqualRect(&updateBannerCloseButtonRect_, &hoveredButtonRect_);
+    const bool closePressed = hasPressedButton_ && EqualRect(&updateBannerCloseButtonRect_, &pressedButtonRect_);
+    RECT closeIconRect = ShrinkRect(updateBannerCloseButtonRect_, Dips(6), Dips(6));
+    if (closePressed)
+    {
+        OffsetRect(&closeIconRect, 0, Dips(1));
+    }
+    PaintXIcon(hdc, closeIconRect, closeHovered || closePressed ? kTextPrimary : kTextSecondary);
+}
+
+void ToolkitApp::PaintReminderCalendar(HDC hdc)
+{
+    if (!reminderCalendarOpen_ || !HasArea(reminderCalendarRect_))
+    {
+        return;
+    }
+
+    FillRoundRect(hdc, reminderCalendarRect_, Dips(14), kDropdownBackground);
+    StrokeRoundRect(hdc, reminderCalendarRect_, Dips(14), kAccentSoft);
+    PaintButton(hdc, reminderCalendarPrevButtonRect_, L"", false);
+    PaintButton(hdc, reminderCalendarNextButtonRect_, L"", false);
+    PaintChevron(hdc, ShrinkRect(reminderCalendarPrevButtonRect_, Dips(9), Dips(8)), false, kTextPrimary);
+    RECT nextChevron = ShrinkRect(reminderCalendarNextButtonRect_, Dips(9), Dips(8));
+    POINT rightPoints[] {
+        { nextChevron.left + Dips(5), nextChevron.top + Dips(3) },
+        { nextChevron.left + Dips(5), nextChevron.bottom - Dips(3) },
+        { nextChevron.right - Dips(4), nextChevron.top + ((nextChevron.bottom - nextChevron.top) / 2) }
+    };
+    HBRUSH arrowBrush = CreateSolidBrush(kTextPrimary);
+    HBRUSH oldArrowBrush = static_cast<HBRUSH>(SelectObject(hdc, arrowBrush));
+    HPEN arrowPen = CreatePen(PS_SOLID, 1, kTextPrimary);
+    HPEN oldArrowPen = static_cast<HPEN>(SelectObject(hdc, arrowPen));
+    Polygon(hdc, rightPoints, static_cast<int>(std::size(rightPoints)));
+    SelectObject(hdc, oldArrowPen);
+    SelectObject(hdc, oldArrowBrush);
+    DeleteObject(arrowPen);
+    DeleteObject(arrowBrush);
+
+    static constexpr wchar_t monthNames[][10] {
+        L"January", L"February", L"March", L"April", L"May", L"June",
+        L"July", L"August", L"September", L"October", L"November", L"December"
+    };
+    const int monthIndex = std::clamp(reminderCalendarMonth_, 1, 12) - 1;
+    const std::wstring title = std::wstring(monthNames[monthIndex]) + L" " + std::to_wstring(reminderCalendarYear_);
+    RECT titleRect {
+        reminderCalendarPrevButtonRect_.right + Dips(8),
+        reminderCalendarRect_.top + Dips(12),
+        reminderCalendarNextButtonRect_.left - Dips(8),
+        reminderCalendarRect_.top + Dips(46)
+    };
+    DrawTextLine(hdc, title.c_str(), titleRect, navFont_, kTextPrimary, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    static constexpr wchar_t weekdays[][4] { L"Sun", L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat" };
+    const int cellGap = Dips(4);
+    const int gridLeft = reminderCalendarRect_.left + Dips(14);
+    const int weekdayTop = reminderCalendarRect_.top + Dips(58);
+    const int cellWidth = std::max(1, static_cast<int>(reminderCalendarRect_.right - reminderCalendarRect_.left - Dips(28) - cellGap * 6) / 7);
+    for (int index = 0; index < 7; ++index)
+    {
+        RECT weekdayRect {
+            gridLeft + index * (cellWidth + cellGap),
+            weekdayTop,
+            gridLeft + index * (cellWidth + cellGap) + cellWidth,
+            weekdayTop + Dips(24)
+        };
+        DrawTextLine(hdc, weekdays[index], weekdayRect, bodyFont_, kTextSecondary, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    }
+
+    int selectedYear = 0;
+    int selectedMonth = 0;
+    int selectedDay = 0;
+    const std::wstring selectedDate = GetWindowTextString(reminderDateEdit_);
+    swscanf_s(selectedDate.c_str(), L"%d/%d/%d", &selectedYear, &selectedMonth, &selectedDay);
+
+    const auto now = ReminderService::Now();
+    const std::tm today = LocalTimeParts(now);
+    const int days = ReminderDaysInMonth(reminderCalendarYear_, reminderCalendarMonth_);
+    for (int day = 1; day <= days; ++day)
+    {
+        RECT dayRect = ReminderCalendarDayRect(day);
+        const bool selected =
+            selectedYear == reminderCalendarYear_ &&
+            selectedMonth == reminderCalendarMonth_ &&
+            selectedDay == day;
+        const bool isToday =
+            today.tm_year + 1900 == reminderCalendarYear_ &&
+            today.tm_mon + 1 == reminderCalendarMonth_ &&
+            today.tm_mday == day;
+        if (selected || isToday)
+        {
+            FillRoundRect(hdc, dayRect, Dips(8), selected ? kAccentSoft : kButtonBackground);
+            StrokeRoundRect(hdc, dayRect, Dips(8), selected ? kAccent : kBorder);
+        }
+        std::wstring label = std::to_wstring(day);
+        DrawTextLine(hdc, label.c_str(), dayRect, bodyFont_, kTextPrimary, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    }
+}
+
+void ToolkitApp::PaintReminderIcon(HDC hdc, const RECT& bounds)
+{
+    const int width = bounds.right - bounds.left;
+    const int height = bounds.bottom - bounds.top;
+    if (width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    Gdiplus::Graphics graphics(hdc);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+
+    auto color = [](COLORREF value)
+    {
+        return Gdiplus::Color(
+            255,
+            static_cast<BYTE>(value & 0xFF),
+            static_cast<BYTE>((value >> 8) & 0xFF),
+            static_cast<BYTE>((value >> 16) & 0xFF));
+    };
+
+    const float left = static_cast<float>(bounds.left);
+    const float top = static_cast<float>(bounds.top);
+    const float size = static_cast<float>(std::min(width, height));
+    const float x = left + (static_cast<float>(width) - size) / 2.0f;
+    const float y = top + (static_cast<float>(height) - size) / 2.0f;
+
+    Gdiplus::Pen pen(color(kTextPrimary), std::max<Gdiplus::REAL>(1.6f, static_cast<Gdiplus::REAL>(Dips(2))));
+    pen.SetLineJoin(Gdiplus::LineJoinRound);
+    Gdiplus::SolidBrush brush(color(kTextPrimary));
+
+    Gdiplus::GraphicsPath bell;
+    bell.StartFigure();
+    bell.AddBezier(
+        x + size * 0.28f, y + size * 0.58f,
+        x + size * 0.28f, y + size * 0.34f,
+        x + size * 0.40f, y + size * 0.22f,
+        x + size * 0.50f, y + size * 0.22f);
+    bell.AddBezier(
+        x + size * 0.50f, y + size * 0.22f,
+        x + size * 0.60f, y + size * 0.22f,
+        x + size * 0.72f, y + size * 0.34f,
+        x + size * 0.72f, y + size * 0.58f);
+    bell.AddLine(x + size * 0.80f, y + size * 0.74f, x + size * 0.20f, y + size * 0.74f);
+    bell.CloseFigure();
+    graphics.DrawPath(&pen, &bell);
+
+    graphics.DrawLine(&pen, x + size * 0.50f, y + size * 0.14f, x + size * 0.50f, y + size * 0.21f);
+    graphics.DrawLine(&pen, x + size * 0.34f, y + size * 0.82f, x + size * 0.66f, y + size * 0.82f);
+    graphics.FillEllipse(&brush, x + size * 0.44f, y + size * 0.82f, size * 0.12f, size * 0.12f);
+}
+
+void ToolkitApp::PaintSmartFileTransfer(HDC hdc)
+{
+    const int margin = Dips(42);
+    const int contentTop = contentRect_.top - scrollOffsetY_;
+    const ToolDefinition* tool = FindTool(ToolKind::SmartFileTransfer);
+
+    PaintBackButton(hdc, backButtonRect_);
+
+    RECT titleRect {
+        backButtonRect_.right + Dips(20),
+        contentTop + Dips(kToolHeaderTopDip - 2),
+        contentRect_.right - margin,
+        contentTop + Dips(kToolHeaderTopDip + 30)
+    };
+    DrawTextLine(hdc, tool ? tool->name.c_str() : L"Smart File Transfer", titleRect, headingFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    RECT subtitleRect = titleRect;
+    subtitleRect.top = titleRect.bottom + Dips(2);
+    subtitleRect.bottom = subtitleRect.top + Dips(24);
+    DrawTextLine(hdc, L"Send files directly between Rex's Toolkit users without cloud storage.", subtitleRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    auto paintTab = [&](const RECT& rect, const wchar_t* label, bool selected)
+    {
+        const bool hovered = hasHoveredButton_ && EqualRect(&rect, &hoveredButtonRect_);
+        FillRoundRect(hdc, rect, Dips(10), selected ? kAccentSoft : hovered ? kPanelHover : kButtonBackground);
+        StrokeRoundRect(hdc, rect, Dips(10), selected ? kAccent : kBorder);
+        DrawTextLine(hdc, label, rect, navFont_, selected || hovered ? kTextPrimary : kTextSecondary, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    };
+    paintTab(smartTransferSendTabRect_, L"Send", smartTransferTab_ == SmartTransferTab::Send);
+    paintTab(smartTransferReceiveTabRect_, L"Receive", smartTransferTab_ == SmartTransferTab::Receive);
+
+    RECT noteRect { smartTransferReceiveTabRect_.right + Dips(20), smartTransferSendTabRect_.top, contentRect_.right - margin, smartTransferSendTabRect_.bottom };
+    DrawTextLine(hdc, L"Some networks block direct transfers. Rex's Toolkit will try available direct methods and explain what works.", noteRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    if (smartTransferTab_ == SmartTransferTab::Send)
+    {
+        FillRoundRect(hdc, smartTransferDropZoneRect_, Dips(18), kInputBackground);
+        StrokeRoundRect(hdc, smartTransferDropZoneRect_, Dips(18), kAccentSoft);
+        RECT dropTitle { smartTransferDropZoneRect_.left + Dips(28), smartTransferDropZoneRect_.top + Dips(32), smartTransferBrowseButtonRect_.left - Dips(18), smartTransferDropZoneRect_.top + Dips(62) };
+        DrawTextLine(hdc, L"Drag files here to send", dropTitle, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        RECT dropSubtitle = dropTitle;
+        dropSubtitle.top = dropTitle.bottom + Dips(4);
+        dropSubtitle.bottom = dropSubtitle.top + Dips(28);
+        DrawTextLine(hdc, L"or click Browse Files. Only selected files are exposed by safe file IDs.", dropSubtitle, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        PaintButton(hdc, smartTransferBrowseButtonRect_, L"Browse Files", false, false, !smartTransferHosting_);
+
+        FillRoundRect(hdc, smartTransferSendFileListRect_, Dips(16), kPanelBackground);
+        StrokeRoundRect(hdc, smartTransferSendFileListRect_, Dips(16), kBorder);
+        unsigned long long totalBytes = 0;
+        for (const SmartTransferFile& file : smartTransferFiles_)
+        {
+            totalBytes += file.size;
+        }
+        RECT listTitle { smartTransferSendFileListRect_.left + Dips(18), smartTransferSendFileListRect_.top + Dips(12), smartTransferClearButtonRect_.left - Dips(12), smartTransferSendFileListRect_.top + Dips(42) };
+        std::wstring listTitleText = smartTransferFiles_.empty()
+            ? L"Selected files"
+            : (std::to_wstring(smartTransferFiles_.size()) + L" file" + (smartTransferFiles_.size() == 1 ? L"" : L"s") + L" / " + FileSizeLabel(totalBytes));
+        DrawTextLine(hdc, listTitleText.c_str(), listTitle, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        PaintButton(hdc, smartTransferClearButtonRect_, L"Clear All", false, false, !smartTransferHosting_ && !smartTransferFiles_.empty());
+
+        if (smartTransferFiles_.empty())
+        {
+            RECT emptyTitle { smartTransferSendFileListRect_.left + Dips(24), smartTransferSendFileListRect_.top + Dips(76), smartTransferSendFileListRect_.right - Dips(24), smartTransferSendFileListRect_.top + Dips(108) };
+            DrawTextLine(hdc, L"No files selected.", emptyTitle, navFont_, kTextPrimary, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+            RECT emptySubtitle = emptyTitle;
+            emptySubtitle.top = emptyTitle.bottom + Dips(4);
+            emptySubtitle.bottom = emptySubtitle.top + Dips(28);
+            DrawTextLine(hdc, L"Drag files here or browse to create a transfer.", emptySubtitle, bodyFont_, kTextSecondary, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        }
+        else
+        {
+            const int rowHeight = Dips(36);
+            int rowTop = smartTransferSendFileListRect_.top + Dips(52);
+            const int maxRows = std::max<int>(1, static_cast<int>(smartTransferSendFileListRect_.bottom - rowTop - Dips(12)) / rowHeight);
+            for (int index = 0; index < std::min<int>(maxRows, static_cast<int>(smartTransferFiles_.size())); ++index)
+            {
+                const SmartTransferFile& file = smartTransferFiles_[static_cast<size_t>(index)];
+                RECT row { smartTransferSendFileListRect_.left + Dips(14), rowTop, smartTransferSendFileListRect_.right - Dips(14), rowTop + rowHeight - Dips(5) };
+                FillRoundRect(hdc, row, Dips(9), kButtonBackground);
+                RECT nameRect { row.left + Dips(12), row.top, row.right - Dips(260), row.bottom };
+                RECT typeRect { row.right - Dips(250), row.top, row.right - Dips(172), row.bottom };
+                RECT sizeRect { row.right - Dips(164), row.top, row.right - Dips(68), row.bottom };
+                RECT removeRect { row.right - Dips(44), row.top + Dips(4), row.right - Dips(10), row.bottom - Dips(4) };
+                DrawTextLine(hdc, file.name.c_str(), nameRect, bodyFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                DrawTextLine(hdc, file.extension.empty() ? L"File" : file.extension.c_str(), typeRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                DrawTextLine(hdc, FileSizeLabel(file.size).c_str(), sizeRect, bodyFont_, kTextSecondary, DT_RIGHT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                PaintButton(hdc, removeRect, L"", false, false, !smartTransferHosting_);
+                PaintXIcon(hdc, ShrinkRect(removeRect, Dips(9), Dips(7)), kTextSecondary);
+                rowTop += rowHeight;
+            }
+        }
+
+        auto drawLabel = [&](const wchar_t* label, const RECT& rect)
+        {
+            RECT labelRect { rect.left, rect.top - Dips(26), rect.right, rect.top - Dips(4) };
+            DrawTextLine(hdc, label, labelRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        };
+        drawLabel(L"Optional transfer name", smartTransferNameEditRect_);
+        FillRoundRect(hdc, smartTransferNameEditRect_, Dips(10), kInputBackground);
+        StrokeRoundRect(hdc, smartTransferNameEditRect_, Dips(10), kBorder);
+        drawLabel(L"Expiration time", smartTransferExpirationButtonRect_);
+        PaintDropdownButton(hdc, smartTransferExpirationButtonRect_, SmartTransferExpirationLabel().c_str(), !smartTransferHosting_);
+        PaintCheckbox(hdc, smartTransferApprovalToggleRect_, smartTransferOptions_.requireApproval, L"Require sender approval");
+        PaintCheckbox(hdc, smartTransferStopAfterToggleRect_, smartTransferOptions_.stopAfterFirstCompletedDownload, L"Stop after completed download");
+        PaintCheckbox(hdc, smartTransferMultiReceiverToggleRect_, smartTransferOptions_.allowMultipleReceivers, L"Allow multiple receivers");
+        PaintCheckbox(hdc, smartTransferDirectHostToggleRect_, smartTransferOptions_.tryDirectHost, L"Try Direct Host (internet)");
+        RECT directHostNotice {
+            smartTransferDirectHostToggleRect_.left + Dips(30),
+            smartTransferDirectHostToggleRect_.bottom + Dips(2),
+            smartTransferDirectHostToggleRect_.right,
+            smartTransferDirectHostToggleRect_.bottom + Dips(28)
+        };
+        DrawTextLine(
+            hdc,
+            L"Temporarily opens the transfer port with UPnP if your router allows it. Removed when hosting stops.",
+            directHostNotice,
+            bodyFont_,
+            kTextSecondary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        PaintButton(hdc, smartTransferCreateButtonRect_, smartTransferHosting_ ? L"Hosting..." : L"Create Transfer", true, smartTransferHosting_, !smartTransferFiles_.empty() && !smartTransferHosting_);
+        PaintButton(hdc, smartTransferStopButtonRect_, L"Stop Hosting", false, false, smartTransferHosting_);
+        PaintButton(hdc, smartTransferCopyCodeButtonRect_, L"Copy Code", false, false, !smartTransferHostSnapshot_.transferCode.empty());
+
+        FillRoundRect(hdc, smartTransferCodeBoxRect_, Dips(14), kInputBackground);
+        StrokeRoundRect(hdc, smartTransferCodeBoxRect_, Dips(14), kBorder);
+        RECT codeTitle { smartTransferCodeBoxRect_.left + Dips(18), smartTransferCodeBoxRect_.top + Dips(12), smartTransferCodeBoxRect_.right - Dips(18), smartTransferCodeBoxRect_.top + Dips(38) };
+        DrawTextLine(hdc, L"Transfer code", codeTitle, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        RECT codeText = codeTitle;
+        codeText.top = codeTitle.bottom + Dips(4);
+        codeText.bottom = smartTransferCodeBoxRect_.bottom - Dips(14);
+        std::wstring codePreview = smartTransferHostSnapshot_.transferCode.empty() ? L"Create a transfer to generate a secure code." : smartTransferHostSnapshot_.transferCode;
+        DrawTextLine(hdc, codePreview.c_str(), codeText, monospaceFont_, smartTransferHostSnapshot_.transferCode.empty() ? kTextSecondary : kTextPrimary, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+
+        RECT statusRect { smartTransferCodeBoxRect_.left, smartTransferCodeBoxRect_.bottom + Dips(8), smartTransferCodeBoxRect_.right, smartTransferCodeBoxRect_.bottom + Dips(36) };
+        std::wstring status = smartTransferHostSnapshot_.message.empty() ? smartTransferStatusMessage_ : smartTransferHostSnapshot_.message;
+        if (status.empty()) status = SmartTransferHostStatusLabel();
+        DrawTextLine(hdc, status.c_str(), statusRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        if (!smartTransferHostSnapshot_.directHostMessage.empty() && !smartTransferHostSnapshot_.approvalPending)
+        {
+            RECT directStatusRect = statusRect;
+            directStatusRect.top = statusRect.bottom + Dips(2);
+            directStatusRect.bottom = directStatusRect.top + Dips(26);
+            DrawTextLine(hdc, smartTransferHostSnapshot_.directHostMessage.c_str(), directStatusRect, bodyFont_, smartTransferHostSnapshot_.directHostAvailable ? kAccent : kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            if (!smartTransferHostSnapshot_.webRtcMessage.empty())
+            {
+                RECT webRtcStatusRect = directStatusRect;
+                webRtcStatusRect.top = directStatusRect.bottom + Dips(2);
+                webRtcStatusRect.bottom = webRtcStatusRect.top + Dips(26);
+                DrawTextLine(hdc, smartTransferHostSnapshot_.webRtcMessage.c_str(), webRtcStatusRect, bodyFont_, smartTransferHostSnapshot_.webRtcDependencyAvailable ? kAccent : kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            }
+        }
+
+        if (HasArea(smartTransferWebRtcSendPanelRect_))
+        {
+            FillRoundRect(hdc, smartTransferWebRtcSendPanelRect_, Dips(16), kPanelBackground);
+            StrokeRoundRect(hdc, smartTransferWebRtcSendPanelRect_, Dips(16), kBorder);
+            RECT p2pTitle {
+                smartTransferWebRtcSendPanelRect_.left + Dips(18),
+                smartTransferWebRtcSendPanelRect_.top + Dips(14),
+                smartTransferWebRtcSendPanelRect_.right - Dips(18),
+                smartTransferWebRtcSendPanelRect_.top + Dips(42)
+            };
+            DrawTextLine(hdc, L"Manual P2P fallback", p2pTitle, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            RECT p2pBody = p2pTitle;
+            p2pBody.left = smartTransferCopyPairingButtonRect_.right + Dips(16);
+            p2pBody.top = smartTransferCopyPairingButtonRect_.top;
+            p2pBody.bottom = smartTransferCopyPairingButtonRect_.bottom;
+            std::wstring p2pMessage = smartTransferHostSnapshot_.webRtcMessage.empty()
+                ? L"Copy a sender pairing code if LAN and Direct Host fail."
+                : smartTransferHostSnapshot_.webRtcMessage;
+            DrawTextLine(hdc, p2pMessage.c_str(), p2pBody, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            PaintButton(
+                hdc,
+                smartTransferCopyPairingButtonRect_,
+                smartTransferWebRtcBusy_ ? L"Working..." : L"Copy Sender Code",
+                false,
+                smartTransferWebRtcBusy_,
+                smartTransferHosting_ && !smartTransferWebRtcBusy_ && smartTransferHostSnapshot_.webRtcDependencyAvailable);
+
+            RECT responseLabel {
+                smartTransferReceiverResponseEditRect_.left,
+                smartTransferReceiverResponseEditRect_.top - Dips(26),
+                smartTransferReceiverResponseEditRect_.right,
+                smartTransferReceiverResponseEditRect_.top - Dips(4)
+            };
+            DrawTextLine(hdc, L"Receiver response code", responseLabel, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            FillRoundRect(hdc, smartTransferReceiverResponseEditRect_, Dips(10), kInputBackground);
+            StrokeRoundRect(hdc, smartTransferReceiverResponseEditRect_, Dips(10), kBorder);
+            PaintButton(
+                hdc,
+                smartTransferApplyResponseButtonRect_,
+                smartTransferWebRtcBusy_ ? L"Pairing..." : L"Apply Response",
+                true,
+                smartTransferWebRtcBusy_,
+                smartTransferHosting_ && !smartTransferWebRtcBusy_ && smartTransferHostSnapshot_.webRtcDependencyAvailable);
+        }
+
+        if (smartTransferHostSnapshot_.approvalPending)
+        {
+            RECT approvalText { smartTransferCodeBoxRect_.left, smartTransferAllowButtonRect_.top, smartTransferAllowButtonRect_.left - Dips(18), smartTransferAllowButtonRect_.bottom };
+            std::wstring approval = L"Receiver " + smartTransferHostSnapshot_.receiverAddress + L" is requesting access.";
+            DrawTextLine(hdc, approval.c_str(), approvalText, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            PaintButton(hdc, smartTransferAllowButtonRect_, L"Allow", true);
+            PaintButton(hdc, smartTransferDenyButtonRect_, L"Deny", false);
+        }
+        return;
+    }
+
+    FillRoundRect(hdc, smartTransferReceiveCodeEditRect_, Dips(14), kInputBackground);
+    StrokeRoundRect(hdc, smartTransferReceiveCodeEditRect_, Dips(14), kBorder);
+    RECT receiveLabel { smartTransferReceiveCodeEditRect_.left, smartTransferReceiveCodeEditRect_.top - Dips(28), smartTransferReceiveCodeEditRect_.right, smartTransferReceiveCodeEditRect_.top - Dips(6) };
+    DrawTextLine(hdc, L"Transfer Code", receiveLabel, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    PaintButton(hdc, smartTransferConnectButtonRect_, smartTransferConnecting_ ? L"Connecting..." : L"Connect", true, smartTransferConnecting_, !smartTransferConnecting_ && !smartTransferDownloading_);
+    PaintButton(hdc, smartTransferClearCodeButtonRect_, L"Clear", false, false, !smartTransferConnecting_ && !smartTransferDownloading_);
+    RECT attemptRect { smartTransferClearCodeButtonRect_.right + Dips(18), smartTransferConnectButtonRect_.top, contentRect_.right - margin, smartTransferConnectButtonRect_.bottom };
+    std::wstring attemptText = smartTransferReceiveStatusMessage_.empty() ? L"Paste a transfer code to connect to another Rex's Toolkit user." : smartTransferReceiveStatusMessage_;
+    DrawTextLine(hdc, attemptText.c_str(), attemptRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    if (HasArea(smartTransferWebRtcReceivePanelRect_))
+    {
+        FillRoundRect(hdc, smartTransferWebRtcReceivePanelRect_, Dips(16), kPanelBackground);
+        StrokeRoundRect(hdc, smartTransferWebRtcReceivePanelRect_, Dips(16), kAccentSoft);
+        RECT p2pTitle {
+            smartTransferWebRtcReceivePanelRect_.left + Dips(18),
+            smartTransferWebRtcReceivePanelRect_.top + Dips(14),
+            smartTransferWebRtcReceivePanelRect_.right - Dips(18),
+            smartTransferWebRtcReceivePanelRect_.top + Dips(42)
+        };
+        DrawTextLine(hdc, L"Manual P2P pairing", p2pTitle, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        RECT p2pBody {
+            p2pTitle.left,
+            p2pTitle.bottom + Dips(4),
+            p2pTitle.right,
+            p2pTitle.bottom + Dips(28)
+        };
+        std::wstring p2pMessage = smartTransferReceiveWebRtcMessage_.empty()
+            ? L"LAN and Direct Host could not connect. Paste the sender pairing code to try manual P2P."
+            : smartTransferReceiveWebRtcMessage_;
+        DrawTextLine(hdc, p2pMessage.c_str(), p2pBody, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        RECT pairingLabel {
+            smartTransferSenderPairingEditRect_.left,
+            smartTransferSenderPairingEditRect_.top - Dips(26),
+            smartTransferSenderPairingEditRect_.right,
+            smartTransferSenderPairingEditRect_.top - Dips(4)
+        };
+        DrawTextLine(hdc, L"Sender pairing code", pairingLabel, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        FillRoundRect(hdc, smartTransferSenderPairingEditRect_, Dips(10), kInputBackground);
+        StrokeRoundRect(hdc, smartTransferSenderPairingEditRect_, Dips(10), kBorder);
+        PaintButton(
+            hdc,
+            smartTransferGenerateResponseButtonRect_,
+            smartTransferWebRtcBusy_ ? L"Generating..." : L"Generate Response",
+            true,
+            smartTransferWebRtcBusy_,
+            !smartTransferWebRtcBusy_ && smartTransferWebRtcFallbackOffered_ && !smartTransferReceiveInvite_.sessionId.empty());
+        PaintButton(
+            hdc,
+            smartTransferCopyResponseButtonRect_,
+            L"Copy Response",
+            false,
+            false,
+            !smartTransferReceiverResponseCode_.empty());
+        RECT privacy {
+            smartTransferWebRtcReceivePanelRect_.left + Dips(18),
+            smartTransferSenderPairingEditRect_.bottom + Dips(12),
+            smartTransferGenerateResponseButtonRect_.left - Dips(14),
+            smartTransferWebRtcReceivePanelRect_.bottom - Dips(14)
+        };
+        DrawTextLine(hdc, L"Direct P2P transfer may reveal your public IP address to the other user. That is normal for peer-to-peer connections.", privacy, bodyFont_, kTextSecondary, DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+    }
+
+    FillRoundRect(hdc, smartTransferManifestRect_, Dips(16), kPanelBackground);
+    StrokeRoundRect(hdc, smartTransferManifestRect_, Dips(16), kBorder);
+    RECT manifestTitle { smartTransferManifestRect_.left + Dips(18), smartTransferManifestRect_.top + Dips(12), smartTransferManifestRect_.right - Dips(18), smartTransferManifestRect_.top + Dips(42) };
+    DrawTextLine(hdc, L"File manifest", manifestTitle, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    if (smartTransferReceiveManifest_.files.empty())
+    {
+        if (smartTransferWebRtcFallbackOffered_ || smartTransferWebRtcDependencyMissing_)
+        {
+            RECT emptyTitle { smartTransferManifestRect_.left + Dips(24), smartTransferManifestRect_.top + Dips(92), smartTransferManifestRect_.right - Dips(24), smartTransferManifestRect_.top + Dips(124) };
+            DrawTextLine(hdc, L"Use the Manual P2P panel above to finish pairing.", emptyTitle, navFont_, kTextPrimary, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            RECT emptySub = emptyTitle;
+            emptySub.top = emptyTitle.bottom + Dips(4);
+            emptySub.bottom = emptySub.top + Dips(32);
+            DrawTextLine(hdc, L"The file list will appear here once the P2P connection is ready.", emptySub, bodyFont_, kTextSecondary, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        }
+        else
+        {
+            RECT emptyTitle { smartTransferManifestRect_.left + Dips(24), smartTransferManifestRect_.top + Dips(106), smartTransferManifestRect_.right - Dips(24), smartTransferManifestRect_.top + Dips(136) };
+            DrawTextLine(hdc, L"Paste a transfer code to connect to another Rex's Toolkit user.", emptyTitle, navFont_, kTextPrimary, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            RECT emptySub = emptyTitle;
+            emptySub.top = emptyTitle.bottom + Dips(4);
+            emptySub.bottom = emptySub.top + Dips(28);
+            DrawTextLine(hdc, L"Receiver tries LAN first, then Direct Host if the sender enabled it. Manual P2P requires the WebRTC backend.", emptySub, bodyFont_, kTextSecondary, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        }
+    }
+    else
+    {
+        unsigned long long totalSize = 0;
+        unsigned long long selectedSize = 0;
+        for (const SmartTransferManifestFile& file : smartTransferReceiveManifest_.files)
+        {
+            totalSize += file.size;
+            if (file.selected) selectedSize += file.size;
+        }
+        RECT summary { manifestTitle.left, manifestTitle.bottom + Dips(2), manifestTitle.right, manifestTitle.bottom + Dips(26) };
+        std::wstring summaryText = smartTransferReceiveManifest_.transferName + L" / " + std::to_wstring(smartTransferReceiveManifest_.files.size()) +
+            L" file" + (smartTransferReceiveManifest_.files.size() == 1 ? L"" : L"s") +
+            L" / " + FileSizeLabel(totalSize) + L" total / " + FileSizeLabel(selectedSize) + L" selected";
+        DrawTextLine(hdc, summaryText.c_str(), summary, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+        const int rowHeight = Dips(36);
+        int rowTop = summary.bottom + Dips(8);
+        const int maxRows = std::max<int>(1, static_cast<int>(smartTransferManifestRect_.bottom - rowTop - Dips(12)) / rowHeight);
+        for (int index = 0; index < std::min<int>(maxRows, static_cast<int>(smartTransferReceiveManifest_.files.size())); ++index)
+        {
+            const SmartTransferManifestFile& file = smartTransferReceiveManifest_.files[static_cast<size_t>(index)];
+            RECT row { smartTransferManifestRect_.left + Dips(14), rowTop, smartTransferManifestRect_.right - Dips(14), rowTop + rowHeight - Dips(5) };
+            FillRoundRect(hdc, row, Dips(9), kButtonBackground);
+            RECT checkRect { row.left + Dips(10), row.top, row.left + Dips(40), row.bottom };
+            PaintCheckbox(hdc, checkRect, file.selected, L"");
+            RECT nameRect { row.left + Dips(44), row.top, row.right - Dips(178), row.bottom };
+            RECT sizeRect { row.right - Dips(164), row.top, row.right - Dips(16), row.bottom };
+            DrawTextLine(hdc, file.name.c_str(), nameRect, bodyFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            DrawTextLine(hdc, FileSizeLabel(file.size).c_str(), sizeRect, bodyFont_, kTextSecondary, DT_RIGHT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            rowTop += rowHeight;
+        }
+    }
+
+    RECT saveLabel { smartTransferSaveFolderRect_.left, smartTransferSaveFolderRect_.top - Dips(28), smartTransferSaveFolderRect_.right, smartTransferSaveFolderRect_.top - Dips(6) };
+    DrawTextLine(hdc, L"Save folder", saveLabel, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    FillRoundRect(hdc, smartTransferSaveFolderRect_, Dips(10), kInputBackground);
+    StrokeRoundRect(hdc, smartTransferSaveFolderRect_, Dips(10), kBorder);
+    RECT saveText = ShrinkRect(smartTransferSaveFolderRect_, Dips(12), 0);
+    std::wstring saveFolder = smartTransferSaveFolder_.empty()
+        ? (ExternalToolService::DefaultDownloadsFolder() / L"RexsToolkit Transfers").wstring()
+        : smartTransferSaveFolder_.wstring();
+    DrawTextLine(hdc, saveFolder.c_str(), saveText, bodyFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    PaintButton(hdc, smartTransferBrowseSaveButtonRect_, L"Browse", false);
+    PaintButton(hdc, smartTransferDownloadButtonRect_, smartTransferDownloading_ ? L"Downloading..." : L"Download Selected", true, smartTransferDownloading_, !smartTransferDownloading_ && !smartTransferReceiveManifest_.files.empty());
+    PaintButton(hdc, smartTransferCancelButtonRect_, L"Cancel", false, false, smartTransferDownloading_);
+    PaintButton(hdc, smartTransferOpenFolderButtonRect_, L"Open Folder", false, false, !smartTransferSaveFolder_.empty());
+
+    const double progress = smartTransferDownloadProgress_.totalBytes > 0
+        ? static_cast<double>(smartTransferDownloadProgress_.bytesDownloaded) / static_cast<double>(smartTransferDownloadProgress_.totalBytes)
+        : 0.0;
+    PaintProgressBar(hdc, smartTransferProgressRect_, progress);
+    RECT progressText { smartTransferProgressRect_.left, smartTransferProgressRect_.bottom + Dips(6), smartTransferProgressRect_.right, smartTransferProgressRect_.bottom + Dips(34) };
+    std::wstring progressLabel = smartTransferDownloadProgress_.message.empty() ? SmartTransferClientStatusLabel() : smartTransferDownloadProgress_.message;
+    if (smartTransferDownloadProgress_.totalBytes > 0)
+    {
+        progressLabel += L"  " + FileSizeLabel(smartTransferDownloadProgress_.bytesDownloaded) + L" / " + FileSizeLabel(smartTransferDownloadProgress_.totalBytes);
+    }
+    DrawTextLine(hdc, progressLabel.c_str(), progressText, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+}
+
 void ToolkitApp::PaintSettings(HDC hdc)
 {
     const int margin = Dips(42);
@@ -6282,6 +8696,7 @@ void ToolkitApp::PaintSettings(HDC hdc)
     StrokeRoundRect(hdc, railPanel, Dips(16), kBorder);
 
     PaintSettingsSectionTab(hdc, settingsGeneralTabRect_, L"General", SettingsSection::General);
+    PaintSettingsSectionTab(hdc, settingsSmartTransferTabRect_, L"Smart Transfer", SettingsSection::SmartTransfer);
     PaintSettingsSectionTab(hdc, settingsAppearanceTabRect_, L"Appearance", SettingsSection::Appearance);
     PaintSettingsSectionTab(hdc, settingsUpdatesTabRect_, L"Updates", SettingsSection::Updates);
     PaintSettingsSectionTab(hdc, settingsAboutTabRect_, L"About", SettingsSection::About);
@@ -6339,6 +8754,95 @@ void ToolkitApp::PaintSettings(HDC hdc)
 
         drawLabel(L"Open on startup", settingsStartPageButtonRect_);
         PaintDropdownButton(hdc, settingsStartPageButtonRect_, StartPageLabel().c_str(), true);
+
+        drawLabel(L"Close button behavior", settingsMinimizeToTrayToggleRect_);
+        PaintCheckbox(
+            hdc,
+            settingsMinimizeToTrayToggleRect_,
+            appSettings_.minimizeToTrayOnClose,
+            L"Minimize to tray when closed");
+        RECT trayDescription {
+            settingsMinimizeToTrayToggleRect_.left + Dips(30),
+            settingsMinimizeToTrayToggleRect_.bottom + Dips(2),
+            panel.right - Dips(28),
+            settingsMinimizeToTrayToggleRect_.bottom + Dips(30)
+        };
+        DrawTextLine(
+            hdc,
+            L"Rex's Toolkit stays open in the system tray so reminders and notifications can still run.",
+            trayDescription,
+            bodyFont_,
+            kTextSecondary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        return;
+    }
+
+    if (settingsSection_ == SettingsSection::SmartTransfer)
+    {
+        drawSectionTitle(L"Smart Transfer", L"Control peer-to-peer fallback behavior and advanced diagnostics.");
+        PaintCheckbox(
+            hdc,
+            settingsWebRtcFallbackToggleRect_,
+            appSettings_.smartTransferWebRtcFallback,
+            L"Enable WebRTC P2P fallback");
+        RECT fallbackDescription {
+            settingsWebRtcFallbackToggleRect_.left + Dips(30),
+            settingsWebRtcFallbackToggleRect_.bottom + Dips(2),
+            panel.right - Dips(28),
+            settingsWebRtcFallbackToggleRect_.bottom + Dips(48)
+        };
+        DrawTextLine(
+            hdc,
+            WebRtcTransport::StatusMessage().c_str(),
+            fallbackDescription,
+            bodyFont_,
+            kTextSecondary,
+            DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+
+        PaintCheckbox(
+            hdc,
+            settingsWebRtcDiagnosticsToggleRect_,
+            appSettings_.smartTransferWebRtcDiagnostics,
+            L"Show WebRTC advanced diagnostics");
+        RECT diagnosticsDescription {
+            settingsWebRtcDiagnosticsToggleRect_.left + Dips(30),
+            settingsWebRtcDiagnosticsToggleRect_.bottom + Dips(2),
+            panel.right - Dips(28),
+            settingsWebRtcDiagnosticsToggleRect_.bottom + Dips(32)
+        };
+        DrawTextLine(
+            hdc,
+            L"Shows ICE, data channel, selected candidate, and backend details when WebRTC is available.",
+            diagnosticsDescription,
+            bodyFont_,
+            kTextSecondary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+        drawLabel(L"STUN servers", settingsWebRtcStunServersRect_);
+        FillRoundRect(hdc, settingsWebRtcStunServersRect_, Dips(10), kInputBackground);
+        StrokeRoundRect(hdc, settingsWebRtcStunServersRect_, Dips(10), kBorder);
+        RECT stunText = ShrinkRect(settingsWebRtcStunServersRect_, Dips(12), Dips(8));
+        DrawTextLine(
+            hdc,
+            appSettings_.smartTransferStunServers.empty() ? L"No STUN servers configured" : appSettings_.smartTransferStunServers.c_str(),
+            stunText,
+            bodyFont_,
+            kTextPrimary,
+            DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+
+        RECT privacyNote {
+            settingsWebRtcStunServersRect_.left,
+            settingsWebRtcStunServersRect_.bottom + Dips(18),
+            panel.right - Dips(28),
+            settingsWebRtcStunServersRect_.bottom + Dips(72)
+        };
+        DrawTextLine(
+            hdc,
+            L"Direct P2P transfer may reveal your public IP address to the other user. This is normal for direct peer-to-peer connections.",
+            privacyNote,
+            bodyFont_,
+            kTextSecondary,
+            DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
         return;
     }
 
@@ -6574,8 +9078,11 @@ void ToolkitApp::OpenDropdown(
     dropdownEnabled_ = enabled;
     dropdownSelectedValue_ = selectedValue;
     hoverDropdownIndex_ = -1;
+    reminderCalendarOpen_ = false;
     UpdateMediaDownloaderControls();
+    UpdateSmartFileTransferControls();
     UpdateAnimeTrackerControls();
+    UpdateReminderControls();
 
     const int itemHeight = Dips(38);
     const int height = static_cast<int>(dropdownLabels_.size()) * itemHeight + Dips(10);
@@ -6586,6 +9093,47 @@ void ToolkitApp::OpenDropdown(
         anchor.right,
         anchor.bottom + gap + height
     };
+
+    int minimumDropdownWidth = Dips(150);
+    if (kind == DropdownKind::ReminderPreset)
+    {
+        minimumDropdownWidth = Dips(190);
+    }
+    else if (kind == DropdownKind::ReminderAlert)
+    {
+        minimumDropdownWidth = Dips(190);
+    }
+    else if (kind == DropdownKind::ReminderSnooze)
+    {
+        minimumDropdownWidth = Dips(170);
+    }
+    else if (kind == DropdownKind::ReminderAmPm)
+    {
+        minimumDropdownWidth = Dips(92);
+    }
+    else if (kind == DropdownKind::ReminderSort ||
+        kind == DropdownKind::ReminderFilter ||
+        kind == DropdownKind::ReminderRepeat)
+    {
+        minimumDropdownWidth = Dips(180);
+    }
+
+    if (dropdownRect_.right - dropdownRect_.left < minimumDropdownWidth)
+    {
+        dropdownRect_.right = dropdownRect_.left + minimumDropdownWidth;
+    }
+    if (dropdownRect_.right > clientRect_.right - Dips(18))
+    {
+        const int shift = dropdownRect_.right - (clientRect_.right - Dips(18));
+        dropdownRect_.left -= shift;
+        dropdownRect_.right -= shift;
+    }
+    if (dropdownRect_.left < contentRect_.left + Dips(8))
+    {
+        const int shift = contentRect_.left + Dips(8) - dropdownRect_.left;
+        dropdownRect_.left += shift;
+        dropdownRect_.right += shift;
+    }
 
     const int bottomLimit = clientRect_.bottom - Dips(18);
     if (dropdownRect_.bottom > bottomLimit)
@@ -6612,13 +9160,20 @@ void ToolkitApp::CloseDropdown()
         return;
     }
 
+    const DropdownKind closingKind = activeDropdown_;
     activeDropdown_ = DropdownKind::None;
     dropdownLabels_.clear();
     dropdownValues_.clear();
     dropdownEnabled_.clear();
     hoverDropdownIndex_ = -1;
+    if (closingKind == DropdownKind::ReminderSnooze)
+    {
+        pendingReminderSnoozeIndex_ = -1;
+    }
     UpdateMediaDownloaderControls();
+    UpdateSmartFileTransferControls();
     UpdateAnimeTrackerControls();
+    UpdateReminderControls();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -6644,7 +9199,10 @@ void ToolkitApp::PaintDropdown(HDC hdc)
         };
 
         const bool enabled = index >= dropdownEnabled_.size() || dropdownEnabled_[index];
-        const bool selected = index < dropdownValues_.size() && dropdownValues_[index] == dropdownSelectedValue_;
+        const int itemValue = index < dropdownValues_.size() ? dropdownValues_[index] : 0;
+        const bool selected = activeDropdown_ == DropdownKind::ReminderAlert
+            ? std::find(reminderFormAlertMinutesList_.begin(), reminderFormAlertMinutesList_.end(), itemValue) != reminderFormAlertMinutesList_.end()
+            : itemValue == dropdownSelectedValue_;
         const bool hovered = enabled && hoverDropdownIndex_ == static_cast<int>(index);
 
         if (selected || hovered)
@@ -6658,7 +9216,28 @@ void ToolkitApp::PaintDropdown(HDC hdc)
             itemRect.left + Dips(34),
             itemRect.bottom
         };
-        if (selected)
+        if (activeDropdown_ == DropdownKind::ReminderAlert)
+        {
+            RECT box {
+                checkRect.left + Dips(5),
+                checkRect.top + ((checkRect.bottom - checkRect.top) - Dips(18)) / 2,
+                checkRect.left + Dips(23),
+                checkRect.top + ((checkRect.bottom - checkRect.top) + Dips(18)) / 2
+            };
+            FillRoundRect(hdc, box, Dips(5), selected ? kAccentSoft : kInputBackground);
+            StrokeRoundRect(hdc, box, Dips(5), selected ? kAccent : kBorder);
+            if (selected)
+            {
+                HPEN checkPen = CreatePen(PS_SOLID, Dips(2), kTextPrimary);
+                HPEN oldPen = static_cast<HPEN>(SelectObject(hdc, checkPen));
+                MoveToEx(hdc, box.left + Dips(4), box.top + Dips(9), nullptr);
+                LineTo(hdc, box.left + Dips(8), box.bottom - Dips(5));
+                LineTo(hdc, box.right - Dips(4), box.top + Dips(5));
+                SelectObject(hdc, oldPen);
+                DeleteObject(checkPen);
+            }
+        }
+        else if (selected)
         {
             const int markerSize = Dips(8);
             const int markerLeft = checkRect.left + ((checkRect.right - checkRect.left) - markerSize) / 2;
@@ -6718,7 +9297,36 @@ bool ToolkitApp::HandleDropdownClick(POINT point)
     }
 
     const int value = dropdownValues_[static_cast<size_t>(index)];
+    if (activeDropdown_ == DropdownKind::ReminderAlert)
+    {
+        auto found = std::find(
+            reminderFormAlertMinutesList_.begin(),
+            reminderFormAlertMinutesList_.end(),
+            value);
+        if (found == reminderFormAlertMinutesList_.end())
+        {
+            reminderFormAlertMinutesList_.push_back(value);
+        }
+        else if (reminderFormAlertMinutesList_.size() > 1)
+        {
+            reminderFormAlertMinutesList_.erase(found);
+        }
+        else
+        {
+            reminderStatusMessage_ = L"Choose at least one alert time.";
+        }
+
+        std::sort(reminderFormAlertMinutesList_.begin(), reminderFormAlertMinutesList_.end());
+        reminderFormAlertMinutesList_.erase(
+            std::unique(reminderFormAlertMinutesList_.begin(), reminderFormAlertMinutesList_.end()),
+            reminderFormAlertMinutesList_.end());
+        reminderFormAlertMinutes_ = reminderFormAlertMinutesList_.empty() ? 0 : reminderFormAlertMinutesList_.front();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
     const DropdownKind kind = activeDropdown_;
+    const int reminderSnoozeIndex = pendingReminderSnoozeIndex_;
     CloseDropdown();
 
     if (kind == DropdownKind::FileOutputFormat)
@@ -6787,6 +9395,77 @@ bool ToolkitApp::HandleDropdownClick(POINT point)
         return true;
     }
 
+    if (kind == DropdownKind::ReminderFilter)
+    {
+        reminderFilter_ = static_cast<ReminderFilter>(value);
+        selectedReminderIndex_ = -1;
+        editingReminder_ = false;
+        RecalculateLayout();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    if (kind == DropdownKind::ReminderSort)
+    {
+        reminderSort_ = static_cast<ReminderSort>(value);
+        RecalculateLayout();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    if (kind == DropdownKind::ReminderPreset)
+    {
+        if (value == 6)
+        {
+            SetFocus(reminderDateEdit_);
+        }
+        else
+        {
+            const auto target = ReminderPresetTarget(value);
+            SetWindowTextW(reminderDateEdit_, DateForEdit(target).c_str());
+            SetWindowTextW(reminderTimeEdit_, TimeForEdit(target).c_str());
+            reminderFormPm_ = IsPmForEdit(target);
+            reminderFormAllDay_ = false;
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    if (kind == DropdownKind::ReminderPriority)
+    {
+        reminderFormPriority_ = static_cast<ReminderPriority>(value);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    if (kind == DropdownKind::ReminderRepeat)
+    {
+        reminderFormRepeat_ = static_cast<ReminderRepeatType>(value);
+        if (reminderFormRepeat_ != ReminderRepeatType::Yearly)
+        {
+            reminderFormBirthday_ = false;
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    if (kind == DropdownKind::ReminderAmPm)
+    {
+        reminderFormPm_ = value == 1;
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    if (kind == DropdownKind::ReminderSnooze)
+    {
+        if (reminderSnoozeIndex >= 0)
+        {
+            SnoozeReminderAt(static_cast<size_t>(reminderSnoozeIndex), value);
+        }
+        pendingReminderSnoozeIndex_ = -1;
+        return true;
+    }
+
     if (kind == DropdownKind::SettingsStartPage)
     {
         appSettings_.startPage = value == 1 ? DefaultStartPage::AllTools : DefaultStartPage::Favorites;
@@ -6811,6 +9490,13 @@ bool ToolkitApp::HandleDropdownClick(POINT point)
         return true;
     }
 
+    if (kind == DropdownKind::SmartTransferExpiration)
+    {
+        smartTransferOptions_.expiration = static_cast<SmartTransferExpiration>(value);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
     return true;
 }
 
@@ -6822,12 +9508,41 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
     };
     RECT rect {};
 
+    if (reminderAlert_.hasValue)
+    {
+        for (const RECT& candidate : { reminderBannerCloseButtonRect_ })
+        {
+            rect = hit(candidate);
+            if (rect.right > rect.left) return rect;
+        }
+    }
+    else if (updateNotificationVisible_ &&
+        hasUpdateResult_ &&
+        updateResult_.status == UpdateCheckStatus::UpdateAvailable)
+    {
+        for (const RECT& candidate : { updateBannerUpdateButtonRect_, updateBannerCloseButtonRect_ })
+        {
+            rect = hit(candidate);
+            if (rect.right > rect.left) return rect;
+        }
+    }
+
+    if (reminderCalendarOpen_)
+    {
+        for (const RECT& candidate : { reminderCalendarPrevButtonRect_, reminderCalendarNextButtonRect_ })
+        {
+            rect = hit(candidate);
+            if (rect.right > rect.left) return rect;
+        }
+    }
+
     if (currentPage_ != Page::Tool)
     {
         if (currentPage_ == Page::Settings)
         {
             for (const RECT& candidate : {
                 settingsGeneralTabRect_,
+                settingsSmartTransferTabRect_,
                 settingsAppearanceTabRect_,
                 settingsUpdatesTabRect_,
                 settingsAboutTabRect_
@@ -6839,7 +9554,19 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
 
             if (settingsSection_ == SettingsSection::General)
             {
-                for (const RECT& candidate : { settingsBrowseDefaultFolderButtonRect_, settingsStartPageButtonRect_ })
+                for (const RECT& candidate : {
+                    settingsBrowseDefaultFolderButtonRect_,
+                    settingsStartPageButtonRect_,
+                    settingsMinimizeToTrayToggleRect_
+                })
+                {
+                    rect = hit(candidate);
+                    if (rect.right > rect.left) return rect;
+                }
+            }
+            else if (settingsSection_ == SettingsSection::SmartTransfer)
+            {
+                for (const RECT& candidate : { settingsWebRtcFallbackToggleRect_, settingsWebRtcDiagnosticsToggleRect_ })
                 {
                     rect = hit(candidate);
                     if (rect.right > rect.left) return rect;
@@ -7017,6 +9744,90 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
             if (rect.right > rect.left) return rect;
         }
     }
+    else if (currentTool_ == ToolKind::Reminders)
+    {
+        std::vector<RECT> candidates {
+            reminderNewButtonRect_,
+            reminderDatePickerButtonRect_,
+            reminderTimeAmPmButtonRect_,
+            reminderAddButtonRect_,
+            reminderAlertButtonRect_,
+            reminderMoreOptionsToggleRect_,
+            reminderFilterButtonRect_,
+            reminderSortButtonRect_
+        };
+        if (reminderMoreOptionsOpen_)
+        {
+            candidates.push_back(reminderPresetButtonRect_);
+            candidates.push_back(reminderPriorityButtonRect_);
+            candidates.push_back(reminderRepeatButtonRect_);
+            candidates.push_back(reminderAllDayToggleRect_);
+            candidates.push_back(reminderBirthdayToggleRect_);
+        }
+
+        const std::vector<size_t> visibleReminders = VisibleReminderIndexes();
+        for (size_t visibleIndex = 0; visibleIndex < visibleReminders.size(); ++visibleIndex)
+        {
+            for (int action = 0; action < 2; ++action)
+            {
+                candidates.push_back(ReminderActionRect(visibleIndex, action));
+            }
+        }
+
+        for (const RECT& candidate : candidates)
+        {
+            rect = hit(candidate);
+            if (rect.right > rect.left) return rect;
+        }
+    }
+    else if (currentTool_ == ToolKind::SmartFileTransfer)
+    {
+        std::vector<RECT> candidates {
+            smartTransferSendTabRect_,
+            smartTransferReceiveTabRect_
+        };
+        if (smartTransferTab_ == SmartTransferTab::Send)
+        {
+            candidates.insert(
+                candidates.end(),
+                {
+                    smartTransferBrowseButtonRect_,
+                    smartTransferClearButtonRect_,
+                    smartTransferCreateButtonRect_,
+                    smartTransferStopButtonRect_,
+                    smartTransferCopyCodeButtonRect_,
+                    smartTransferExpirationButtonRect_,
+                    smartTransferApprovalToggleRect_,
+                    smartTransferStopAfterToggleRect_,
+                    smartTransferMultiReceiverToggleRect_,
+                    smartTransferDirectHostToggleRect_,
+                    smartTransferAllowButtonRect_,
+                    smartTransferDenyButtonRect_,
+                    smartTransferCopyPairingButtonRect_,
+                    smartTransferApplyResponseButtonRect_
+                });
+        }
+        else
+        {
+            candidates.insert(
+                candidates.end(),
+                {
+                    smartTransferConnectButtonRect_,
+                    smartTransferClearCodeButtonRect_,
+                    smartTransferGenerateResponseButtonRect_,
+                    smartTransferCopyResponseButtonRect_,
+                    smartTransferBrowseSaveButtonRect_,
+                    smartTransferDownloadButtonRect_,
+                    smartTransferCancelButtonRect_,
+                    smartTransferOpenFolderButtonRect_
+                });
+        }
+        for (const RECT& candidate : candidates)
+        {
+            rect = hit(candidate);
+            if (rect.right > rect.left) return rect;
+        }
+    }
 
     return {};
 }
@@ -7123,6 +9934,14 @@ void ToolkitApp::PaintToolIcon(HDC hdc, ToolKind tool, const RECT& bounds)
     else if (tool == ToolKind::MediaDownloader)
     {
         icon = mediaDownloaderIconTinted_.get();
+    }
+    else if (tool == ToolKind::Reminders)
+    {
+        icon = remindersIconTinted_.get();
+    }
+    else if (tool == ToolKind::SmartFileTransfer)
+    {
+        icon = smartFileTransferIconTinted_.get();
     }
     else if (tool == ToolKind::AnimeTracker)
     {
@@ -7458,6 +10277,50 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
     {
         SetFocus(hwnd_);
     }
+    else if (focusedWindow == reminderTitleEdit_ && !IsPointInRect(reminderTitleEditRect_, point))
+    {
+        SetFocus(hwnd_);
+    }
+    else if (focusedWindow == reminderDateEdit_ && !IsPointInRect(reminderDateEditRect_, point))
+    {
+        SetFocus(hwnd_);
+    }
+    else if (focusedWindow == reminderTimeEdit_ && !IsPointInRect(reminderTimeEditRect_, point))
+    {
+        SetFocus(hwnd_);
+    }
+    else if (focusedWindow == reminderCategoryEdit_ && !IsPointInRect(reminderCategoryEditRect_, point))
+    {
+        SetFocus(hwnd_);
+    }
+    else if (focusedWindow == reminderNotesEdit_ && !IsPointInRect(reminderNotesEditRect_, point))
+    {
+        SetFocus(hwnd_);
+    }
+    else if (focusedWindow == reminderSearchEdit_ && !IsPointInRect(reminderSearchEditRect_, point))
+    {
+        SetFocus(hwnd_);
+    }
+
+    if (currentPage_ == Page::Tool &&
+        currentTool_ == ToolKind::Reminders &&
+        IsPointInRect(reminderTitleEditRect_, point) &&
+        reminderTitleEdit_ &&
+        GetWindowTextString(reminderTitleEdit_).empty())
+    {
+        ShowWindow(reminderTitleEdit_, SW_SHOW);
+        EnableWindow(reminderTitleEdit_, TRUE);
+        SetWindowPos(
+            reminderTitleEdit_,
+            nullptr,
+            reminderTitleEditRect_.left + Dips(10),
+            reminderTitleEditRect_.top + ((reminderTitleEditRect_.bottom - reminderTitleEditRect_.top) - Dips(24)) / 2 + Dips(2),
+            std::max(1, static_cast<int>(reminderTitleEditRect_.right - reminderTitleEditRect_.left) - Dips(20)),
+            std::max(1, Dips(24)),
+            SWP_NOZORDER | SWP_NOACTIVATE);
+        SetFocus(reminderTitleEdit_);
+        return;
+    }
 
     if (IsScrollBarVisible() && IsPointInRect(scrollBarTrackRect_, point))
     {
@@ -7480,6 +10343,35 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
     if (hasPressedButton_)
     {
         InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+
+    if (reminderAlert_.hasValue)
+    {
+        if (IsPointInRect(reminderBannerCloseButtonRect_, point))
+        {
+            DismissReminderBanner();
+            return;
+        }
+    }
+    else if (updateNotificationVisible_ &&
+        hasUpdateResult_ &&
+        updateResult_.status == UpdateCheckStatus::UpdateAvailable)
+    {
+        if (IsPointInRect(updateBannerCloseButtonRect_, point))
+        {
+            DismissUpdateNotification();
+            return;
+        }
+        if (IsPointInRect(updateBannerUpdateButtonRect_, point) && !updateInstalling_)
+        {
+            StartUpdateInstall();
+            return;
+        }
+    }
+
+    if (reminderCalendarOpen_ && HandleReminderCalendarClick(point))
+    {
+        return;
     }
 
     if (awaitingActivationKey_)
@@ -7519,6 +10411,13 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             InvalidateRect(hwnd_, nullptr, FALSE);
             return;
         }
+        if (IsPointInRect(settingsSmartTransferTabRect_, point))
+        {
+            settingsSection_ = SettingsSection::SmartTransfer;
+            CloseDropdown();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
         if (IsPointInRect(settingsAppearanceTabRect_, point))
         {
             settingsSection_ = SettingsSection::Appearance;
@@ -7551,6 +10450,30 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             IsPointInRect(settingsStartPageButtonRect_, point))
         {
             ShowSettingsStartPageDropdown();
+            return;
+        }
+        if (settingsSection_ == SettingsSection::General &&
+            IsPointInRect(settingsMinimizeToTrayToggleRect_, point))
+        {
+            appSettings_.minimizeToTrayOnClose = !appSettings_.minimizeToTrayOnClose;
+            SaveAppSettings();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (settingsSection_ == SettingsSection::SmartTransfer &&
+            IsPointInRect(settingsWebRtcFallbackToggleRect_, point))
+        {
+            appSettings_.smartTransferWebRtcFallback = !appSettings_.smartTransferWebRtcFallback;
+            SaveAppSettings();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (settingsSection_ == SettingsSection::SmartTransfer &&
+            IsPointInRect(settingsWebRtcDiagnosticsToggleRect_, point))
+        {
+            appSettings_.smartTransferWebRtcDiagnostics = !appSettings_.smartTransferWebRtcDiagnostics;
+            SaveAppSettings();
+            InvalidateRect(hwnd_, nullptr, FALSE);
             return;
         }
         if (settingsSection_ == SettingsSection::Appearance &&
@@ -7591,6 +10514,225 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
         {
             ShellExecuteW(hwnd_, L"open", L"https://github.com/Rexarater/rex-toolkit/issues", nullptr, nullptr, SW_SHOWNORMAL);
             return;
+        }
+    }
+
+    if (currentPage_ == Page::Tool && currentTool_ == ToolKind::SmartFileTransfer)
+    {
+        if (IsPointInRect(backButtonRect_, point))
+        {
+            SelectPage(Page::AllTools);
+            return;
+        }
+        if (IsPointInRect(smartTransferSendTabRect_, point))
+        {
+            smartTransferTab_ = SmartTransferTab::Send;
+            CloseDropdown();
+            RecalculateLayout();
+            UpdateSmartFileTransferControls();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (IsPointInRect(smartTransferReceiveTabRect_, point))
+        {
+            smartTransferTab_ = SmartTransferTab::Receive;
+            CloseDropdown();
+            RecalculateLayout();
+            UpdateSmartFileTransferControls();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+
+        if (smartTransferTab_ == SmartTransferTab::Send)
+        {
+            if ((IsPointInRect(smartTransferDropZoneRect_, point) || IsPointInRect(smartTransferBrowseButtonRect_, point)) && !smartTransferHosting_)
+            {
+                BrowseSmartTransferFiles();
+                return;
+            }
+            if (IsPointInRect(smartTransferClearButtonRect_, point) && !smartTransferHosting_)
+            {
+                smartTransferFiles_.clear();
+                smartTransferStatusMessage_ = L"No files selected.";
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+
+            const int rowHeight = Dips(36);
+            int rowTop = smartTransferSendFileListRect_.top + Dips(52);
+            const int maxRows = std::max<int>(1, static_cast<int>(smartTransferSendFileListRect_.bottom - rowTop - Dips(12)) / rowHeight);
+            for (int index = 0; index < std::min<int>(maxRows, static_cast<int>(smartTransferFiles_.size())); ++index)
+            {
+                RECT removeRect {
+                    smartTransferSendFileListRect_.right - Dips(14) - Dips(44),
+                    rowTop + Dips(4),
+                    smartTransferSendFileListRect_.right - Dips(14) - Dips(10),
+                    rowTop + rowHeight - Dips(5) - Dips(4)
+                };
+                if (IsPointInRect(removeRect, point) && !smartTransferHosting_)
+                {
+                    smartTransferFiles_.erase(smartTransferFiles_.begin() + index);
+                    smartTransferStatusMessage_ = L"File removed.";
+                    InvalidateRect(hwnd_, nullptr, FALSE);
+                    return;
+                }
+                rowTop += rowHeight;
+            }
+
+            if (IsPointInRect(smartTransferExpirationButtonRect_, point) && !smartTransferHosting_)
+            {
+                ShowSmartTransferExpirationDropdown();
+                return;
+            }
+            if (IsPointInRect(smartTransferApprovalToggleRect_, point) && !smartTransferHosting_)
+            {
+                smartTransferOptions_.requireApproval = !smartTransferOptions_.requireApproval;
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (IsPointInRect(smartTransferStopAfterToggleRect_, point) && !smartTransferHosting_)
+            {
+                smartTransferOptions_.stopAfterFirstCompletedDownload = !smartTransferOptions_.stopAfterFirstCompletedDownload;
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (IsPointInRect(smartTransferMultiReceiverToggleRect_, point) && !smartTransferHosting_)
+            {
+                smartTransferOptions_.allowMultipleReceivers = !smartTransferOptions_.allowMultipleReceivers;
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (IsPointInRect(smartTransferDirectHostToggleRect_, point) && !smartTransferHosting_)
+            {
+                smartTransferOptions_.tryDirectHost = !smartTransferOptions_.tryDirectHost;
+                smartTransferStatusMessage_ = smartTransferOptions_.tryDirectHost
+                    ? L"Direct Host will try to temporarily open a router port when you create the transfer."
+                    : L"Direct Host disabled. Transfer code will use LAN only.";
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (IsPointInRect(smartTransferCreateButtonRect_, point))
+            {
+                StartSmartTransferHosting();
+                return;
+            }
+            if (IsPointInRect(smartTransferStopButtonRect_, point) && smartTransferHosting_)
+            {
+                StopSmartTransferHosting();
+                return;
+            }
+            if (IsPointInRect(smartTransferCopyCodeButtonRect_, point))
+            {
+                CopySmartTransferCode();
+                return;
+            }
+            if (IsPointInRect(smartTransferCopyPairingButtonRect_, point))
+            {
+                StartSmartTransferCreatePairingCode();
+                return;
+            }
+            if (IsPointInRect(smartTransferApplyResponseButtonRect_, point))
+            {
+                StartSmartTransferApplyReceiverResponse();
+                return;
+            }
+            if (smartTransferHostSnapshot_.approvalPending && IsPointInRect(smartTransferAllowButtonRect_, point))
+            {
+                smartFileTransferService_.AllowPendingReceiver();
+                smartTransferHostSnapshot_ = smartFileTransferService_.HostSnapshot();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (smartTransferHostSnapshot_.approvalPending && IsPointInRect(smartTransferDenyButtonRect_, point))
+            {
+                smartFileTransferService_.DenyPendingReceiver();
+                smartTransferHostSnapshot_ = smartFileTransferService_.HostSnapshot();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+        }
+        else
+        {
+            if (IsPointInRect(smartTransferConnectButtonRect_, point))
+            {
+                StartSmartTransferConnect();
+                return;
+            }
+            if (IsPointInRect(smartTransferClearCodeButtonRect_, point) && !smartTransferConnecting_ && !smartTransferDownloading_)
+            {
+                SetWindowTextW(smartTransferCodeEdit_, L"");
+                smartTransferReceiveManifest_ = {};
+                smartTransferWebRtcFallbackOffered_ = false;
+                smartTransferWebRtcDependencyMissing_ = false;
+                smartTransferWebRtcReceiverActive_ = false;
+                smartTransferReceiverResponseCode_.clear();
+                if (smartTransferSenderPairingEdit_)
+                {
+                    SetWindowTextW(smartTransferSenderPairingEdit_, L"");
+                }
+                smartTransferReceiveWebRtcMessage_.clear();
+                smartTransferReceiveStatusMessage_ = L"Transfer code cleared.";
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (IsPointInRect(smartTransferGenerateResponseButtonRect_, point))
+            {
+                StartSmartTransferCreateReceiverResponse();
+                return;
+            }
+            if (IsPointInRect(smartTransferCopyResponseButtonRect_, point) && !smartTransferReceiverResponseCode_.empty())
+            {
+                if (SetClipboardUnicodeText(hwnd_, smartTransferReceiverResponseCode_))
+                {
+                    smartTransferReceiveStatusMessage_ = L"Receiver response code copied. Send it back to the sender.";
+                    InvalidateRect(hwnd_, nullptr, FALSE);
+                }
+                return;
+            }
+
+            const int rowHeight = Dips(36);
+            int rowTop = smartTransferManifestRect_.top + Dips(80);
+            const int maxRows = std::max<int>(1, static_cast<int>(smartTransferManifestRect_.bottom - rowTop - Dips(12)) / rowHeight);
+            for (int index = 0; index < std::min<int>(maxRows, static_cast<int>(smartTransferReceiveManifest_.files.size())); ++index)
+            {
+                RECT row {
+                    smartTransferManifestRect_.left + Dips(14),
+                    rowTop,
+                    smartTransferManifestRect_.right - Dips(14),
+                    rowTop + rowHeight - Dips(5)
+                };
+                if (IsPointInRect(row, point) && !smartTransferDownloading_)
+                {
+                    smartTransferReceiveManifest_.files[static_cast<size_t>(index)].selected =
+                        !smartTransferReceiveManifest_.files[static_cast<size_t>(index)].selected;
+                    InvalidateRect(hwnd_, nullptr, FALSE);
+                    return;
+                }
+                rowTop += rowHeight;
+            }
+
+            if (IsPointInRect(smartTransferBrowseSaveButtonRect_, point))
+            {
+                BrowseSmartTransferSaveFolder();
+                return;
+            }
+            if (IsPointInRect(smartTransferDownloadButtonRect_, point))
+            {
+                StartSmartTransferDownload();
+                return;
+            }
+            if (IsPointInRect(smartTransferCancelButtonRect_, point) && smartTransferDownloading_)
+            {
+                smartTransferCancelRequested_ = true;
+                smartTransferReceiveStatusMessage_ = L"Cancelling download...";
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (IsPointInRect(smartTransferOpenFolderButtonRect_, point) && !smartTransferSaveFolder_.empty())
+            {
+                ShellExecuteW(hwnd_, L"open", smartTransferSaveFolder_.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                return;
+            }
         }
     }
 
@@ -8017,6 +11159,134 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
         return;
     }
 
+    if (currentPage_ == Page::Tool && currentTool_ == ToolKind::Reminders)
+    {
+        if (IsPointInRect(backButtonRect_, point))
+        {
+            SelectPage(Page::AllTools);
+            return;
+        }
+        if (IsPointInRect(reminderNewButtonRect_, point))
+        {
+            SetReminderFormDefaults();
+            RecalculateLayout();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (IsPointInRect(reminderMoreOptionsToggleRect_, point))
+        {
+            reminderMoreOptionsOpen_ = !reminderMoreOptionsOpen_;
+            CloseDropdown();
+            RecalculateLayout();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (reminderMoreOptionsOpen_ && IsPointInRect(reminderPresetButtonRect_, point))
+        {
+            ShowReminderPresetDropdown();
+            return;
+        }
+        if (IsPointInRect(reminderDatePickerButtonRect_, point))
+        {
+            ShowReminderCalendar();
+            return;
+        }
+        if (IsPointInRect(reminderTimeAmPmButtonRect_, point))
+        {
+            ShowReminderAmPmDropdown();
+            return;
+        }
+        if (reminderMoreOptionsOpen_ && IsPointInRect(reminderPriorityButtonRect_, point))
+        {
+            ShowReminderPriorityDropdown();
+            return;
+        }
+        if (reminderMoreOptionsOpen_ && IsPointInRect(reminderRepeatButtonRect_, point))
+        {
+            ShowReminderRepeatDropdown();
+            return;
+        }
+        if (IsPointInRect(reminderAlertButtonRect_, point))
+        {
+            ShowReminderAlertDropdown();
+            return;
+        }
+        if (reminderMoreOptionsOpen_ && IsPointInRect(reminderAllDayToggleRect_, point))
+        {
+            reminderFormAllDay_ = !reminderFormAllDay_;
+            if (reminderFormAllDay_)
+            {
+                SetWindowTextW(reminderTimeEdit_, L"9:00");
+                reminderFormPm_ = false;
+            }
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (reminderMoreOptionsOpen_ && IsPointInRect(reminderBirthdayToggleRect_, point))
+        {
+            reminderFormBirthday_ = !reminderFormBirthday_;
+            if (reminderFormBirthday_)
+            {
+                reminderFormAllDay_ = true;
+                reminderFormRepeat_ = ReminderRepeatType::Yearly;
+                reminderFormAlertMinutes_ = 1440;
+                reminderFormAlertMinutesList_ = { 1440 };
+                if (TrimWhitespace(GetWindowTextString(reminderCategoryEdit_)).empty() ||
+                    LowercaseText(TrimWhitespace(GetWindowTextString(reminderCategoryEdit_))) == L"general")
+                {
+                    SetWindowTextW(reminderCategoryEdit_, L"Birthday");
+                }
+                SetWindowTextW(reminderTimeEdit_, L"9:00");
+                reminderFormPm_ = false;
+            }
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (IsPointInRect(reminderAddButtonRect_, point))
+        {
+            SaveReminderFromForm();
+            return;
+        }
+        if (IsPointInRect(reminderFilterButtonRect_, point))
+        {
+            ShowReminderFilterDropdown();
+            return;
+        }
+        if (IsPointInRect(reminderSortButtonRect_, point))
+        {
+            ShowReminderSortDropdown();
+            return;
+        }
+
+        const std::vector<size_t> visibleReminders = VisibleReminderIndexes();
+        for (size_t visibleIndex = 0; visibleIndex < visibleReminders.size(); ++visibleIndex)
+        {
+            const size_t reminderIndex = visibleReminders[visibleIndex];
+            if (IsPointInRect(ReminderActionRect(visibleIndex, 0), point))
+            {
+                selectedReminderIndex_ = static_cast<int>(reminderIndex);
+                LoadReminderFormFromSelection();
+                RecalculateLayout();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (IsPointInRect(ReminderActionRect(visibleIndex, 1), point))
+            {
+                DeleteReminderAt(reminderIndex);
+                return;
+            }
+            if (IsPointInRect(ReminderRowRect(visibleIndex), point))
+            {
+                selectedReminderIndex_ = static_cast<int>(reminderIndex);
+                LoadReminderFormFromSelection();
+                RecalculateLayout();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+        }
+        return;
+    }
+
     if (currentPage_ == Page::Tool && currentTool_ == ToolKind::AutoClicker)
     {
         if (IsPointInRect(backButtonRect_, point))
@@ -8372,6 +11642,621 @@ void ToolkitApp::UpdateMediaDownloaderControls()
     moveEdit(mediaFileNameEdit_, mediaFileNameEditRect_, !mediaDownloading_);
 }
 
+void ToolkitApp::CreateSmartFileTransferControls()
+{
+    smartTransferNameEdit_ = CreateWindowExW(
+        0,
+        L"EDIT",
+        L"",
+        WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL,
+        0,
+        0,
+        0,
+        0,
+        hwnd_,
+        nullptr,
+        instance_,
+        nullptr);
+
+    smartTransferCodeEdit_ = CreateWindowExW(
+        0,
+        L"EDIT",
+        L"",
+        WS_CHILD | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN,
+        0,
+        0,
+        0,
+        0,
+        hwnd_,
+        nullptr,
+        instance_,
+        nullptr);
+
+    smartTransferReceiverResponseEdit_ = CreateWindowExW(
+        0,
+        L"EDIT",
+        L"",
+        WS_CHILD | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN,
+        0,
+        0,
+        0,
+        0,
+        hwnd_,
+        nullptr,
+        instance_,
+        nullptr);
+
+    smartTransferSenderPairingEdit_ = CreateWindowExW(
+        0,
+        L"EDIT",
+        L"",
+        WS_CHILD | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN,
+        0,
+        0,
+        0,
+        0,
+        hwnd_,
+        nullptr,
+        instance_,
+        nullptr);
+
+    for (HWND edit : { smartTransferNameEdit_, smartTransferCodeEdit_, smartTransferReceiverResponseEdit_, smartTransferSenderPairingEdit_ })
+    {
+        if (!edit)
+        {
+            continue;
+        }
+        SendMessageW(edit, WM_SETFONT, reinterpret_cast<WPARAM>(searchInputFont_), TRUE);
+        SendMessageW(edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(Dips(8), Dips(6)));
+    }
+
+    if (smartTransferNameEdit_)
+    {
+        SendMessageW(smartTransferNameEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Optional transfer name"));
+    }
+    if (smartTransferCodeEdit_)
+    {
+        SendMessageW(smartTransferCodeEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Paste the transfer code from the sender"));
+    }
+    if (smartTransferReceiverResponseEdit_)
+    {
+        SendMessageW(smartTransferReceiverResponseEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Paste the receiver response code here"));
+    }
+    if (smartTransferSenderPairingEdit_)
+    {
+        SendMessageW(smartTransferSenderPairingEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Paste the sender pairing code here"));
+    }
+}
+
+void ToolkitApp::UpdateSmartFileTransferControls()
+{
+    const bool visible = currentPage_ == Page::Tool && currentTool_ == ToolKind::SmartFileTransfer && !liveResize_;
+    auto moveEdit = [&](HWND edit, const RECT& rect, bool enabled, bool shouldShow)
+    {
+        if (!edit)
+        {
+            return;
+        }
+
+        const bool coveredByDropdown = activeDropdown_ != DropdownKind::None &&
+            HasArea(dropdownRect_) &&
+            RectsOverlap(rect, dropdownRect_);
+        const bool inViewport = visible && shouldShow && !coveredByDropdown &&
+            rect.top >= contentRect_.top &&
+            rect.bottom <= contentRect_.bottom &&
+            RectsOverlap(rect, contentRect_);
+        ShowWindow(edit, inViewport ? SW_SHOW : SW_HIDE);
+        EnableWindow(edit, inViewport && enabled);
+        if (!inViewport)
+        {
+            return;
+        }
+
+        const int editLeftInset = Dips(10);
+        const int editRightInset = Dips(10);
+        const int editWidth = std::max(1, static_cast<int>(rect.right - rect.left) - editLeftInset - editRightInset);
+        const bool multiline =
+            edit == smartTransferCodeEdit_ ||
+            edit == smartTransferReceiverResponseEdit_ ||
+            edit == smartTransferSenderPairingEdit_;
+        const int editHeight = multiline
+            ? std::max(1, static_cast<int>(rect.bottom - rect.top) - Dips(16))
+            : std::max(1, Dips(24));
+        const int editTop = static_cast<int>(rect.top) + ((rect.bottom - rect.top) - editHeight) / 2 + Dips(2);
+        SetWindowPos(
+            edit,
+            nullptr,
+            static_cast<int>(rect.left) + editLeftInset,
+            editTop,
+            editWidth,
+            editHeight,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+    };
+
+    moveEdit(
+        smartTransferNameEdit_,
+        smartTransferNameEditRect_,
+        !smartTransferHosting_,
+        smartTransferTab_ == SmartTransferTab::Send);
+    moveEdit(
+        smartTransferCodeEdit_,
+        smartTransferReceiveCodeEditRect_,
+        !smartTransferConnecting_ && !smartTransferDownloading_,
+        smartTransferTab_ == SmartTransferTab::Receive);
+    moveEdit(
+        smartTransferReceiverResponseEdit_,
+        smartTransferReceiverResponseEditRect_,
+        !smartTransferWebRtcBusy_ && smartTransferHosting_,
+        smartTransferTab_ == SmartTransferTab::Send && HasArea(smartTransferReceiverResponseEditRect_));
+    moveEdit(
+        smartTransferSenderPairingEdit_,
+        smartTransferSenderPairingEditRect_,
+        !smartTransferWebRtcBusy_ && !smartTransferDownloading_,
+        smartTransferTab_ == SmartTransferTab::Receive && HasArea(smartTransferSenderPairingEditRect_));
+}
+
+void ToolkitApp::AddFilesToSmartTransferQueue(const std::vector<std::filesystem::path>& paths)
+{
+    int added = 0;
+    int skipped = 0;
+    int duplicates = 0;
+
+    for (const std::filesystem::path& path : paths)
+    {
+        std::error_code pathError;
+        const std::filesystem::path absolute = std::filesystem::absolute(path, pathError);
+        if (pathError)
+        {
+            ++skipped;
+            continue;
+        }
+
+        const bool duplicate = std::any_of(
+            smartTransferFiles_.begin(),
+            smartTransferFiles_.end(),
+            [&](const SmartTransferFile& file)
+            {
+                std::error_code equivalentError;
+                return std::filesystem::equivalent(file.path, absolute, equivalentError);
+            });
+        if (duplicate)
+        {
+            ++duplicates;
+            continue;
+        }
+
+        std::wstring errorMessage;
+        auto file = smartFileTransferService_.CreateTransferFile(absolute, smartTransferFiles_.size(), errorMessage);
+        if (!file)
+        {
+            ++skipped;
+            continue;
+        }
+        smartTransferFiles_.push_back(*file);
+        ++added;
+    }
+
+    std::wostringstream status;
+    if (added > 0)
+    {
+        status << L"Added " << added << L" file" << (added == 1 ? L"" : L"s") << L".";
+    }
+    if (duplicates > 0)
+    {
+        if (status.tellp() > 0) status << L" ";
+        status << duplicates << L" duplicate" << (duplicates == 1 ? L" was" : L"s were") << L" ignored.";
+    }
+    if (skipped > 0)
+    {
+        if (status.tellp() > 0) status << L" ";
+        status << skipped << L" item" << (skipped == 1 ? L" was" : L"s were") << L" skipped.";
+    }
+    smartTransferStatusMessage_ = status.str().empty() ? L"Ready." : status.str();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::BrowseSmartTransferFiles()
+{
+    std::vector<wchar_t> buffer(32768, L'\0');
+    OPENFILENAMEW openFileName {};
+    openFileName.lStructSize = sizeof(openFileName);
+    openFileName.hwndOwner = hwnd_;
+    openFileName.lpstrFilter = L"All files (*.*)\0*.*\0";
+    openFileName.lpstrFile = buffer.data();
+    openFileName.nMaxFile = static_cast<DWORD>(buffer.size());
+    openFileName.Flags = OFN_ALLOWMULTISELECT | OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+    if (!GetOpenFileNameW(&openFileName))
+    {
+        return;
+    }
+
+    std::vector<std::filesystem::path> paths;
+    const wchar_t* cursor = buffer.data();
+    std::filesystem::path first = cursor;
+    cursor += first.wstring().size() + 1;
+    if (*cursor == L'\0')
+    {
+        paths.push_back(first);
+    }
+    else
+    {
+        while (*cursor != L'\0')
+        {
+            std::filesystem::path fileName = cursor;
+            paths.push_back(first / fileName);
+            cursor += fileName.wstring().size() + 1;
+        }
+    }
+    AddFilesToSmartTransferQueue(paths);
+}
+
+void ToolkitApp::StartSmartTransferHosting()
+{
+    if (smartTransferHosting_ || smartTransferFiles_.empty())
+    {
+        return;
+    }
+
+    smartTransferOptions_.transferName = GetWindowTextString(smartTransferNameEdit_);
+    smartTransferOptions_.enableWebRtcFallback = appSettings_.smartTransferWebRtcFallback;
+    smartTransferOptions_.showWebRtcDiagnostics = appSettings_.smartTransferWebRtcDiagnostics;
+    smartTransferOptions_.stunServers.clear();
+    if (!appSettings_.smartTransferStunServers.empty())
+    {
+        smartTransferOptions_.stunServers.push_back(appSettings_.smartTransferStunServers);
+    }
+    smartTransferHostSnapshot_ = {};
+    smartTransferSenderPairingCode_.clear();
+    if (smartTransferReceiverResponseEdit_)
+    {
+        SetWindowTextW(smartTransferReceiverResponseEdit_, L"");
+    }
+    smartTransferStatusMessage_ = smartTransferOptions_.tryDirectHost
+        ? L"Preparing files, creating secure token, and checking Direct Host..."
+        : L"Preparing files and creating secure token...";
+    std::wstring errorMessage;
+    if (!smartFileTransferService_.StartHosting(smartTransferFiles_, smartTransferOptions_, errorMessage))
+    {
+        smartTransferStatusMessage_ = errorMessage.empty() ? L"Could not create transfer." : errorMessage;
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
+    smartTransferHostSnapshot_ = smartFileTransferService_.HostSnapshot();
+    smartTransferHosting_ = true;
+    smartTransferStatusMessage_ = smartTransferHostSnapshot_.directHostAvailable
+        ? L"Transfer code ready with LAN and Direct Host. Share it with the receiver."
+        : L"Transfer code ready. Share it with the receiver.";
+    SetTimer(hwnd_, kSmartTransferTimerId, kSmartTransferRefreshMs, nullptr);
+    UpdateSmartFileTransferControls();
+    RecalculateLayout();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::StopSmartTransferHosting()
+{
+    smartFileTransferService_.StopHosting();
+    smartTransferHosting_ = false;
+    smartTransferSenderPairingCode_.clear();
+    KillTimer(hwnd_, kSmartTransferTimerId);
+    smartTransferHostSnapshot_ = smartFileTransferService_.HostSnapshot();
+    smartTransferStatusMessage_ = L"Hosting stopped.";
+    UpdateSmartFileTransferControls();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::CopySmartTransferCode()
+{
+    if (smartTransferHostSnapshot_.transferCode.empty())
+    {
+        return;
+    }
+    if (SetClipboardUnicodeText(hwnd_, smartTransferHostSnapshot_.transferCode))
+    {
+        smartTransferStatusMessage_ = L"Transfer code copied.";
+    }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::StartSmartTransferCreatePairingCode()
+{
+    if (!smartTransferHosting_ || smartTransferWebRtcBusy_)
+    {
+        return;
+    }
+
+    if (!smartTransferSenderPairingCode_.empty())
+    {
+        if (SetClipboardUnicodeText(hwnd_, smartTransferSenderPairingCode_))
+        {
+            smartTransferStatusMessage_ = L"Sender pairing code copied.";
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
+    FinishSmartTransferThread();
+    smartTransferWebRtcBusy_ = true;
+    smartTransferStatusMessage_ = L"Creating sender pairing code...";
+    HWND hwnd = hwnd_;
+    smartTransferThread_ = std::thread(
+        [this, hwnd]()
+        {
+            auto* result = new SmartTransferWebRtcThreadResult();
+            std::wstring errorMessage;
+            result->success = smartFileTransferService_.CreateWebRtcSenderPairingCode(result->code, errorMessage);
+            result->message = result->success
+                ? L"Sender pairing code copied. Send it to the receiver."
+                : (errorMessage.empty() ? L"Could not create sender pairing code." : errorMessage);
+            PostMessageW(hwnd, kSmartTransferPairingFinishedMessage, 0, reinterpret_cast<LPARAM>(result));
+        });
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::StartSmartTransferApplyReceiverResponse()
+{
+    if (!smartTransferHosting_ || smartTransferWebRtcBusy_)
+    {
+        return;
+    }
+
+    const std::wstring responseCode = GetWindowTextString(smartTransferReceiverResponseEdit_);
+    if (TrimWhitespace(responseCode).empty())
+    {
+        smartTransferStatusMessage_ = L"Paste the receiver response code first.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
+    FinishSmartTransferThread();
+    smartTransferWebRtcBusy_ = true;
+    smartTransferStatusMessage_ = L"Applying receiver response code...";
+    HWND hwnd = hwnd_;
+    smartTransferThread_ = std::thread(
+        [this, hwnd, responseCode]()
+        {
+            auto* result = new SmartTransferWebRtcThreadResult();
+            std::wstring errorMessage;
+            result->success = smartFileTransferService_.ApplyWebRtcReceiverResponse(responseCode, errorMessage);
+            result->message = result->success
+                ? L"Receiver response accepted. Waiting for P2P connection..."
+                : (errorMessage.empty() ? L"Could not apply receiver response code." : errorMessage);
+            PostMessageW(hwnd, kSmartTransferApplyResponseFinishedMessage, 0, reinterpret_cast<LPARAM>(result));
+        });
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::StartSmartTransferCreateReceiverResponse()
+{
+    if (smartTransferWebRtcBusy_ || smartTransferDownloading_ || smartTransferReceiveInvite_.sessionId.empty())
+    {
+        return;
+    }
+
+    const std::wstring senderPairingCode = GetWindowTextString(smartTransferSenderPairingEdit_);
+    if (TrimWhitespace(senderPairingCode).empty())
+    {
+        smartTransferReceiveStatusMessage_ = L"Paste the sender pairing code first.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
+    FinishSmartTransferThread();
+    smartTransferWebRtcBusy_ = true;
+    smartTransferReceiveStatusMessage_ = L"Creating receiver response code...";
+    HWND hwnd = hwnd_;
+    SmartTransferInvite invite = smartTransferReceiveInvite_;
+    std::vector<std::wstring> stunServers;
+    if (!appSettings_.smartTransferStunServers.empty())
+    {
+        stunServers.push_back(appSettings_.smartTransferStunServers);
+    }
+    smartTransferThread_ = std::thread(
+        [this, hwnd, invite, senderPairingCode, stunServers]()
+        {
+            auto* result = new SmartTransferWebRtcThreadResult();
+            std::wstring errorMessage;
+            result->success = smartFileTransferService_.CreateWebRtcReceiverResponse(invite, stunServers, senderPairingCode, result->code, errorMessage);
+            result->message = result->success
+                ? L"Receiver response code copied. Send it back to the sender, then wait for the file list."
+                : (errorMessage.empty() ? L"Could not create receiver response code." : errorMessage);
+            PostMessageW(hwnd, kSmartTransferResponseFinishedMessage, 0, reinterpret_cast<LPARAM>(result));
+        });
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::BrowseSmartTransferSaveFolder()
+{
+    BROWSEINFOW browseInfo {};
+    browseInfo.hwndOwner = hwnd_;
+    browseInfo.lpszTitle = L"Choose where to save transferred files";
+    browseInfo.ulFlags = BIF_RETURNONLYFSDIRS | BIF_USENEWUI;
+    PIDLIST_ABSOLUTE itemList = SHBrowseForFolderW(&browseInfo);
+    if (!itemList)
+    {
+        return;
+    }
+
+    wchar_t path[MAX_PATH] {};
+    if (SHGetPathFromIDListW(itemList, path))
+    {
+        smartTransferSaveFolder_ = path;
+        smartTransferReceiveStatusMessage_ = L"Save folder selected.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+    CoTaskMemFree(itemList);
+}
+
+void ToolkitApp::StartSmartTransferConnect()
+{
+    if (smartTransferConnecting_ || smartTransferDownloading_)
+    {
+        return;
+    }
+
+    FinishSmartTransferThread();
+    smartTransferConnecting_ = true;
+    smartTransferReceiveManifest_ = {};
+    smartTransferWebRtcFallbackOffered_ = false;
+    smartTransferWebRtcDependencyMissing_ = false;
+    smartTransferWebRtcReceiverActive_ = false;
+    smartTransferReceiverResponseCode_.clear();
+    if (smartTransferSenderPairingEdit_)
+    {
+        SetWindowTextW(smartTransferSenderPairingEdit_, L"");
+    }
+    smartTransferReceiveWebRtcMessage_.clear();
+    smartTransferDownloadProgress_ = {};
+    smartTransferReceiveStatusMessage_ = L"Trying LAN, then Direct Host if available...";
+    const std::wstring code = GetWindowTextString(smartTransferCodeEdit_);
+    HWND hwnd = hwnd_;
+    smartTransferThread_ = std::thread(
+        [this, hwnd, code]()
+        {
+            auto* result = new SmartTransferConnectThreadResult();
+            result->result = smartFileTransferService_.Connect(code);
+            PostMessageW(hwnd, kSmartTransferConnectFinishedMessage, 0, reinterpret_cast<LPARAM>(result));
+        });
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::StartSmartTransferDownload()
+{
+    if (smartTransferDownloading_ || smartTransferConnecting_ || smartTransferReceiveManifest_.files.empty())
+    {
+        return;
+    }
+
+    if (smartTransferSaveFolder_.empty())
+    {
+        smartTransferSaveFolder_ = ExternalToolService::DefaultDownloadsFolder() / L"RexsToolkit Transfers";
+    }
+
+    FinishSmartTransferThread();
+    smartTransferCancelRequested_ = false;
+    smartTransferDownloading_ = true;
+    smartTransferDownloadProgress_ = {};
+    smartTransferDownloadProgress_.status = SmartTransferClientStatus::Downloading;
+    smartTransferReceiveStatusMessage_ = L"Starting download...";
+    HWND hwnd = hwnd_;
+    const SmartTransferInvite invite = smartTransferReceiveInvite_;
+    const SmartTransferManifest manifest = smartTransferReceiveManifest_;
+    const std::filesystem::path saveFolder = smartTransferSaveFolder_;
+    smartTransferThread_ = std::thread(
+        [this, hwnd, invite, manifest, saveFolder]()
+        {
+            auto* result = new SmartTransferDownloadThreadResult();
+            std::wstring errorMessage;
+            result->success = smartFileTransferService_.DownloadSelected(
+                invite,
+                manifest,
+                saveFolder,
+                smartTransferCancelRequested_,
+                [hwnd](const SmartTransferDownloadProgress& progress)
+                {
+                    auto* heapProgress = new SmartTransferDownloadProgress(progress);
+                    PostMessageW(hwnd, kSmartTransferDownloadProgressMessage, 0, reinterpret_cast<LPARAM>(heapProgress));
+                },
+                errorMessage);
+            result->message = result->success
+                ? L"Download complete."
+                : (errorMessage.empty() ? L"Download failed." : errorMessage);
+            PostMessageW(hwnd, kSmartTransferDownloadFinishedMessage, 0, reinterpret_cast<LPARAM>(result));
+        });
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::FinishSmartTransferThread()
+{
+    if (smartTransferThread_.joinable() && smartTransferThread_.get_id() != std::this_thread::get_id())
+    {
+        smartTransferThread_.join();
+    }
+}
+
+void ToolkitApp::ApplySmartTransferConnectResult(const SmartTransferConnectResult& result)
+{
+    if (result.success)
+    {
+        smartTransferReceiveInvite_ = result.invite;
+        smartTransferReceiveManifest_ = result.manifest;
+        smartTransferDownloadProgress_ = {};
+        smartTransferReceiveStatusMessage_ = result.message;
+        smartTransferWebRtcFallbackOffered_ = false;
+        smartTransferWebRtcDependencyMissing_ = false;
+        smartTransferReceiveWebRtcMessage_.clear();
+        if (smartTransferSaveFolder_.empty())
+        {
+            smartTransferSaveFolder_ = ExternalToolService::DefaultDownloadsFolder() / L"RexsToolkit Transfers";
+        }
+        return;
+    }
+
+    smartTransferReceiveInvite_ = result.invite;
+    smartTransferReceiveManifest_ = {};
+    smartTransferReceiveStatusMessage_ = result.message.empty() ? L"Could not connect." : result.message;
+    smartTransferWebRtcFallbackOffered_ = result.webRtcFallbackOffered || result.webRtcDependencyMissing;
+    smartTransferWebRtcDependencyMissing_ = result.webRtcDependencyMissing;
+    smartTransferReceiveWebRtcMessage_ = result.webRtcMessage;
+    if (result.waitingForApproval)
+    {
+        smartTransferDownloadProgress_.status = SmartTransferClientStatus::WaitingForApproval;
+    }
+}
+
+void ToolkitApp::ApplySmartTransferDownloadProgress(const SmartTransferDownloadProgress& progress)
+{
+    smartTransferDownloadProgress_ = progress;
+    smartTransferReceiveStatusMessage_ = progress.message;
+}
+
+void ToolkitApp::PollSmartTransferWebRtc()
+{
+    smartTransferWebRtcSnapshot_ = smartFileTransferService_.WebRtcSnapshot();
+    if (!smartTransferWebRtcSnapshot_.message.empty())
+    {
+        if (smartTransferTab_ == SmartTransferTab::Send && smartTransferHosting_)
+        {
+            smartTransferHostSnapshot_.webRtcMessage = smartTransferWebRtcSnapshot_.message;
+        }
+        else if (smartTransferWebRtcReceiverActive_)
+        {
+            smartTransferReceiveWebRtcMessage_ = smartTransferWebRtcSnapshot_.message;
+            smartTransferReceiveStatusMessage_ = smartTransferWebRtcSnapshot_.message;
+        }
+    }
+
+    if (smartTransferWebRtcReceiverActive_ &&
+        smartTransferWebRtcSnapshot_.manifestReady &&
+        !smartTransferWebRtcSnapshot_.manifest.files.empty())
+    {
+        smartTransferReceiveManifest_ = smartTransferWebRtcSnapshot_.manifest;
+        smartTransferReceiveInvite_.activeUrl = L"webrtc://manual";
+        smartTransferWebRtcFallbackOffered_ = false;
+        smartTransferWebRtcDependencyMissing_ = false;
+        if (smartTransferSaveFolder_.empty())
+        {
+            smartTransferSaveFolder_ = ExternalToolService::DefaultDownloadsFolder() / L"RexsToolkit Transfers";
+        }
+    }
+}
+
+void ToolkitApp::ShowSmartTransferExpirationDropdown()
+{
+    OpenDropdown(
+        DropdownKind::SmartTransferExpiration,
+        smartTransferExpirationButtonRect_,
+        { L"15 minutes", L"30 minutes", L"1 hour", L"Until manually stopped" },
+        {
+            static_cast<int>(SmartTransferExpiration::FifteenMinutes),
+            static_cast<int>(SmartTransferExpiration::ThirtyMinutes),
+            static_cast<int>(SmartTransferExpiration::OneHour),
+            static_cast<int>(SmartTransferExpiration::Manual)
+        },
+        { true, true, true, true },
+        static_cast<int>(smartTransferOptions_.expiration));
+}
+
 std::wstring ToolkitApp::AnimeTrackerFilePath() const
 {
     wchar_t appDataPath[MAX_PATH] {};
@@ -8577,6 +12462,1040 @@ void ToolkitApp::UpdateAnimeTrackerControls()
         animeNotesStatusText_.clear();
         lastNotesIndex = -1;
     }
+}
+
+std::wstring ToolkitApp::RemindersFilePath() const
+{
+    return SettingsDirectory() + L"\\reminders.json";
+}
+
+void ToolkitApp::LoadRemindersData()
+{
+    std::wstring warning;
+    reminderList_ = reminderService_.LoadReminders(RemindersFilePath(), warning);
+    reminderStatusMessage_ = warning.empty() ? L"Ready." : warning;
+    UpdateReminderBanner();
+}
+
+void ToolkitApp::SaveRemindersData()
+{
+    std::wstring errorMessage;
+    if (!reminderService_.SaveReminders(RemindersFilePath(), reminderList_, errorMessage))
+    {
+        reminderStatusMessage_ = errorMessage;
+    }
+}
+
+void ToolkitApp::CreateReminderControls()
+{
+    auto createEdit = [&](DWORD style)
+    {
+        return CreateWindowExW(
+            0,
+            L"EDIT",
+            L"",
+            WS_CHILD | WS_TABSTOP | style,
+            0,
+            0,
+            0,
+            0,
+            hwnd_,
+            nullptr,
+            instance_,
+            nullptr);
+    };
+
+    reminderTitleEdit_ = createEdit(ES_AUTOHSCROLL);
+    reminderDateEdit_ = createEdit(ES_AUTOHSCROLL);
+    reminderTimeEdit_ = createEdit(ES_AUTOHSCROLL);
+    reminderCategoryEdit_ = createEdit(ES_AUTOHSCROLL);
+    reminderNotesEdit_ = createEdit(ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN);
+    reminderSearchEdit_ = createEdit(ES_AUTOHSCROLL);
+
+    for (HWND edit : { reminderTitleEdit_, reminderDateEdit_, reminderTimeEdit_, reminderCategoryEdit_, reminderSearchEdit_ })
+    {
+        if (!edit)
+        {
+            continue;
+        }
+        SendMessageW(edit, WM_SETFONT, reinterpret_cast<WPARAM>(searchInputFont_), TRUE);
+        SendMessageW(edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(Dips(8), Dips(6)));
+    }
+    if (reminderNotesEdit_)
+    {
+        SendMessageW(reminderNotesEdit_, WM_SETFONT, reinterpret_cast<WPARAM>(monospaceFont_), TRUE);
+        SendMessageW(reminderNotesEdit_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(Dips(4), Dips(4)));
+    }
+    if (reminderDateEdit_)
+    {
+        SendMessageW(reminderDateEdit_, EM_SETLIMITTEXT, 10, 0);
+    }
+    if (reminderTimeEdit_)
+    {
+        SendMessageW(reminderTimeEdit_, EM_SETLIMITTEXT, 5, 0);
+    }
+
+    if (reminderDateEdit_)
+    {
+        SendMessageW(reminderDateEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"YYYY/MM/DD"));
+        SendMessageW(reminderDateEdit_, EM_SETLIMITTEXT, 10, 0);
+    }
+    if (reminderTimeEdit_)
+    {
+        SendMessageW(reminderTimeEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"9:00"));
+        SendMessageW(reminderTimeEdit_, EM_SETLIMITTEXT, 5, 0);
+    }
+    if (reminderCategoryEdit_)
+    {
+        SendMessageW(reminderCategoryEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Category"));
+    }
+    if (reminderNotesEdit_)
+    {
+        SendMessageW(reminderNotesEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Optional notes"));
+    }
+    if (reminderSearchEdit_)
+    {
+        SendMessageW(reminderSearchEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Search reminders"));
+    }
+
+    SetReminderFormDefaults();
+}
+
+void ToolkitApp::UpdateReminderControls()
+{
+    const bool visible = currentPage_ == Page::Tool && currentTool_ == ToolKind::Reminders && !liveResize_;
+    const bool hideForDropdown =
+        activeDropdown_ == DropdownKind::ReminderFilter ||
+        activeDropdown_ == DropdownKind::ReminderSort ||
+        activeDropdown_ == DropdownKind::ReminderPreset ||
+        activeDropdown_ == DropdownKind::ReminderPriority ||
+        activeDropdown_ == DropdownKind::ReminderRepeat ||
+        activeDropdown_ == DropdownKind::ReminderAlert ||
+        activeDropdown_ == DropdownKind::ReminderAmPm ||
+        activeDropdown_ == DropdownKind::ReminderSnooze;
+
+    auto moveEdit = [&](HWND edit, const RECT& rect, bool multiline = false, bool shouldShow = true)
+    {
+        if (!edit)
+        {
+            return;
+        }
+
+        const bool coveredByCalendar = reminderCalendarOpen_ &&
+            edit != reminderDateEdit_ &&
+            HasArea(reminderCalendarRect_) &&
+            RectsOverlap(rect, reminderCalendarRect_);
+        const bool inViewport = shouldShow && visible && !hideForDropdown && !coveredByCalendar &&
+            rect.top >= contentRect_.top &&
+            rect.bottom <= contentRect_.bottom &&
+            RectsOverlap(rect, contentRect_);
+        ShowWindow(edit, inViewport ? SW_SHOW : SW_HIDE);
+        EnableWindow(edit, inViewport);
+        if (!inViewport)
+        {
+            return;
+        }
+
+        const int editLeftInset = Dips(10);
+        const int editRightInset = edit == reminderDateEdit_ ? Dips(52) : Dips(10);
+        const int editTopInset = multiline ? Dips(8) : 0;
+        const int editWidth = std::max(1, static_cast<int>(rect.right - rect.left) - editLeftInset - editRightInset);
+        const int editHeight = multiline
+            ? std::max(1, static_cast<int>(rect.bottom - rect.top) - Dips(16))
+            : std::max(1, Dips(24));
+        const int editTop = multiline
+            ? static_cast<int>(rect.top) + editTopInset
+            : static_cast<int>(rect.top) + ((rect.bottom - rect.top) - editHeight) / 2 + Dips(2);
+
+        SetWindowPos(
+            edit,
+            nullptr,
+            static_cast<int>(rect.left) + editLeftInset,
+            editTop,
+            editWidth,
+            editHeight,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+    };
+
+    const bool titlePlaceholderVisible =
+        visible &&
+        !hideForDropdown &&
+        GetFocus() != reminderTitleEdit_ &&
+        GetWindowTextString(reminderTitleEdit_).empty() &&
+        reminderTitleEditRect_.top >= contentRect_.top &&
+        reminderTitleEditRect_.bottom <= contentRect_.bottom &&
+        RectsOverlap(reminderTitleEditRect_, contentRect_);
+    moveEdit(reminderTitleEdit_, reminderTitleEditRect_, false, !titlePlaceholderVisible);
+    moveEdit(reminderDateEdit_, reminderDateEditRect_);
+    moveEdit(reminderTimeEdit_, reminderTimeEditRect_);
+    moveEdit(reminderCategoryEdit_, reminderCategoryEditRect_, false, reminderMoreOptionsOpen_);
+    moveEdit(reminderNotesEdit_, reminderNotesEditRect_, true, reminderMoreOptionsOpen_);
+    moveEdit(reminderSearchEdit_, reminderSearchEditRect_);
+}
+
+void ToolkitApp::SetReminderFormDefaults()
+{
+    const auto target = ReminderPresetTarget(3);
+    SetWindowTextIfChanged(reminderTitleEdit_, L"");
+    SetWindowTextIfChanged(reminderDateEdit_, DateForEdit(target));
+    SetWindowTextIfChanged(reminderTimeEdit_, TimeForEdit(target));
+    SetWindowTextIfChanged(reminderCategoryEdit_, L"General");
+    SetWindowTextIfChanged(reminderNotesEdit_, L"");
+    reminderFormPriority_ = ReminderPriority::Normal;
+    reminderFormRepeat_ = ReminderRepeatType::None;
+    reminderFormAlertMinutes_ = 15;
+    reminderFormAlertMinutesList_ = { 15 };
+    reminderFormPm_ = IsPmForEdit(target);
+    reminderFormAllDay_ = false;
+    reminderFormBirthday_ = false;
+    editingReminder_ = false;
+    selectedReminderIndex_ = -1;
+    reminderMoreOptionsOpen_ = false;
+    reminderStatusMessage_ = L"Ready.";
+}
+
+void ToolkitApp::LoadReminderFormFromSelection()
+{
+    if (selectedReminderIndex_ < 0 || selectedReminderIndex_ >= static_cast<int>(reminderList_.reminders.size()))
+    {
+        SetReminderFormDefaults();
+        return;
+    }
+
+    const Reminder& reminder = reminderList_.reminders[static_cast<size_t>(selectedReminderIndex_)];
+    SetWindowTextIfChanged(reminderTitleEdit_, reminder.title);
+    SetWindowTextIfChanged(reminderCategoryEdit_, reminder.category.empty() ? L"General" : reminder.category);
+    SetWindowTextIfChanged(reminderNotesEdit_, reminder.description);
+    if (const auto dueAt = ReminderService::ParseLocalIso(reminder.dueAt))
+    {
+        SetWindowTextIfChanged(reminderDateEdit_, DateForEdit(*dueAt));
+        SetWindowTextIfChanged(reminderTimeEdit_, TimeForEdit(*dueAt));
+        reminderFormPm_ = IsPmForEdit(*dueAt);
+    }
+    reminderFormPriority_ = reminder.priority;
+    reminderFormRepeat_ = reminder.repeat.type;
+    reminderFormAlertMinutesList_ = reminder.alertBeforeMinutesList.empty()
+        ? std::vector<int> { reminder.alertBeforeMinutes }
+        : reminder.alertBeforeMinutesList;
+    for (int& value : reminderFormAlertMinutesList_)
+    {
+        value = std::max(0, value);
+    }
+    std::sort(reminderFormAlertMinutesList_.begin(), reminderFormAlertMinutesList_.end());
+    reminderFormAlertMinutesList_.erase(
+        std::unique(reminderFormAlertMinutesList_.begin(), reminderFormAlertMinutesList_.end()),
+        reminderFormAlertMinutesList_.end());
+    reminderFormAlertMinutes_ = reminderFormAlertMinutesList_.empty()
+        ? std::max(0, reminder.alertBeforeMinutes)
+        : reminderFormAlertMinutesList_.front();
+    reminderFormAllDay_ = reminder.allDay;
+    reminderFormBirthday_ =
+        reminder.repeat.type == ReminderRepeatType::Yearly &&
+        LowercaseText(reminder.category).find(L"birthday") != std::wstring::npos;
+    editingReminder_ = true;
+    reminderMoreOptionsOpen_ =
+        reminderFormPriority_ != ReminderPriority::Normal ||
+        reminderFormRepeat_ != ReminderRepeatType::None ||
+        reminderFormAllDay_ ||
+        reminderFormBirthday_ ||
+        (!reminder.category.empty() && LowercaseText(reminder.category) != L"general") ||
+        !reminder.description.empty();
+    reminderStatusMessage_ = L"Editing reminder.";
+    UpdateReminderControls();
+}
+
+void ToolkitApp::SaveReminderFromForm()
+{
+    std::wstring title = TrimWhitespace(GetWindowTextString(reminderTitleEdit_));
+    std::wstring notes = TrimWhitespace(GetWindowTextString(reminderNotesEdit_));
+    if (title.empty())
+    {
+        reminderStatusMessage_ = L"Add a title before saving the reminder.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
+    bool allDay = reminderFormAllDay_;
+    ReminderRepeatType repeatType = reminderFormRepeat_;
+    std::vector<int> alertMinutesList = reminderFormAlertMinutesList_;
+    if (alertMinutesList.empty())
+    {
+        alertMinutesList.push_back(std::max(0, reminderFormAlertMinutes_));
+    }
+    for (int& value : alertMinutesList)
+    {
+        value = std::max(0, value);
+    }
+    std::sort(alertMinutesList.begin(), alertMinutesList.end());
+    alertMinutesList.erase(std::unique(alertMinutesList.begin(), alertMinutesList.end()), alertMinutesList.end());
+    int alertMinutes = alertMinutesList.empty() ? 0 : alertMinutesList.front();
+    std::wstring category = ReminderCategoryText();
+    if (reminderFormBirthday_)
+    {
+        allDay = true;
+        repeatType = ReminderRepeatType::Yearly;
+        if (std::find(alertMinutesList.begin(), alertMinutesList.end(), 1440) == alertMinutesList.end())
+        {
+            alertMinutesList.push_back(1440);
+            std::sort(alertMinutesList.begin(), alertMinutesList.end());
+        }
+        alertMinutes = alertMinutesList.empty() ? 1440 : alertMinutesList.front();
+        category = L"Birthday";
+    }
+
+    const auto now = ReminderService::Now();
+    const std::wstring timeText = TrimWhitespace(GetWindowTextString(reminderTimeEdit_)) + (reminderFormPm_ ? L" PM" : L" AM");
+    auto parsedDue = now;
+    bool parsedAllDay = allDay;
+    std::optional<std::chrono::system_clock::time_point> dueAt;
+    if (ReminderService::TryParseNaturalDue(title, now, parsedDue, parsedAllDay))
+    {
+        dueAt = parsedDue;
+        allDay = parsedAllDay;
+        SetWindowTextW(reminderDateEdit_, DateForEdit(*dueAt).c_str());
+        SetWindowTextW(reminderTimeEdit_, TimeForEdit(*dueAt).c_str());
+        reminderFormPm_ = IsPmForEdit(*dueAt);
+    }
+    else
+    {
+        dueAt = ReminderService::ParseDateAndTime(GetWindowTextString(reminderDateEdit_), timeText, allDay);
+    }
+    if (!dueAt)
+    {
+        reminderStatusMessage_ = L"Use a date like 2026/06/17 and a time like 5:00, then choose AM or PM.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
+    RecurrenceRule repeat;
+    repeat.type = repeatType;
+    repeat.interval = 1;
+    if (editingReminder_ && selectedReminderIndex_ >= 0 && selectedReminderIndex_ < static_cast<int>(reminderList_.reminders.size()))
+    {
+        Reminder& reminder = reminderList_.reminders[static_cast<size_t>(selectedReminderIndex_)];
+        reminder.title = title;
+        reminder.description = notes;
+        reminder.dueAt = ReminderService::FormatLocalIso(*dueAt);
+        reminder.allDay = allDay;
+        reminder.priority = reminderFormPriority_;
+        reminder.category = category.empty() ? L"General" : category;
+        reminder.repeat = repeat;
+        reminder.alertBeforeMinutes = std::max(0, alertMinutes);
+        reminder.alertBeforeMinutesList = alertMinutesList;
+        reminder.updatedAt = ReminderService::FormatLocalIso(now);
+        reminder.completedAt.clear();
+        reminder.dismissedBannerUntil.clear();
+        reminderStatusMessage_ = *dueAt < now ? L"Reminder saved. It is currently overdue." : L"Reminder saved.";
+    }
+    else
+    {
+        Reminder reminder = reminderService_.CreateReminder(
+            title,
+            notes,
+            *dueAt,
+            allDay,
+            reminderFormPriority_,
+            category,
+            repeat,
+            alertMinutes);
+        reminder.alertBeforeMinutesList = alertMinutesList;
+        reminderList_.reminders.push_back(std::move(reminder));
+        selectedReminderIndex_ = static_cast<int>(reminderList_.reminders.size()) - 1;
+        editingReminder_ = true;
+        reminderStatusMessage_ = *dueAt < now ? L"Reminder created. It is currently overdue." : L"Reminder created.";
+    }
+
+    SaveRemindersData();
+    UpdateReminderBanner();
+    RecalculateLayout();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::CompleteReminderAt(size_t index)
+{
+    if (index >= reminderList_.reminders.size())
+    {
+        return;
+    }
+
+    const ReminderOperationResult result = reminderService_.CompleteReminder(reminderList_.reminders[index], ReminderService::Now());
+    reminderStatusMessage_ = result.message;
+    SaveRemindersData();
+    UpdateReminderBanner();
+    RecalculateLayout();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::DeleteReminderAt(size_t index)
+{
+    if (index >= reminderList_.reminders.size())
+    {
+        return;
+    }
+
+    reminderList_.reminders.erase(reminderList_.reminders.begin() + static_cast<std::ptrdiff_t>(index));
+    if (selectedReminderIndex_ == static_cast<int>(index))
+    {
+        SetReminderFormDefaults();
+    }
+    else if (selectedReminderIndex_ > static_cast<int>(index))
+    {
+        --selectedReminderIndex_;
+    }
+    reminderStatusMessage_ = L"Reminder deleted.";
+    SaveRemindersData();
+    UpdateReminderBanner();
+    RecalculateLayout();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::SnoozeReminderAt(size_t index, int minutes)
+{
+    if (index >= reminderList_.reminders.size())
+    {
+        return;
+    }
+
+    const int snoozeMinutes = std::max(1, minutes);
+    const auto until = ReminderService::Now() + std::chrono::minutes(snoozeMinutes);
+    const ReminderOperationResult result = reminderService_.SnoozeReminder(reminderList_.reminders[index], until);
+    reminderStatusMessage_ = result.message;
+    SaveRemindersData();
+    UpdateReminderBanner();
+    RecalculateLayout();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::SnoozeReminderAlert(int minutes)
+{
+    const int index = FindReminderIndexById(reminderAlert_.reminderId);
+    if (index >= 0)
+    {
+        SnoozeReminderAt(static_cast<size_t>(index), minutes);
+    }
+}
+
+void ToolkitApp::DismissReminderBanner()
+{
+    const int index = FindReminderIndexById(reminderAlert_.reminderId);
+    if (index >= 0)
+    {
+        const auto now = ReminderService::Now();
+        auto dismissUntil = now + std::chrono::minutes(15);
+        Reminder& reminder = reminderList_.reminders[static_cast<size_t>(index)];
+        const ReminderStatus status = ReminderScheduler::StatusFor(reminder, now);
+        if (status == ReminderStatus::DueSoon)
+        {
+            if (const auto dueAt = ReminderService::ParseLocalIso(reminder.dueAt);
+                dueAt && *dueAt > now)
+            {
+                dismissUntil = *dueAt;
+                std::vector<int> alertMinutes = reminder.alertBeforeMinutesList.empty()
+                    ? std::vector<int> { reminder.alertBeforeMinutes }
+                    : reminder.alertBeforeMinutesList;
+                for (int& value : alertMinutes)
+                {
+                    value = std::max(0, value);
+                }
+                std::sort(alertMinutes.begin(), alertMinutes.end());
+                alertMinutes.erase(std::unique(alertMinutes.begin(), alertMinutes.end()), alertMinutes.end());
+                for (int minutes : alertMinutes)
+                {
+                    const auto nextAlertAt = *dueAt - std::chrono::minutes(minutes);
+                    if (nextAlertAt > now && nextAlertAt < dismissUntil)
+                    {
+                        dismissUntil = nextAlertAt;
+                    }
+                }
+            }
+        }
+        reminderService_.DismissBanner(
+            reminder,
+            dismissUntil);
+        reminderStatusMessage_ = status == ReminderStatus::DueSoon
+            ? L"Early reminder hidden. It will return at the next alert time."
+            : L"Reminder banner hidden for 15 minutes.";
+        SaveRemindersData();
+        UpdateReminderBanner();
+    }
+}
+
+void ToolkitApp::ViewReminderFromBanner()
+{
+    const int index = FindReminderIndexById(reminderAlert_.reminderId);
+    OpenTool(ToolKind::Reminders);
+    if (index >= 0)
+    {
+        selectedReminderIndex_ = index;
+        LoadReminderFormFromSelection();
+    }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::UpdateReminderBanner()
+{
+    const ReminderAlert previousAlert = reminderAlert_;
+    reminderAlert_ = ReminderBannerManager::ChooseAlert(reminderList_, ReminderService::Now());
+    if (reminderNotificationsArmed_)
+    {
+        HandleReminderDueNowNotification();
+    }
+    else
+    {
+        reminderNotificationsArmed_ = true;
+    }
+
+    if (previousAlert.hasValue != reminderAlert_.hasValue ||
+        previousAlert.reminderId != reminderAlert_.reminderId ||
+        previousAlert.message != reminderAlert_.message ||
+        previousAlert.severity != reminderAlert_.severity)
+    {
+        if (hwnd_)
+        {
+            RecalculateLayout();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
+}
+
+void ToolkitApp::HandleReminderDueNowNotification()
+{
+    if (!reminderAlert_.hasValue || reminderAlert_.severity != ReminderAlertSeverity::DueNow)
+    {
+        return;
+    }
+
+    const int index = FindReminderIndexById(reminderAlert_.reminderId);
+    if (index < 0 || index >= static_cast<int>(reminderList_.reminders.size()))
+    {
+        return;
+    }
+
+    const Reminder& reminder = reminderList_.reminders[static_cast<size_t>(index)];
+    const std::wstring notificationKey = reminder.id + L"|" + reminder.dueAt;
+    if (notificationKey.empty() || notificationKey == lastReminderNotificationKey_)
+    {
+        return;
+    }
+
+    lastReminderNotificationKey_ = notificationKey;
+    PlayReminderNotificationSound();
+    BringReminderWindowToFront();
+}
+
+bool ToolkitApp::ShouldShowUpdateNotification(const UpdateCheckResult& result) const
+{
+    return result.status == UpdateCheckStatus::UpdateAvailable &&
+        !result.latestVersion.empty() &&
+        CurrentEpochSeconds() >= appSettings_.updateNotificationDismissedUntil;
+}
+
+void ToolkitApp::DismissUpdateNotification()
+{
+    updateNotificationVisible_ = false;
+    appSettings_.updateNotificationDismissedUntil = CurrentEpochSeconds() + (3LL * 24LL * 60LL * 60LL);
+    SaveAppSettings();
+    RecalculateLayout();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+std::wstring ToolkitApp::ReminderNotificationSoundFilePath() const
+{
+    wchar_t executablePath[MAX_PATH] {};
+    const DWORD length = GetModuleFileNameW(nullptr, executablePath, static_cast<DWORD>(std::size(executablePath)));
+    if (length == 0 || length >= std::size(executablePath))
+    {
+        return {};
+    }
+
+    return (std::filesystem::path(executablePath).parent_path() / L"assets" / L"reminder_notification.mp3").wstring();
+}
+
+void ToolkitApp::PlayReminderNotificationSound() const
+{
+    const std::wstring soundPath = ReminderNotificationSoundFilePath();
+    if (soundPath.empty() || !std::filesystem::exists(soundPath))
+    {
+        MessageBeep(MB_ICONINFORMATION);
+        return;
+    }
+
+    constexpr wchar_t alias[] = L"rexReminderNotification";
+    mciSendStringW((std::wstring(L"close ") + alias).c_str(), nullptr, 0, nullptr);
+    const std::wstring openCommand = L"open \"" + soundPath + L"\" type mpegvideo alias " + alias;
+    if (mciSendStringW(openCommand.c_str(), nullptr, 0, nullptr) == 0)
+    {
+        mciSendStringW((std::wstring(L"setaudio ") + alias + L" volume to 700").c_str(), nullptr, 0, nullptr);
+        mciSendStringW((std::wstring(L"play ") + alias + L" from 0").c_str(), nullptr, 0, nullptr);
+    }
+    else
+    {
+        MessageBeep(MB_ICONINFORMATION);
+    }
+}
+
+void ToolkitApp::BringReminderWindowToFront()
+{
+    if (!hwnd_)
+    {
+        return;
+    }
+
+    if (minimizedToTray_)
+    {
+        RestoreFromTray();
+    }
+    else if (IsIconic(hwnd_))
+    {
+        ShowWindow(hwnd_, SW_RESTORE);
+    }
+    else
+    {
+        ShowWindow(hwnd_, SW_SHOW);
+    }
+
+    SetForegroundWindow(hwnd_);
+    SetActiveWindow(hwnd_);
+    SetFocus(hwnd_);
+
+    FLASHWINFO flashInfo {};
+    flashInfo.cbSize = sizeof(flashInfo);
+    flashInfo.hwnd = hwnd_;
+    flashInfo.dwFlags = FLASHW_TRAY | FLASHW_TIMERNOFG;
+    flashInfo.uCount = 3;
+    FlashWindowEx(&flashInfo);
+}
+
+int ToolkitApp::FindReminderIndexById(const std::wstring& id) const
+{
+    for (size_t index = 0; index < reminderList_.reminders.size(); ++index)
+    {
+        if (reminderList_.reminders[index].id == id)
+        {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
+}
+
+std::vector<size_t> ToolkitApp::VisibleReminderIndexes() const
+{
+    const auto now = ReminderService::Now();
+    const std::wstring search = LowercaseText(TrimWhitespace(GetWindowTextString(reminderSearchEdit_)));
+    std::vector<size_t> indexes;
+    indexes.reserve(reminderList_.reminders.size());
+
+    for (size_t index = 0; index < reminderList_.reminders.size(); ++index)
+    {
+        const Reminder& reminder = reminderList_.reminders[index];
+        const ReminderStatus status = ReminderScheduler::StatusFor(reminder, now);
+        const auto dueAt = ReminderService::ParseLocalIso(reminder.dueAt);
+        const std::wstring categoryLower = LowercaseText(reminder.category);
+        const std::wstring titleLower = LowercaseText(reminder.title);
+        const bool birthday =
+            categoryLower.find(L"birthday") != std::wstring::npos ||
+            titleLower.find(L"birthday") != std::wstring::npos;
+
+        bool include = true;
+        switch (reminderFilter_)
+        {
+        case ReminderFilter::Today:
+            include = dueAt && SameReminderLocalDate(*dueAt, now);
+            break;
+        case ReminderFilter::Upcoming:
+            include = status == ReminderStatus::Upcoming ||
+                status == ReminderStatus::DueSoon ||
+                status == ReminderStatus::DueNow ||
+                status == ReminderStatus::Snoozed;
+            break;
+        case ReminderFilter::Overdue:
+            include = status == ReminderStatus::Overdue;
+            break;
+        case ReminderFilter::Completed:
+            include = status == ReminderStatus::Completed;
+            break;
+        case ReminderFilter::Recurring:
+            include = reminder.repeat.type != ReminderRepeatType::None;
+            break;
+        case ReminderFilter::Birthdays:
+            include = birthday;
+            break;
+        case ReminderFilter::All:
+            include = true;
+            break;
+        }
+
+        if (!include)
+        {
+            continue;
+        }
+        if (!search.empty())
+        {
+            const std::wstring haystack =
+                LowercaseText(reminder.title + L" " + reminder.description + L" " + reminder.category);
+            if (haystack.find(search) == std::wstring::npos)
+            {
+                continue;
+            }
+        }
+        indexes.push_back(index);
+    }
+
+    auto dueSortKey = [&](size_t index)
+    {
+        return ReminderService::ParseLocalIso(reminderList_.reminders[index].dueAt).value_or(std::chrono::system_clock::time_point::max());
+    };
+
+    std::stable_sort(indexes.begin(), indexes.end(), [&](size_t left, size_t right)
+    {
+        const Reminder& leftReminder = reminderList_.reminders[left];
+        const Reminder& rightReminder = reminderList_.reminders[right];
+        switch (reminderSort_)
+        {
+        case ReminderSort::Priority:
+            if (leftReminder.priority != rightReminder.priority)
+            {
+                return static_cast<int>(leftReminder.priority) > static_cast<int>(rightReminder.priority);
+            }
+            return dueSortKey(left) < dueSortKey(right);
+        case ReminderSort::CreatedDate:
+            return leftReminder.createdAt > rightReminder.createdAt;
+        case ReminderSort::Title:
+            return LowercaseText(leftReminder.title) < LowercaseText(rightReminder.title);
+        case ReminderSort::SoonestFirst:
+            return dueSortKey(left) < dueSortKey(right);
+        }
+        return left < right;
+    });
+
+    return indexes;
+}
+
+RECT ToolkitApp::ReminderRowRect(size_t visibleIndex) const
+{
+    const int rowTop = reminderListRect_.top + Dips(108) + static_cast<int>(visibleIndex) * Dips(78);
+    return {
+        reminderListRect_.left + Dips(14),
+        rowTop,
+        reminderListRect_.right - Dips(14),
+        rowTop + Dips(66)
+    };
+}
+
+RECT ToolkitApp::ReminderActionRect(size_t visibleIndex, int actionIndex) const
+{
+    const RECT row = ReminderRowRect(visibleIndex);
+    const int buttonHeight = Dips(34);
+    const int buttonTop = row.top + ((row.bottom - row.top) - buttonHeight) / 2;
+    const int gap = Dips(8);
+    const int widths[] { Dips(72), Dips(38) };
+    int right = row.right - Dips(10);
+    const int clampedAction = std::clamp(actionIndex, 0, 1);
+    for (int index = 1; index > clampedAction; --index)
+    {
+        right -= widths[index] + gap;
+    }
+    const int width = widths[clampedAction];
+    return { right - width, buttonTop, right, buttonTop + buttonHeight };
+}
+
+std::wstring ToolkitApp::ReminderFilterLabel() const
+{
+    switch (reminderFilter_)
+    {
+    case ReminderFilter::Today:
+        return L"Today";
+    case ReminderFilter::Upcoming:
+        return L"Upcoming";
+    case ReminderFilter::Overdue:
+        return L"Overdue";
+    case ReminderFilter::Completed:
+        return L"Completed";
+    case ReminderFilter::Recurring:
+        return L"Recurring";
+    case ReminderFilter::Birthdays:
+        return L"Birthdays";
+    case ReminderFilter::All:
+        return L"All";
+    }
+    return L"All";
+}
+
+std::wstring ToolkitApp::ReminderSortLabel() const
+{
+    switch (reminderSort_)
+    {
+    case ReminderSort::Priority:
+        return L"Priority";
+    case ReminderSort::CreatedDate:
+        return L"Created date";
+    case ReminderSort::Title:
+        return L"Title";
+    case ReminderSort::SoonestFirst:
+        return L"Soonest first";
+    }
+    return L"Soonest first";
+}
+
+std::wstring ToolkitApp::ReminderAlertSummaryLabel() const
+{
+    std::vector<int> values = reminderFormAlertMinutesList_;
+    if (values.empty())
+    {
+        values.push_back(std::max(0, reminderFormAlertMinutes_));
+    }
+
+    for (int& value : values)
+    {
+        value = std::max(0, value);
+    }
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+
+    if (values.size() == 1)
+    {
+        return ReminderService::AlertLabel(values.front(), reminderFormAllDay_);
+    }
+
+    return ReminderService::AlertLabel(values.front(), reminderFormAllDay_) +
+        L" +" + std::to_wstring(values.size() - 1);
+}
+
+std::wstring ToolkitApp::ReminderCategoryText() const
+{
+    const std::wstring category = TrimWhitespace(GetWindowTextString(reminderCategoryEdit_));
+    return category.empty() ? L"General" : category;
+}
+
+void ToolkitApp::ShowReminderFilterDropdown()
+{
+    OpenDropdown(
+        DropdownKind::ReminderFilter,
+        reminderFilterButtonRect_,
+        { L"All", L"Today", L"Upcoming", L"Overdue", L"Completed", L"Recurring", L"Birthdays" },
+        {
+            static_cast<int>(ReminderFilter::All),
+            static_cast<int>(ReminderFilter::Today),
+            static_cast<int>(ReminderFilter::Upcoming),
+            static_cast<int>(ReminderFilter::Overdue),
+            static_cast<int>(ReminderFilter::Completed),
+            static_cast<int>(ReminderFilter::Recurring),
+            static_cast<int>(ReminderFilter::Birthdays)
+        },
+        { true, true, true, true, true, true, true },
+        static_cast<int>(reminderFilter_));
+}
+
+void ToolkitApp::ShowReminderSortDropdown()
+{
+    OpenDropdown(
+        DropdownKind::ReminderSort,
+        reminderSortButtonRect_,
+        { L"Soonest first", L"Priority", L"Created date", L"Title" },
+        {
+            static_cast<int>(ReminderSort::SoonestFirst),
+            static_cast<int>(ReminderSort::Priority),
+            static_cast<int>(ReminderSort::CreatedDate),
+            static_cast<int>(ReminderSort::Title)
+        },
+        { true, true, true, true },
+        static_cast<int>(reminderSort_));
+}
+
+void ToolkitApp::ShowReminderPresetDropdown()
+{
+    OpenDropdown(
+        DropdownKind::ReminderPreset,
+        reminderPresetButtonRect_,
+        { L"Later today", L"Tomorrow", L"In 1 hour", L"In 3 hours", L"In 1 week", L"Pick date/time" },
+        { 1, 2, 3, 4, 5, 6 },
+        { true, true, true, true, true, true },
+        0);
+}
+
+void ToolkitApp::ShowReminderPriorityDropdown()
+{
+    OpenDropdown(
+        DropdownKind::ReminderPriority,
+        reminderPriorityButtonRect_,
+        { L"Low", L"Normal", L"High" },
+        {
+            static_cast<int>(ReminderPriority::Low),
+            static_cast<int>(ReminderPriority::Normal),
+            static_cast<int>(ReminderPriority::High)
+        },
+        { true, true, true },
+        static_cast<int>(reminderFormPriority_));
+}
+
+void ToolkitApp::ShowReminderRepeatDropdown()
+{
+    OpenDropdown(
+        DropdownKind::ReminderRepeat,
+        reminderRepeatButtonRect_,
+        { L"None", L"Daily", L"Weekly", L"Monthly", L"Yearly" },
+        {
+            static_cast<int>(ReminderRepeatType::None),
+            static_cast<int>(ReminderRepeatType::Daily),
+            static_cast<int>(ReminderRepeatType::Weekly),
+            static_cast<int>(ReminderRepeatType::Monthly),
+            static_cast<int>(ReminderRepeatType::Yearly)
+        },
+        { true, true, true, true, true },
+        static_cast<int>(reminderFormRepeat_));
+}
+
+void ToolkitApp::ShowReminderAlertDropdown()
+{
+    OpenDropdown(
+        DropdownKind::ReminderAlert,
+        reminderAlertButtonRect_,
+        {
+            ReminderService::AlertLabel(0, reminderFormAllDay_),
+            ReminderService::AlertLabel(5, reminderFormAllDay_),
+            ReminderService::AlertLabel(15, reminderFormAllDay_),
+            ReminderService::AlertLabel(30, reminderFormAllDay_),
+            ReminderService::AlertLabel(60, reminderFormAllDay_),
+            ReminderService::AlertLabel(1440, reminderFormAllDay_)
+        },
+        { 0, 5, 15, 30, 60, 1440 },
+        { true, true, true, true, true, true },
+        reminderFormAlertMinutes_);
+}
+
+void ToolkitApp::ShowReminderSnoozeDropdown(int reminderIndex, const RECT& anchor)
+{
+    if (reminderIndex < 0 || reminderIndex >= static_cast<int>(reminderList_.reminders.size()))
+    {
+        return;
+    }
+
+    pendingReminderSnoozeIndex_ = reminderIndex;
+    OpenDropdown(
+        DropdownKind::ReminderSnooze,
+        anchor,
+        { L"5 minutes", L"10 minutes", L"30 minutes", L"1 hour", L"Tomorrow" },
+        { 5, 10, 30, 60, 1440 },
+        { true, true, true, true, true },
+        10);
+}
+
+void ToolkitApp::ShowReminderAmPmDropdown()
+{
+    OpenDropdown(
+        DropdownKind::ReminderAmPm,
+        reminderTimeAmPmButtonRect_,
+        { L"AM", L"PM" },
+        { 0, 1 },
+        { true, true },
+        reminderFormPm_ ? 1 : 0);
+}
+
+void ToolkitApp::ShowReminderCalendar()
+{
+    CloseDropdown();
+    auto dueAt = ReminderService::ParseDateAndTime(
+        GetWindowTextString(reminderDateEdit_),
+        TrimWhitespace(GetWindowTextString(reminderTimeEdit_)) + (reminderFormPm_ ? L" PM" : L" AM"),
+        reminderFormAllDay_);
+    if (!dueAt)
+    {
+        dueAt = ReminderService::Now();
+    }
+
+    const std::tm local = LocalTimeParts(*dueAt);
+    reminderCalendarYear_ = local.tm_year + 1900;
+    reminderCalendarMonth_ = local.tm_mon + 1;
+    reminderCalendarOpen_ = true;
+    UpdateReminderControls();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+RECT ToolkitApp::ReminderCalendarDayRect(int day) const
+{
+    if (day < 1 || day > ReminderDaysInMonth(reminderCalendarYear_, reminderCalendarMonth_))
+    {
+        return {};
+    }
+
+    const int firstWeekday = ReminderFirstWeekday(reminderCalendarYear_, reminderCalendarMonth_);
+    const int cellGap = Dips(4);
+    const int gridLeft = reminderCalendarRect_.left + Dips(14);
+    const int gridTop = reminderCalendarRect_.top + Dips(94);
+    const int cellWidth = std::max(1, static_cast<int>(reminderCalendarRect_.right - reminderCalendarRect_.left - Dips(28) - cellGap * 6) / 7);
+    const int cellHeight = Dips(31);
+    const int index = firstWeekday + day - 1;
+    const int column = index % 7;
+    const int row = index / 7;
+    const int left = gridLeft + column * (cellWidth + cellGap);
+    const int top = gridTop + row * (cellHeight + cellGap);
+    return { left, top, left + cellWidth, top + cellHeight };
+}
+
+void ToolkitApp::SetReminderDateFromCalendar(int day)
+{
+    if (day < 1 || day > ReminderDaysInMonth(reminderCalendarYear_, reminderCalendarMonth_))
+    {
+        return;
+    }
+
+    wchar_t buffer[16] {};
+    swprintf_s(buffer, L"%04d/%02d/%02d", reminderCalendarYear_, reminderCalendarMonth_, day);
+    SetWindowTextW(reminderDateEdit_, buffer);
+    reminderCalendarOpen_ = false;
+    UpdateReminderControls();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+bool ToolkitApp::HandleReminderCalendarClick(POINT point)
+{
+    if (!reminderCalendarOpen_)
+    {
+        return false;
+    }
+
+    if (!IsPointInRect(reminderCalendarRect_, point))
+    {
+        reminderCalendarOpen_ = false;
+        UpdateReminderControls();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return false;
+    }
+
+    if (IsPointInRect(reminderCalendarPrevButtonRect_, point))
+    {
+        --reminderCalendarMonth_;
+        if (reminderCalendarMonth_ < 1)
+        {
+            reminderCalendarMonth_ = 12;
+            --reminderCalendarYear_;
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+    if (IsPointInRect(reminderCalendarNextButtonRect_, point))
+    {
+        ++reminderCalendarMonth_;
+        if (reminderCalendarMonth_ > 12)
+        {
+            reminderCalendarMonth_ = 1;
+            ++reminderCalendarYear_;
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    const int days = ReminderDaysInMonth(reminderCalendarYear_, reminderCalendarMonth_);
+    for (int day = 1; day <= days; ++day)
+    {
+        if (IsPointInRect(ReminderCalendarDayRect(day), point))
+        {
+            SetReminderDateFromCalendar(day);
+            return true;
+        }
+    }
+
+    return true;
 }
 
 std::wstring ToolkitApp::AnimeSearchText() const
@@ -9747,20 +14666,38 @@ void ToolkitApp::ApplyMediaJobUpdate(const MediaDownloadJob& job)
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-void ToolkitApp::StartUpdateCheck()
+void ToolkitApp::StartUpdateCheck(bool silent)
 {
-    if (updateChecking_ || updateInstalling_)
+    if (updateChecking_)
+    {
+        if (!silent && updateCheckSilent_)
+        {
+            updateCheckSilent_ = false;
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+        return;
+    }
+
+    if (updateInstalling_)
     {
         return;
     }
 
     FinishUpdateThread();
     updateChecking_ = true;
-    hasUpdateResult_ = false;
-    updateResult_ = {};
+    updateCheckSilent_ = silent;
+    if (!silent)
+    {
+        hasUpdateResult_ = false;
+        updateResult_ = {};
+        updateNotificationVisible_ = false;
+    }
     updateResult_.currentVersion = APP_VERSION;
     updateInstallStatus_.clear();
-    InvalidateRect(hwnd_, nullptr, FALSE);
+    if (!silent)
+    {
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
 
     HWND hwnd = hwnd_;
     updateThread_ = std::thread(
@@ -9782,10 +14719,25 @@ void ToolkitApp::FinishUpdateThread()
 
 void ToolkitApp::ApplyUpdateCheckResult(const UpdateCheckResult& result)
 {
+    const bool wasSilent = updateCheckSilent_;
+    const bool wasNotificationVisible = updateNotificationVisible_;
+    updateCheckSilent_ = false;
     updateResult_ = result;
     updateChecking_ = false;
     updateInstallStatus_.clear();
-    hasUpdateResult_ = true;
+    hasUpdateResult_ = !wasSilent || result.status == UpdateCheckStatus::UpdateAvailable;
+    if (result.status != UpdateCheckStatus::UpdateAvailable || !wasSilent)
+    {
+        updateNotificationVisible_ = false;
+    }
+    if (wasSilent && ShouldShowUpdateNotification(result))
+    {
+        updateNotificationVisible_ = true;
+    }
+    if (wasNotificationVisible != updateNotificationVisible_)
+    {
+        RecalculateLayout();
+    }
 }
 
 void ToolkitApp::StartUpdateInstall()
@@ -11077,6 +16029,72 @@ std::wstring ToolkitApp::ThemeLabel() const
         return L"Dark";
     }
     return L"Dark";
+}
+
+std::wstring ToolkitApp::SmartTransferExpirationLabel() const
+{
+    switch (smartTransferOptions_.expiration)
+    {
+    case SmartTransferExpiration::FifteenMinutes:
+        return L"15 minutes";
+    case SmartTransferExpiration::ThirtyMinutes:
+        return L"30 minutes";
+    case SmartTransferExpiration::OneHour:
+        return L"1 hour";
+    case SmartTransferExpiration::Manual:
+        return L"Until manually stopped";
+    }
+    return L"30 minutes";
+}
+
+std::wstring ToolkitApp::SmartTransferHostStatusLabel() const
+{
+    switch (smartTransferHostSnapshot_.status)
+    {
+    case SmartTransferHostStatus::Preparing:
+        return L"Preparing files...";
+    case SmartTransferHostStatus::Hosting:
+        return L"Waiting for receiver.";
+    case SmartTransferHostStatus::WaitingForApproval:
+        return L"Waiting for sender approval.";
+    case SmartTransferHostStatus::Sending:
+        return smartTransferHostSnapshot_.currentFile.empty()
+            ? L"Sending..."
+            : L"Sending " + smartTransferHostSnapshot_.currentFile + L"...";
+    case SmartTransferHostStatus::Complete:
+        return L"Transfer complete.";
+    case SmartTransferHostStatus::Failed:
+        return L"Transfer failed.";
+    case SmartTransferHostStatus::Cancelled:
+        return L"Transfer cancelled.";
+    case SmartTransferHostStatus::Idle:
+        return L"Ready.";
+    }
+    return L"Ready.";
+}
+
+std::wstring ToolkitApp::SmartTransferClientStatusLabel() const
+{
+    switch (smartTransferDownloadProgress_.status)
+    {
+    case SmartTransferClientStatus::Connecting:
+        return L"Connecting...";
+    case SmartTransferClientStatus::WaitingForApproval:
+        return L"Waiting for sender approval.";
+    case SmartTransferClientStatus::Connected:
+        return L"Connected using local network.";
+    case SmartTransferClientStatus::Downloading:
+        return L"Downloading...";
+    case SmartTransferClientStatus::Complete:
+        return L"Download complete.";
+    case SmartTransferClientStatus::Failed:
+        return L"Download failed.";
+    case SmartTransferClientStatus::Cancelled:
+        return L"Download cancelled.";
+    case SmartTransferClientStatus::Idle:
+        return L"Ready.";
+    }
+    return L"Ready.";
 }
 
 void ToolkitApp::ApplyTheme()

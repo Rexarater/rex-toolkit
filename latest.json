@@ -1,11 +1,10 @@
 {
-  "latestVersion": "0.4.0",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.4.0/RexsToolkit_v0.4.0.zip",
+  "latestVersion": "0.4.9",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.4.9/RexsToolkit_v0.4.9.zip",
   "releaseNotes": [
-    "Added public AniList import for Anime Tracker using a username or profile link, with safe merging that keeps local notes and favorites.",
-    "Expanded Anime Tracker details with richer search results, detail pages, characters, voice actors, score/status data, episodes, and improved watchlist layout.",
-    "Improved Media Downloader validation, metadata display, download actions, and the beta BPM & Key Finder with bundled Essentia support.",
-    "Improved File Converter advanced options layout, queue spacing, drag-and-drop area, and save flow.",
-    "Added Auto Clicker alternating outputs and keyboard output bindings, plus many UI spacing, scrolling, dropdown, theme, and performance improvements."
+    "Added Smart File Transfer with LAN transfer, Direct Host support, and manual WebRTC P2P fallback using bundled libdatachannel.",
+    "Bundled and linked the native WebRTC/OpenSSL pieces needed for Smart File Transfer so no extra WebRTC install is required.",
+    "Added a new Smart File Transfer tool icon and improved the P2P pairing flow with safer sender/receiver session handling.",
+    "Improved Smart File Transfer reliability around STUN settings, approval/denial messages, stale pairing state, and long P2P downloads."
   ]
 }

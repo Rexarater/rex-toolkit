@@ -12,6 +12,10 @@ add_executable(RexToolkit WIN32
     src/main.cpp
     src/MediaDownloadService.cpp
     src/MediaDownloadService.h
+    src/ReminderService.cpp
+    src/ReminderService.h
+    src/SmartFileTransferService.cpp
+    src/SmartFileTransferService.h
     src/ToolkitApp.cpp
     src/ToolkitApp.h
     src/UpdateChecker.cpp
@@ -24,17 +28,44 @@ target_compile_definitions(RexToolkit PRIVATE UNICODE _UNICODE NOMINMAX _WIN32_W
 
 target_link_libraries(RexToolkit PRIVATE
     Comdlg32
+    Crypt32
     Dwmapi
     Gdiplus
+    Iphlpapi
     Ole32
+    OleAut32
+    Secur32
     Shell32
     UxTheme
     Windowscodecs
     Winhttp
     Wininet
     Winmm
+    Ws2_32
+    Bcrypt
     Urlmon
 )
+
+set(LIBDATACHANNEL_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libdatachannel-src")
+set(LIBDATACHANNEL_BUILD "${LIBDATACHANNEL_ROOT}/build/release")
+set(OPENSSL_STATIC_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/openssl-x64-windows-static" CACHE PATH "Static OpenSSL root used by libdatachannel")
+set(LIBDATACHANNEL_STATIC_LIB "${LIBDATACHANNEL_BUILD}/datachannel-static.lib")
+set(LIBDATACHANNEL_JUICE_LIB "${LIBDATACHANNEL_BUILD}/deps/libjuice/juice-static.lib")
+set(LIBDATACHANNEL_USRSCTP_LIB "${LIBDATACHANNEL_BUILD}/deps/usrsctp/usrsctplib/usrsctp.lib")
+if (EXISTS "${LIBDATACHANNEL_STATIC_LIB}" AND EXISTS "${LIBDATACHANNEL_JUICE_LIB}" AND EXISTS "${LIBDATACHANNEL_USRSCTP_LIB}" AND EXISTS "${OPENSSL_STATIC_ROOT}/lib/libssl.lib" AND EXISTS "${OPENSSL_STATIC_ROOT}/lib/libcrypto.lib")
+    target_compile_definitions(RexToolkit PRIVATE REX_TOOLKIT_HAS_LIBDATACHANNEL=1 RTC_STATIC=1)
+    target_include_directories(RexToolkit PRIVATE
+        "${LIBDATACHANNEL_ROOT}/include"
+        "${OPENSSL_STATIC_ROOT}/include"
+    )
+    target_link_libraries(RexToolkit PRIVATE
+        "${LIBDATACHANNEL_STATIC_LIB}"
+        "${LIBDATACHANNEL_JUICE_LIB}"
+        "${LIBDATACHANNEL_USRSCTP_LIB}"
+        "${OPENSSL_STATIC_ROOT}/lib/libssl.lib"
+        "${OPENSSL_STATIC_ROOT}/lib/libcrypto.lib"
+    )
+endif()
 
 set(BUNDLED_YT_DLP "${CMAKE_CURRENT_SOURCE_DIR}/tools/yt-dlp.exe")
 if (EXISTS "${BUNDLED_YT_DLP}")
@@ -76,6 +107,17 @@ if (EXISTS "${BUNDLED_ESSENTIA_DIR}")
             "${BUNDLED_ESSENTIA_DIR}"
             "$<TARGET_FILE_DIR:RexToolkit>/tools/essentia"
         COMMENT "Copying bundled Essentia folder"
+    )
+endif()
+
+set(REMINDER_NOTIFICATION_SOUND "${CMAKE_CURRENT_SOURCE_DIR}/assets/reminder_notification.mp3")
+if (EXISTS "${REMINDER_NOTIFICATION_SOUND}")
+    add_custom_command(TARGET RexToolkit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RexToolkit>/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${REMINDER_NOTIFICATION_SOUND}"
+            "$<TARGET_FILE_DIR:RexToolkit>/assets/reminder_notification.mp3"
+        COMMENT "Copying reminder notification sound"
     )
 endif()
 
