@@ -17,6 +17,8 @@
 
 namespace
 {
+constexpr int kMaxNaturalReminderMinutes = 10 * 366 * 24 * 60;
+
 std::wstring Utf8ToWide(const std::string& text)
 {
     if (text.empty())
@@ -1145,7 +1147,17 @@ bool ReminderService::TryParseNaturalDue(const std::wstring& text, std::chrono::
             return false;
         }
 
-        amount = _wtoi(value.c_str());
+        long long parsed = 0;
+        for (wchar_t ch : value)
+        {
+            parsed = parsed * 10 + static_cast<long long>(ch - L'0');
+            if (parsed > kMaxNaturalReminderMinutes)
+            {
+                return false;
+            }
+        }
+
+        amount = static_cast<int>(parsed);
         return amount > 0;
     };
 
@@ -1181,7 +1193,7 @@ bool ReminderService::TryParseNaturalDue(const std::wstring& text, std::chrono::
 
     auto unitToMinutes = [](const std::wstring& unit)
     {
-        if (unit.find(L"minute") == 0 || unit == L"min" || unit == L"mins" || unit == L"m")
+        if (unit.find(L"minute") == 0 || unit == L"min" || unit == L"mins" || unit == L"mn" || unit == L"m")
         {
             return 1;
         }
@@ -1200,10 +1212,75 @@ bool ReminderService::TryParseNaturalDue(const std::wstring& text, std::chrono::
         return 0;
     };
 
+    auto addMinutes = [](long long& totalMinutes, int amount, int unitMinutes)
+    {
+        if (amount <= 0 || unitMinutes <= 0)
+        {
+            return false;
+        }
+        const long long addition = static_cast<long long>(amount) * unitMinutes;
+        if (addition <= 0 || totalMinutes + addition > kMaxNaturalReminderMinutes)
+        {
+            return false;
+        }
+        totalMinutes += addition;
+        return true;
+    };
+
+    auto parseCompactDurationToken = [&](const std::wstring& value, int& minutes)
+    {
+        minutes = 0;
+        long long totalMinutes = 0;
+        bool parsedAny = false;
+        size_t position = 0;
+        while (position < value.size())
+        {
+            const size_t amountStart = position;
+            while (position < value.size() && iswdigit(value[position]) != 0)
+            {
+                ++position;
+            }
+            if (position == amountStart)
+            {
+                return false;
+            }
+
+            int amount = 0;
+            if (!parseAmount(value.substr(amountStart, position - amountStart), amount))
+            {
+                return false;
+            }
+
+            const size_t unitStart = position;
+            while (position < value.size() && iswalpha(value[position]) != 0)
+            {
+                ++position;
+            }
+            if (position == unitStart || position < value.size())
+            {
+                return false;
+            }
+
+            const int unitMinutes = unitToMinutes(value.substr(unitStart, position - unitStart));
+            if (!addMinutes(totalMinutes, amount, unitMinutes))
+            {
+                return false;
+            }
+            parsedAny = true;
+        }
+
+        if (!parsedAny || totalMinutes <= 0 || totalMinutes > kMaxNaturalReminderMinutes)
+        {
+            return false;
+        }
+        minutes = static_cast<int>(totalMinutes);
+        return true;
+    };
+
     auto parseRelativeDuration = [&](size_t startIndex, int& totalMinutes)
     {
         bool parsedAny = false;
-        totalMinutes = 0;
+        long long accumulatedMinutes = 0;
 
         for (size_t index = startIndex; index < tokens.size();)
         {
@@ -1229,7 +1306,10 @@ bool ReminderService::TryParseNaturalDue(const std::wstring& text, std::chrono::
                     const int unitMinutes = unitToMinutes(tokens[unitIndex]);
                     if (unitMinutes > 0)
                     {
-                        totalMinutes += std::max(1, unitMinutes / 2);
+                        if (!addMinutes(accumulatedMinutes, std::max(1, unitMinutes / 2), 1))
+                        {
+                            return false;
+                        }
                         parsedAny = true;
                         index = unitIndex + 1;
                         continue;
@@ -1245,11 +1325,26 @@ bool ReminderService::TryParseNaturalDue(const std::wstring& text, std::chrono::
                 const int unitMinutes = unitToMinutes(tokens[index + amountTokens]);
                 if (unitMinutes > 0)
                 {
-                    totalMinutes += amount * unitMinutes;
+                    if (!addMinutes(accumulatedMinutes, amount, unitMinutes))
+                    {
+                        return false;
+                    }
                     parsedAny = true;
                     index += amountTokens + 1;
                     continue;
                 }
+            }
+
+            int compactMinutes = 0;
+            if (parseCompactDurationToken(tokens[index], compactMinutes))
+            {
+                if (!addMinutes(accumulatedMinutes, compactMinutes, 1))
+                {
+                    return false;
+                }
+                parsedAny = true;
+                ++index;
+                continue;
             }
 
             if (parsedAny &&
@@ -1260,7 +1355,10 @@ bool ReminderService::TryParseNaturalDue(const std::wstring& text, std::chrono::
                 const int unitMinutes = unitToMinutes(tokens[index + 2]);
                 if (unitMinutes > 0)
                 {
-                    totalMinutes += std::max(1, unitMinutes / 2);
+                    if (!addMinutes(accumulatedMinutes, std::max(1, unitMinutes / 2), 1))
+                    {
+                        return false;
+                    }
                     index += 3;
                     continue;
                 }
@@ -1269,7 +1367,13 @@ bool ReminderService::TryParseNaturalDue(const std::wstring& text, std::chrono::
             break;
         }
 
-        return parsedAny && totalMinutes > 0;
+        if (!parsedAny || accumulatedMinutes <= 0 || accumulatedMinutes > kMaxNaturalReminderMinutes)
+        {
+            totalMinutes = 0;
+            return false;
+        }
+        totalMinutes = static_cast<int>(accumulatedMinutes);
+        return true;
     };
 
     for (size_t index = 0; index < tokens.size(); ++index)

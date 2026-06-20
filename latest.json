@@ -1,10 +1,11 @@
 {
-  "latestVersion": "0.4.9",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.4.9/RexsToolkit_v0.4.9.zip",
+  "latestVersion": "0.5.0",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.5.0/RexsToolkit_v0.5.0.zip",
   "releaseNotes": [
-    "Added Smart File Transfer with LAN transfer, Direct Host support, and manual WebRTC P2P fallback using bundled libdatachannel.",
-    "Bundled and linked the native WebRTC/OpenSSL pieces needed for Smart File Transfer so no extra WebRTC install is required.",
-    "Added a new Smart File Transfer tool icon and improved the P2P pairing flow with safer sender/receiver session handling.",
-    "Improved Smart File Transfer reliability around STUN settings, approval/denial messages, stale pairing state, and long P2P downloads."
+    "Added MyAnimeList public profile import to Anime Tracker, with source selection when AniList and MyAnimeList both match a username.",
+    "Improved Smart File Transfer beta behavior, including transfer-code normalization for shared codes and clearer beta labeling.",
+    "Added Auto Clicker toggle mode so the activation bind can turn clicking on/off instead of requiring hold.",
+    "Improved Reminders smart-title parsing for shorthand times like 3m, 3 min, and 1h30m, with safer handling of oversized numbers.",
+    "Polished update, reminder, anime import, and settings UI details."
   ]
 }

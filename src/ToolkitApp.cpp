@@ -330,9 +330,14 @@ struct AnimeRefreshAllThreadResult
 struct AnimeImportThreadResult
 {
     AnimeImportResult result;
+    AnimeImportResult alternateResult;
     std::wstring userName;
     std::wstring message;
+    std::wstring alternateMessage;
     std::vector<std::pair<std::wstring, std::wstring>> coverFiles;
+    AnimeImportSource source = AnimeImportSource::AniList;
+    AnimeImportSource alternateSource = AnimeImportSource::MyAnimeList;
+    bool needsSourceChoice = false;
 };
 
 struct SmartTransferConnectThreadResult
@@ -820,12 +825,33 @@ std::chrono::system_clock::time_point ReminderPresetTarget(int preset)
     return now;
 }
 
-std::wstring NormalizeAniListImportInput(const std::wstring& value)
+struct AnimeImportInput
 {
+    AnimeImportSource source = AnimeImportSource::Auto;
+    std::wstring userName;
+};
+
+std::wstring AnimeImportSourceLabel(AnimeImportSource source)
+{
+    switch (source)
+    {
+    case AnimeImportSource::MyAnimeList:
+        return L"MyAnimeList";
+    case AnimeImportSource::AniList:
+        return L"AniList";
+    case AnimeImportSource::Auto:
+    default:
+        return L"AniList/MyAnimeList";
+    }
+}
+
+AnimeImportInput NormalizeAnimeImportInput(const std::wstring& value)
+{
+    AnimeImportInput input;
     std::wstring text = TrimWhitespace(value);
     if (text.empty())
     {
-        return {};
+        return input;
     }
 
     if (!text.empty() && text.front() == L'@')
@@ -843,10 +869,14 @@ std::wstring NormalizeAniListImportInput(const std::wstring& value)
         return copy;
     }();
 
-    const std::wstring marker = L"anilist.co/user/";
-    const size_t markerPosition = lowered.find(marker);
-    if (markerPosition != std::wstring::npos)
+    auto extractAfterMarker = [&](const std::wstring& marker) -> bool
     {
+        const size_t markerPosition = lowered.find(marker);
+        if (markerPosition == std::wstring::npos)
+        {
+            return false;
+        }
+
         size_t start = markerPosition + marker.size();
         while (start < text.size() && text[start] == L'/')
         {
@@ -863,13 +893,42 @@ std::wstring NormalizeAniListImportInput(const std::wstring& value)
             ++end;
         }
         text = text.substr(start, end - start);
+        return true;
+    };
+
+    if (extractAfterMarker(L"anilist.co/user/"))
+    {
+        input.source = AnimeImportSource::AniList;
+    }
+    else if (lowered.find(L"myanimelist.net/animelist.php") != std::wstring::npos &&
+        lowered.find(L"username=") != std::wstring::npos)
+    {
+        const size_t markerPosition = lowered.find(L"username=");
+        size_t start = markerPosition + 9;
+        size_t end = start;
+        while (end < text.size() &&
+            text[end] != L'&' &&
+            text[end] != L'#' &&
+            !iswspace(text[end]))
+        {
+            ++end;
+        }
+        text = text.substr(start, end - start);
+        input.source = AnimeImportSource::MyAnimeList;
+    }
+    else if (extractAfterMarker(L"myanimelist.net/profile/") ||
+        extractAfterMarker(L"myanimelist.net/animelist/") ||
+        extractAfterMarker(L"myanimelist.net/animelist.php/"))
+    {
+        input.source = AnimeImportSource::MyAnimeList;
     }
 
     while (!text.empty() && (text.back() == L'/' || text.back() == L'?' || text.back() == L'#'))
     {
         text.pop_back();
     }
-    return TrimWhitespace(text);
+    input.userName = TrimWhitespace(text);
+    return input;
 }
 
 unsigned long long StableHash(const std::wstring& value)
@@ -1021,7 +1080,7 @@ std::vector<ToolDefinition> CreateToolRegistry()
         },
         {
             L"smart_file_transfer",
-            L"Smart File Transfer",
+            L"(Beta) Smart File Transfer",
             L"Send files directly to another Rex's Toolkit user using a transfer code.",
             false,
             ToolKind::SmartFileTransfer
@@ -2578,7 +2637,19 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
                     std::filesystem::remove(cover.second, imageError);
                 }
             }
-            ApplyAnimeImportResult(result->result, result->userName, result->message);
+            if (result->needsSourceChoice)
+            {
+                ShowAnimeImportSourceChoice(
+                    result->userName,
+                    result->result,
+                    result->message,
+                    result->alternateResult,
+                    result->alternateMessage);
+            }
+            else
+            {
+                ApplyAnimeImportResult(result->result, result->userName, result->source, result->message);
+            }
         }
         FinishAnimeThread();
         RecalculateLayout();
@@ -3431,6 +3502,7 @@ void ToolkitApp::LoadAutoClickerSettings()
     unsigned int alternateOutputKey = autoClicker_.alternateOutputKey;
     int alternateOutputButton = static_cast<int>(autoClicker_.alternateOutputButton);
     int alternateOutputEnabled = autoClicker_.alternateOutputEnabled ? 1 : 0;
+    int toggleModeEnabled = autoClicker_.toggleModeEnabled ? 1 : 0;
 
     file >> clicksPerSecond >> activationKind >> activationKey >> activationMouseButton >> outputButton;
     std::vector<int> remainingValues;
@@ -3439,7 +3511,17 @@ void ToolkitApp::LoadAutoClickerSettings()
     {
         remainingValues.push_back(settingValue);
     }
-    if (remainingValues.size() >= 6)
+    if (remainingValues.size() >= 7)
+    {
+        outputKind = remainingValues[0];
+        outputKey = static_cast<unsigned int>(remainingValues[1]);
+        alternateOutputKind = remainingValues[2];
+        alternateOutputKey = static_cast<unsigned int>(remainingValues[3]);
+        alternateOutputButton = remainingValues[4];
+        alternateOutputEnabled = remainingValues[5];
+        toggleModeEnabled = remainingValues[6];
+    }
+    else if (remainingValues.size() >= 6)
     {
         outputKind = remainingValues[0];
         outputKey = static_cast<unsigned int>(remainingValues[1]);
@@ -3502,6 +3584,7 @@ void ToolkitApp::LoadAutoClickerSettings()
         autoClicker_.alternateOutputKey = alternateOutputKey;
     }
     autoClicker_.alternateOutputEnabled = alternateOutputEnabled != 0;
+    autoClicker_.toggleModeEnabled = toggleModeEnabled != 0;
 }
 
 void ToolkitApp::SaveAutoClickerSettings() const
@@ -3525,7 +3608,8 @@ void ToolkitApp::SaveAutoClickerSettings() const
         << static_cast<int>(autoClicker_.alternateOutputKind) << L' '
         << autoClicker_.alternateOutputKey << L' '
         << static_cast<int>(autoClicker_.alternateOutputButton) << L' '
-        << (autoClicker_.alternateOutputEnabled ? 1 : 0) << L'\n';
+        << (autoClicker_.alternateOutputEnabled ? 1 : 0) << L' '
+        << (autoClicker_.toggleModeEnabled ? 1 : 0) << L'\n';
 }
 
 void ToolkitApp::RecalculateLayout()
@@ -3689,11 +3773,18 @@ void ToolkitApp::RecalculateLayout()
         panelTop + Dips(272)
     };
 
+    toggleModeToggleRect_ = {
+        controlLeft,
+        panelTop + Dips(282),
+        controlRight,
+        panelTop + Dips(314)
+    };
+
     startStopButtonRect_ = {
         panelLeft + Dips(32),
-        panelTop + Dips(318),
+        panelTop + Dips(354),
         panelLeft + Dips(200),
-        panelTop + Dips(366)
+        panelTop + Dips(402)
     };
 
     const int converterLeft = contentRect_.left + contentMargin;
@@ -4292,10 +4383,10 @@ void ToolkitApp::RecalculateLayout()
         settingsTop + Dips(178)
     };
     settingsDownloadUpdateButtonRect_ = {
-        settingsControlLeft,
-        settingsTop + Dips(504),
-        settingsControlLeft + Dips(182),
-        settingsTop + Dips(548)
+        0,
+        0,
+        0,
+        0
     };
     settingsGithubButtonRect_ = {
         settingsControlLeft,
@@ -4765,6 +4856,38 @@ void ToolkitApp::RecalculateLayout()
         scrollBarThumbRect_ = {};
     }
 
+    const int choicePanelWidth = std::min(Dips(560), std::max(Dips(360), static_cast<int>(clientRect_.right - clientRect_.left) - Dips(64)));
+    const int choicePanelHeight = Dips(270);
+    const int choicePanelLeft = (clientRect_.right - clientRect_.left - choicePanelWidth) / 2;
+    const int choicePanelTop = (clientRect_.bottom - clientRect_.top - choicePanelHeight) / 2;
+    animeImportChoicePanelRect_ = {
+        choicePanelLeft,
+        choicePanelTop,
+        choicePanelLeft + choicePanelWidth,
+        choicePanelTop + choicePanelHeight
+    };
+    const int choiceButtonGap = Dips(12);
+    const int choiceButtonWidth = std::max(Dips(130), (choicePanelWidth - Dips(48) - choiceButtonGap * 2) / 3);
+    const int choiceButtonTop = animeImportChoicePanelRect_.bottom - Dips(66);
+    animeImportChoiceAniListButtonRect_ = {
+        animeImportChoicePanelRect_.left + Dips(24),
+        choiceButtonTop,
+        animeImportChoicePanelRect_.left + Dips(24) + choiceButtonWidth,
+        choiceButtonTop + Dips(42)
+    };
+    animeImportChoiceMyAnimeListButtonRect_ = {
+        animeImportChoiceAniListButtonRect_.right + choiceButtonGap,
+        choiceButtonTop,
+        animeImportChoiceAniListButtonRect_.right + choiceButtonGap + choiceButtonWidth,
+        animeImportChoiceAniListButtonRect_.bottom
+    };
+    animeImportChoiceCancelButtonRect_ = {
+        animeImportChoiceMyAnimeListButtonRect_.right + choiceButtonGap,
+        choiceButtonTop,
+        animeImportChoicePanelRect_.right - Dips(24),
+        animeImportChoiceAniListButtonRect_.bottom
+    };
+
     UpdateMediaDownloaderControls();
     UpdateSmartFileTransferControls();
     UpdateAnimeTrackerControls();
@@ -4985,6 +5108,10 @@ void ToolkitApp::Paint(HDC hdc, const RECT& paintRect)
     if (!liveResize_ && RectsOverlap(clippedPaint, dropdownRect_))
     {
         PaintDropdown(backBufferDc_);
+    }
+    if (!liveResize_ && animeImportSourceChoiceOpen_)
+    {
+        PaintAnimeImportChoiceOverlay(backBufferDc_);
     }
 
     RestoreDC(backBufferDc_, savedDc);
@@ -5521,7 +5648,7 @@ void ToolkitApp::PaintAutoClicker(HDC hdc)
     subtitleRect.bottom = subtitleRect.top + Dips(22);
     DrawTextLine(
         hdc,
-        L"Hold the activation input to repeatedly press the selected output input.",
+        L"Hold the activation input, or enable toggle mode to press once for on/off.",
         subtitleRect,
         bodyFont_,
         kTextSecondary,
@@ -5531,7 +5658,7 @@ void ToolkitApp::PaintAutoClicker(HDC hdc)
         contentRect_.left + margin,
         contentTop + Dips(kToolBodyTopDip),
         contentRect_.right - margin,
-        contentTop + Dips(kToolBodyTopDip + 414)
+        contentTop + Dips(kToolBodyTopDip + 450)
     };
 
     FillRoundRect(hdc, panel, Dips(16), kPanelBackground);
@@ -5623,6 +5750,12 @@ void ToolkitApp::PaintAutoClicker(HDC hdc)
         autoClicker_.alternateOutputEnabled,
         L"Alternate between two output buttons");
 
+    PaintCheckbox(
+        hdc,
+        toggleModeToggleRect_,
+        autoClicker_.toggleModeEnabled,
+        L"Toggle on/off instead of holding activation");
+
     PaintButton(
         hdc,
         startStopButtonRect_,
@@ -5637,7 +5770,9 @@ void ToolkitApp::PaintAutoClicker(HDC hdc)
         startStopButtonRect_.bottom
     };
 
-    std::wstring hint = L"Hold " + ActivationKeyLabel() + L" to run.";
+    std::wstring hint = autoClicker_.toggleModeEnabled
+        ? L"Press " + ActivationKeyLabel() + L" to toggle clicking on or off."
+        : L"Hold " + ActivationKeyLabel() + L" to run.";
     if (autoClicker_.alternateOutputEnabled)
     {
         hint += L" Alternates " + OutputBindingLabel(autoClicker_.outputKind, autoClicker_.outputKey, autoClicker_.outputButton) +
@@ -7455,7 +7590,7 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
     };
     DrawTextLine(
         hdc,
-        L"Import from AniList",
+        L"Import from AniList or MyAnimeList",
         importTitle,
         navFont_,
         kTextPrimary,
@@ -7485,7 +7620,7 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
     };
     DrawTextLine(
         hdc,
-        L"Enter a public AniList username or paste a profile link.",
+        L"Enter a public username or paste an AniList/MyAnimeList profile link.",
         importHelp,
         bodyFont_,
         kTextSecondary,
@@ -7752,6 +7887,81 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
         FillRoundRect(hdc, animeNotesEditRect_, Dips(10), kInputBackground);
         StrokeRoundRect(hdc, animeNotesEditRect_, Dips(10), kBorder);
     }
+}
+
+void ToolkitApp::PaintAnimeImportChoiceOverlay(HDC hdc)
+{
+    if (!animeImportSourceChoiceOpen_)
+    {
+        return;
+    }
+
+    Gdiplus::Graphics graphics(hdc);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    Gdiplus::SolidBrush overlayBrush(Gdiplus::Color(175, 4, 7, 12));
+    graphics.FillRectangle(
+        &overlayBrush,
+        static_cast<INT>(clientRect_.left),
+        static_cast<INT>(clientRect_.top),
+        static_cast<INT>(clientRect_.right - clientRect_.left),
+        static_cast<INT>(clientRect_.bottom - clientRect_.top));
+
+    FillRoundRect(hdc, animeImportChoicePanelRect_, Dips(18), kPanelBackground);
+    StrokeRoundRect(hdc, animeImportChoicePanelRect_, Dips(18), kAccent);
+
+    RECT titleRect {
+        animeImportChoicePanelRect_.left + Dips(26),
+        animeImportChoicePanelRect_.top + Dips(24),
+        animeImportChoicePanelRect_.right - Dips(26),
+        animeImportChoicePanelRect_.top + Dips(58)
+    };
+    DrawTextLine(
+        hdc,
+        L"Choose Import Source",
+        titleRect,
+        headingFont_,
+        kTextPrimary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    RECT bodyRect {
+        titleRect.left,
+        titleRect.bottom + Dips(10),
+        titleRect.right,
+        titleRect.bottom + Dips(78)
+    };
+    std::wstring body =
+        L"Both AniList and MyAnimeList have a public anime list for \"" +
+        pendingAnimeImportUserName_ +
+        L"\". Pick the profile you want Rex's Toolkit to import.";
+    DrawTextLine(
+        hdc,
+        body.c_str(),
+        bodyRect,
+        bodyFont_,
+        kTextSecondary,
+        DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+
+    RECT countsRect {
+        titleRect.left,
+        bodyRect.bottom + Dips(8),
+        titleRect.right,
+        bodyRect.bottom + Dips(34)
+    };
+    std::wstring counts =
+        L"AniList: " + std::to_wstring(pendingAnimeAniListImport_.entries.size()) +
+        L" entries    MyAnimeList: " + std::to_wstring(pendingAnimeMyAnimeListImport_.entries.size()) +
+        L" mapped entries";
+    DrawTextLine(
+        hdc,
+        counts.c_str(),
+        countsRect,
+        bodyFont_,
+        kTextSecondary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    PaintButton(hdc, animeImportChoiceAniListButtonRect_, L"Import AniList", true);
+    PaintButton(hdc, animeImportChoiceMyAnimeListButtonRect_, L"Import MyAnimeList", true);
+    PaintButton(hdc, animeImportChoiceCancelButtonRect_, L"Cancel", false);
 }
 
 void ToolkitApp::PaintReminders(HDC hdc)
@@ -8068,14 +8278,13 @@ void ToolkitApp::PaintReminderBanner(HDC hdc)
     subtextRect.bottom = reminderBannerRect_.bottom - Dips(7);
     DrawTextLine(hdc, reminderAlert_.subtext.c_str(), subtextRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
 
-    const bool closeHovered = hasHoveredButton_ && EqualRect(&reminderBannerCloseButtonRect_, &hoveredButtonRect_);
     const bool closePressed = hasPressedButton_ && EqualRect(&reminderBannerCloseButtonRect_, &pressedButtonRect_);
     RECT closeIconRect = ShrinkRect(reminderBannerCloseButtonRect_, Dips(6), Dips(6));
     if (closePressed)
     {
         OffsetRect(&closeIconRect, 0, Dips(1));
     }
-    PaintXIcon(hdc, closeIconRect, closeHovered || closePressed ? kTextPrimary : kTextSecondary);
+    PaintXIcon(hdc, closeIconRect, RGB(255, 255, 255));
 }
 
 void ToolkitApp::PaintUpdateBanner(HDC hdc)
@@ -8871,6 +9080,7 @@ void ToolkitApp::PaintSettings(HDC hdc)
 
     if (settingsSection_ == SettingsSection::Updates)
     {
+        settingsDownloadUpdateButtonRect_ = {};
         drawSectionTitle(L"Updates", L"Check here for releases, then download and install available updates inside the app.");
         PaintButton(
             hdc,
@@ -8948,20 +9158,52 @@ void ToolkitApp::PaintSettings(HDC hdc)
 
         if (updateResult_.status == UpdateCheckStatus::UpdateAvailable)
         {
+            const int innerLeft = resultPanel.left + Dips(20);
+            const int innerRight = resultPanel.right - Dips(20);
+            const int buttonWidth = std::min(Dips(182), std::max(Dips(142), innerRight - innerLeft));
+            const int buttonHeight = Dips(44);
+            const int bottomButtonTop = resultPanel.bottom - Dips(20) - buttonHeight;
+            settingsDownloadUpdateButtonRect_ = {
+                innerLeft,
+                bottomButtonTop,
+                innerLeft + buttonWidth,
+                bottomButtonTop + buttonHeight
+            };
+
+            const int sideBySideButtonLeft = innerRight - buttonWidth;
+            const bool canUseSideBySide = sideBySideButtonLeft - detailRect.left >= Dips(260);
+            if (canUseSideBySide)
+            {
+                settingsDownloadUpdateButtonRect_.left = sideBySideButtonLeft;
+                settingsDownloadUpdateButtonRect_.right = innerRight;
+                settingsDownloadUpdateButtonRect_.top = detailRect.bottom + Dips(16);
+                settingsDownloadUpdateButtonRect_.bottom = settingsDownloadUpdateButtonRect_.top + buttonHeight;
+            }
+
+            const int notesRight = canUseSideBySide
+                ? settingsDownloadUpdateButtonRect_.left - Dips(18)
+                : innerRight;
             RECT notesTitle {
                 detailRect.left,
                 detailRect.bottom + Dips(16),
-                detailRect.right,
+                notesRight,
                 detailRect.bottom + Dips(42)
             };
             DrawTextLine(hdc, L"Release notes", notesTitle, bodyFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
             int noteTop = notesTitle.bottom + Dips(4);
+            const int notesBottom = canUseSideBySide
+                ? resultPanel.bottom - Dips(20)
+                : settingsDownloadUpdateButtonRect_.top - Dips(12);
             const size_t noteCount = std::min<size_t>(updateResult_.releaseNotes.size(), 5);
             for (size_t index = 0; index < noteCount; ++index)
             {
+                if (noteTop + Dips(24) > notesBottom)
+                {
+                    break;
+                }
                 std::wstring note = L"- " + updateResult_.releaseNotes[index];
-                RECT noteRect { notesTitle.left, noteTop, notesTitle.right, noteTop + Dips(24) };
+                RECT noteRect { notesTitle.left, noteTop, notesRight, noteTop + Dips(24) };
                 DrawTextLine(hdc, note.c_str(), noteRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
                 noteTop += Dips(24);
             }
@@ -8970,10 +9212,10 @@ void ToolkitApp::PaintSettings(HDC hdc)
             if (!updateInstallStatus_.empty())
             {
                 RECT installStatusRect {
-                    settingsDownloadUpdateButtonRect_.right + Dips(16),
-                    settingsDownloadUpdateButtonRect_.top,
-                    resultPanel.right - Dips(20),
-                    settingsDownloadUpdateButtonRect_.bottom
+                    canUseSideBySide ? settingsDownloadUpdateButtonRect_.left : innerLeft,
+                    settingsDownloadUpdateButtonRect_.bottom + Dips(6),
+                    innerRight,
+                    settingsDownloadUpdateButtonRect_.bottom + Dips(30)
                 };
                 DrawTextLine(
                     hdc,
@@ -9508,6 +9750,20 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
     };
     RECT rect {};
 
+    if (animeImportSourceChoiceOpen_)
+    {
+        for (const RECT& candidate : {
+            animeImportChoiceAniListButtonRect_,
+            animeImportChoiceMyAnimeListButtonRect_,
+            animeImportChoiceCancelButtonRect_
+        })
+        {
+            rect = hit(candidate);
+            if (rect.right > rect.left) return rect;
+        }
+        return {};
+    }
+
     if (reminderAlert_.hasValue)
     {
         for (const RECT& candidate : { reminderBannerCloseButtonRect_ })
@@ -9611,6 +9867,7 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
             activationKeyButtonRect_,
             outputButtonButtonRect_,
             alternateOutputToggleRect_,
+            toggleModeToggleRect_,
             startStopButtonRect_
         };
         if (autoClicker_.alternateOutputEnabled)
@@ -10105,6 +10362,10 @@ void ToolkitApp::OnMouseMove(POINT point)
     }
 
     UpdateButtonHover(point);
+    if (animeImportSourceChoiceOpen_)
+    {
+        return;
+    }
 
     int newHoverAnimeResultIndex = -1;
     if (currentPage_ == Page::Tool &&
@@ -10251,6 +10512,26 @@ void ToolkitApp::OnMouseMove(POINT point)
 
 void ToolkitApp::OnLeftButtonDown(POINT point)
 {
+    if (animeImportSourceChoiceOpen_)
+    {
+        if (IsPointInRect(animeImportChoiceAniListButtonRect_, point))
+        {
+            ApplyPendingAnimeImportChoice(AnimeImportSource::AniList);
+            return;
+        }
+        if (IsPointInRect(animeImportChoiceMyAnimeListButtonRect_, point))
+        {
+            ApplyPendingAnimeImportChoice(AnimeImportSource::MyAnimeList);
+            return;
+        }
+        if (IsPointInRect(animeImportChoiceCancelButtonRect_, point) || !IsPointInRect(animeImportChoicePanelRect_, point))
+        {
+            CancelPendingAnimeImportChoice();
+            return;
+        }
+        return;
+    }
+
     if (HandleDropdownClick(point))
     {
         return;
@@ -11349,6 +11630,22 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             return;
         }
 
+        if (IsPointInRect(toggleModeToggleRect_, point))
+        {
+            autoClicker_.toggleModeEnabled = !autoClicker_.toggleModeEnabled;
+            autoClickerActivationHeld_ = false;
+            if (!autoClicker_.toggleModeEnabled)
+            {
+                SetAutoClickerRunning(false);
+            }
+            awaitingActivationKey_ = false;
+            awaitingOutputButton_ = false;
+            awaitingAlternateOutputButton_ = false;
+            SaveAutoClickerSettings();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+
         if (autoClicker_.alternateOutputEnabled && IsPointInRect(alternateOutputButtonRect_, point))
         {
             awaitingAlternateOutputButton_ = true;
@@ -12355,7 +12652,7 @@ void ToolkitApp::CreateAnimeTrackerControls()
     }
     if (animeImportEdit_)
     {
-        SendMessageW(animeImportEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Username or profile link"));
+        SendMessageW(animeImportEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"AniList/MAL username or profile link"));
     }
     if (animeNotesEdit_)
     {
@@ -12365,7 +12662,7 @@ void ToolkitApp::CreateAnimeTrackerControls()
 
 void ToolkitApp::UpdateAnimeTrackerControls()
 {
-    const bool visible = currentPage_ == Page::Tool && currentTool_ == ToolKind::AnimeTracker && !liveResize_;
+    const bool visible = currentPage_ == Page::Tool && currentTool_ == ToolKind::AnimeTracker && !liveResize_ && !animeImportSourceChoiceOpen_;
     const bool hideForDropdown = activeDropdown_ == DropdownKind::AnimeFilter;
 
     auto moveEdit = [&](HWND edit, const RECT& rect, bool enabled, bool shouldShow = true)
@@ -13617,6 +13914,74 @@ void ToolkitApp::ApplyAnimeSearchResponse(const AnimeSearchResponse& response, c
     animeStatusMessage_ = message.empty() ? L"Ready." : message;
 }
 
+void ToolkitApp::ShowAnimeImportSourceChoice(
+    const std::wstring& userName,
+    const AnimeImportResult& aniListResult,
+    const std::wstring& aniListMessage,
+    const AnimeImportResult& myAnimeListResult,
+    const std::wstring& myAnimeListMessage)
+{
+    pendingAnimeImportUserName_ = userName;
+    pendingAnimeAniListImport_ = aniListResult;
+    pendingAnimeMyAnimeListImport_ = myAnimeListResult;
+    pendingAnimeAniListMessage_ = aniListMessage;
+    pendingAnimeMyAnimeListMessage_ = myAnimeListMessage;
+    animeImportSourceChoiceOpen_ = true;
+    animeStatusMessage_ = L"Choose which public profile to import.";
+    activeDropdown_ = DropdownKind::None;
+    reminderCalendarOpen_ = false;
+    hasPressedButton_ = false;
+    hasHoveredButton_ = false;
+    UpdateAnimeTrackerControls();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::ApplyPendingAnimeImportChoice(AnimeImportSource source)
+{
+    if (!animeImportSourceChoiceOpen_)
+    {
+        return;
+    }
+
+    const AnimeImportResult& result = source == AnimeImportSource::MyAnimeList
+        ? pendingAnimeMyAnimeListImport_
+        : pendingAnimeAniListImport_;
+    const std::wstring message = source == AnimeImportSource::MyAnimeList
+        ? pendingAnimeMyAnimeListMessage_
+        : pendingAnimeAniListMessage_;
+    const std::wstring userName = pendingAnimeImportUserName_;
+
+    animeImportSourceChoiceOpen_ = false;
+    pendingAnimeImportUserName_.clear();
+    pendingAnimeAniListMessage_.clear();
+    pendingAnimeMyAnimeListMessage_.clear();
+    ApplyAnimeImportResult(result, userName, source, message);
+    pendingAnimeAniListImport_ = {};
+    pendingAnimeMyAnimeListImport_ = {};
+    RecalculateLayout();
+    UpdateAnimeTrackerControls();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void ToolkitApp::CancelPendingAnimeImportChoice()
+{
+    if (!animeImportSourceChoiceOpen_)
+    {
+        return;
+    }
+
+    animeImportSourceChoiceOpen_ = false;
+    pendingAnimeAniListImport_ = {};
+    pendingAnimeMyAnimeListImport_ = {};
+    pendingAnimeImportUserName_.clear();
+    pendingAnimeAniListMessage_.clear();
+    pendingAnimeMyAnimeListMessage_.clear();
+    animeStatusMessage_ = L"Anime import cancelled.";
+    RecalculateLayout();
+    UpdateAnimeTrackerControls();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 void ToolkitApp::StartAnimeImport()
 {
     if (animeSearching_ || animeRefreshing_ || animeImporting_)
@@ -13624,47 +13989,104 @@ void ToolkitApp::StartAnimeImport()
         return;
     }
 
-    const std::wstring userName = NormalizeAniListImportInput(GetWindowTextString(animeImportEdit_));
-    if (userName.empty())
+    const AnimeImportInput importInput = NormalizeAnimeImportInput(GetWindowTextString(animeImportEdit_));
+    if (importInput.userName.empty())
     {
-        animeStatusMessage_ = L"Enter a public AniList username or profile link to import.";
+        animeStatusMessage_ = L"Enter a public AniList/MyAnimeList username or profile link to import.";
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
 
     FinishAnimeThread();
     animeImporting_ = true;
-    animeStatusMessage_ = L"Importing public AniList list for " + userName + L"...";
+    animeStatusMessage_ = importInput.source == AnimeImportSource::Auto
+        ? L"Looking for public AniList and MyAnimeList lists for " + importInput.userName + L"..."
+        : L"Importing public " + AnimeImportSourceLabel(importInput.source) + L" list for " + importInput.userName + L"...";
     UpdateAnimeTrackerControls();
     InvalidateRect(hwnd_, nullptr, FALSE);
 
     HWND hwnd = hwnd_;
     animeThread_ = std::thread(
-        [this, hwnd, userName]()
+        [this, hwnd, importInput]()
         {
             auto* result = new AnimeImportThreadResult();
-            result->userName = userName;
-            std::wstring errorMessage;
-            result->result = animeTrackerService_.ImportPublicAnimeList(userName, errorMessage);
-            if (!errorMessage.empty())
+            result->userName = importInput.userName;
+            result->source = importInput.source == AnimeImportSource::Auto ? AnimeImportSource::AniList : importInput.source;
+
+            auto downloadImportCovers = [](const AnimeImportResult& importResult, std::vector<std::pair<std::wstring, std::wstring>>& coverFiles)
             {
-                result->message = errorMessage;
+                for (const AnimeEntry& entry : importResult.entries)
+                {
+                    if (!entry.coverImageUrl.empty())
+                    {
+                        if (auto coverPath = DownloadAnimeCoverToCache(entry.coverImageUrl))
+                        {
+                            coverFiles.emplace_back(entry.coverImageUrl, coverPath->wstring());
+                        }
+                    }
+                }
+            };
+
+            auto importSource = [&](AnimeImportSource source, AnimeImportResult& importResult, std::wstring& message)
+            {
+                std::wstring errorMessage;
+                importResult = animeTrackerService_.ImportPublicAnimeList(importInput.userName, source, errorMessage);
+                if (!errorMessage.empty())
+                {
+                    message = errorMessage;
+                }
+                else
+                {
+                    message = L"Imported " + AnimeImportSourceLabel(source) + L" data.";
+                }
+            };
+
+            if (importInput.source == AnimeImportSource::Auto)
+            {
+                importSource(AnimeImportSource::AniList, result->result, result->message);
+                importSource(AnimeImportSource::MyAnimeList, result->alternateResult, result->alternateMessage);
+                result->source = AnimeImportSource::AniList;
+                result->alternateSource = AnimeImportSource::MyAnimeList;
+                result->needsSourceChoice = !result->result.entries.empty() && !result->alternateResult.entries.empty();
+                if (result->result.entries.empty() && !result->alternateResult.entries.empty())
+                {
+                    result->result = std::move(result->alternateResult);
+                    result->message = result->alternateMessage;
+                    result->source = AnimeImportSource::MyAnimeList;
+                    result->alternateResult = {};
+                    result->alternateMessage.clear();
+                }
+                else if (result->result.entries.empty() && result->alternateResult.entries.empty())
+                {
+                    result->message = L"No public AniList or MyAnimeList anime entries were available to import. AniList: " +
+                        result->message + L" MyAnimeList: " + result->alternateMessage;
+                }
             }
             else
             {
-                result->message = L"Imported AniList data.";
+                importSource(importInput.source, result->result, result->message);
+            }
+
+            downloadImportCovers(result->result, result->coverFiles);
+            if (result->needsSourceChoice)
+            {
+                downloadImportCovers(result->alternateResult, result->coverFiles);
             }
 
             PostMessageW(hwnd, kAnimeImportFinishedMessage, 0, reinterpret_cast<LPARAM>(result));
         });
 }
 
-void ToolkitApp::ApplyAnimeImportResult(const AnimeImportResult& result, const std::wstring& userName, const std::wstring& message)
+void ToolkitApp::ApplyAnimeImportResult(
+    const AnimeImportResult& result,
+    const std::wstring& userName,
+    AnimeImportSource source,
+    const std::wstring& message)
 {
     if (result.entries.empty())
     {
         animeStatusMessage_ = message.empty()
-            ? L"No public AniList anime entries were available to import."
+            ? std::wstring(L"No public ") + AnimeImportSourceLabel(source) + L" anime entries were available to import."
             : message;
         return;
     }
@@ -13722,7 +14144,7 @@ void ToolkitApp::ApplyAnimeImportResult(const AnimeImportResult& result, const s
 
     SaveAnimeTrackerData();
     animeStatusMessage_ = L"Imported " + std::to_wstring(added) + L" new and updated " +
-        std::to_wstring(updated) + L" from " + userName + L".";
+        std::to_wstring(updated) + L" from " + AnimeImportSourceLabel(source) + L" profile " + userName + L".";
 }
 
 void ToolkitApp::AddAnimeFromSearch(size_t index)
@@ -15575,12 +15997,27 @@ bool ToolkitApp::HandleKeyboardHook(WPARAM message, const KBDLLHOOKSTRUCT& keybo
 
     if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
     {
-        SetAutoClickerRunning(true);
+        if (autoClicker_.toggleModeEnabled)
+        {
+            if (!autoClickerActivationHeld_)
+            {
+                autoClickerActivationHeld_ = true;
+                SetAutoClickerRunning(!autoClicker_.running);
+            }
+        }
+        else
+        {
+            SetAutoClickerRunning(true);
+        }
         return true;
     }
     else if (message == WM_KEYUP || message == WM_SYSKEYUP)
     {
-        SetAutoClickerRunning(false);
+        autoClickerActivationHeld_ = false;
+        if (!autoClicker_.toggleModeEnabled)
+        {
+            SetAutoClickerRunning(false);
+        }
         return true;
     }
 
@@ -15645,12 +16082,27 @@ bool ToolkitApp::HandleMouseHook(WPARAM message, const MSLLHOOKSTRUCT& mouse)
 
     if (IsActivationMouseMessage(message, mouse, true))
     {
-        SetAutoClickerRunning(true);
+        if (autoClicker_.toggleModeEnabled)
+        {
+            if (!autoClickerActivationHeld_)
+            {
+                autoClickerActivationHeld_ = true;
+                SetAutoClickerRunning(!autoClicker_.running);
+            }
+        }
+        else
+        {
+            SetAutoClickerRunning(true);
+        }
         return true;
     }
     else if (IsActivationMouseMessage(message, mouse, false))
     {
-        SetAutoClickerRunning(false);
+        autoClickerActivationHeld_ = false;
+        if (!autoClicker_.toggleModeEnabled)
+        {
+            SetAutoClickerRunning(false);
+        }
         return true;
     }
 

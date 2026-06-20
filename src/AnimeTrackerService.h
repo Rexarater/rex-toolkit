@@ -14,6 +14,13 @@ enum class AnimeUserStatus
     Dropped
 };
 
+enum class AnimeImportSource
+{
+    Auto,
+    AniList,
+    MyAnimeList
+};
+
 struct AnimeDate
 {
     int year = 0;
@@ -156,10 +163,17 @@ class AniListApiClient
 public:
     AnimeSearchResponse SearchAnime(const std::wstring& searchText, int page, int perPage, std::wstring& errorMessage) const;
     std::optional<AnimeSearchResult> FetchAnimeById(int anilistId, std::wstring& errorMessage) const;
+    std::vector<AnimeSearchResult> FetchAnimeByMalIds(const std::vector<int>& malIds, std::wstring& errorMessage) const;
     AnimeImportResult ImportPublicAnimeList(const std::wstring& userName, std::wstring& errorMessage) const;
 
 private:
     bool ExecuteGraphQl(const std::string& requestBody, std::string& responseBody, std::wstring& errorMessage) const;
+};
+
+class MyAnimeListApiClient
+{
+public:
+    AnimeImportResult ImportPublicAnimeList(const std::wstring& userName, const AniListApiClient& aniListClient, std::wstring& errorMessage) const;
 };
 
 class AnimeListStorage
@@ -187,6 +201,7 @@ public:
     AnimeSearchResponse SearchAnime(const std::wstring& searchText, int page, int perPage, std::wstring& errorMessage) const;
     std::optional<AnimeSearchResult> RefreshAnime(int anilistId, std::wstring& errorMessage) const;
     AnimeImportResult ImportPublicAnimeList(const std::wstring& userName, std::wstring& errorMessage) const;
+    AnimeImportResult ImportPublicAnimeList(const std::wstring& userName, AnimeImportSource source, std::wstring& errorMessage) const;
 
     static AnimeEntry EntryFromSearchResult(const AnimeSearchResult& result);
     static void ApplyMetadata(AnimeEntry& entry, const AnimeSearchResult& result);
@@ -201,5 +216,6 @@ public:
 
 private:
     AniListApiClient apiClient_;
+    MyAnimeListApiClient myAnimeListClient_;
     AnimeListStorage storage_;
 };

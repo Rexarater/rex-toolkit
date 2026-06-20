@@ -22,6 +22,8 @@ namespace
 {
 constexpr DWORD kAniListTimeoutMs = 12000;
 constexpr size_t kMaxAniListResponseBytes = 4 * 1024 * 1024;
+constexpr size_t kMaxMyAnimeListResponseBytes = 8 * 1024 * 1024;
+constexpr int kAniListMalMapBatchSize = 50;
 
 std::wstring AniListHttpErrorMessage(DWORD statusCode)
 {
@@ -84,6 +86,8 @@ struct InternetHandle
     }
 };
 
+std::string WideToUtf8(const std::wstring& text);
+
 bool ReadInternetResponse(HINTERNET request, std::string& responseBody, std::wstring& errorMessage)
 {
     responseBody.clear();
@@ -103,6 +107,40 @@ bool ReadInternetResponse(HINTERNET request, std::string& responseBody, std::wst
         if (responseBody.size() + read > kMaxAniListResponseBytes)
         {
             errorMessage = L"AniList returned too much data. Try a narrower search.";
+            return false;
+        }
+        responseBody.append(buffer, buffer + read);
+    }
+    return true;
+}
+
+bool ReadInternetResponseLimited(
+    HINTERNET request,
+    size_t maxBytes,
+    const wchar_t* serviceName,
+    std::string& responseBody,
+    std::wstring& errorMessage)
+{
+    responseBody.clear();
+    for (;;)
+    {
+        char buffer[8192] {};
+        DWORD read = 0;
+        if (!InternetReadFile(request, buffer, static_cast<DWORD>(sizeof(buffer)), &read))
+        {
+            errorMessage = L"Could not read the ";
+            errorMessage += serviceName;
+            errorMessage += L" response.";
+            return false;
+        }
+        if (read == 0)
+        {
+            break;
+        }
+        if (responseBody.size() + read > maxBytes)
+        {
+            errorMessage = serviceName;
+            errorMessage += L" returned too much data. Try a smaller public list.";
             return false;
         }
         responseBody.append(buffer, buffer + read);
@@ -197,6 +235,106 @@ bool ExecuteGraphQlWithWinInet(const std::string& requestBody, std::string& resp
     }
 
     return ReadInternetResponse(request, responseBody, errorMessage);
+}
+
+std::wstring UrlEncodePathSegment(const std::wstring& value)
+{
+    const std::string utf8 = WideToUtf8(value);
+    std::wostringstream output;
+    output << std::uppercase << std::hex;
+    for (unsigned char ch : utf8)
+    {
+        const bool unreserved =
+            (ch >= 'A' && ch <= 'Z') ||
+            (ch >= 'a' && ch <= 'z') ||
+            (ch >= '0' && ch <= '9') ||
+            ch == '-' ||
+            ch == '_' ||
+            ch == '.' ||
+            ch == '~';
+        if (unreserved)
+        {
+            output << static_cast<wchar_t>(ch);
+        }
+        else
+        {
+            output << L'%' << std::setw(2) << std::setfill(L'0') << static_cast<int>(ch);
+        }
+    }
+    return output.str();
+}
+
+bool ExecuteMyAnimeListGet(const std::wstring& userName, int offset, std::string& responseBody, std::wstring& errorMessage)
+{
+    InternetHandle session(InternetOpenW(
+        L"RexToolkitAnimeTracker/1.0",
+        INTERNET_OPEN_TYPE_PRECONFIG,
+        nullptr,
+        nullptr,
+        0));
+    if (!session)
+    {
+        errorMessage = L"Could not reach MyAnimeList. Check your internet connection and try again.";
+        return false;
+    }
+
+    DWORD timeout = kAniListTimeoutMs;
+    InternetSetOptionW(session, INTERNET_OPTION_CONNECT_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOptionW(session, INTERNET_OPTION_SEND_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOptionW(session, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
+
+    const std::wstring url =
+        L"https://myanimelist.net/animelist/" +
+        UrlEncodePathSegment(userName) +
+        L"/load.json?offset=" +
+        std::to_wstring(std::max(0, offset)) +
+        L"&status=7";
+    const wchar_t headers[] = L"Accept: application/json\r\nCache-Control: no-cache\r\n";
+    InternetHandle request(InternetOpenUrlW(
+        session,
+        url.c_str(),
+        headers,
+        static_cast<DWORD>(-1),
+        INTERNET_FLAG_SECURE | INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE,
+        0));
+    if (!request)
+    {
+        errorMessage = L"Could not reach that MyAnimeList profile. Make sure the username is correct and the anime list is public.";
+        return false;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusCodeSize = sizeof(statusCode);
+    if (HttpQueryInfoW(
+            request,
+            HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
+            &statusCode,
+            &statusCodeSize,
+            nullptr))
+    {
+        if (statusCode == 404)
+        {
+            errorMessage = L"MyAnimeList could not find that profile.";
+            return false;
+        }
+        if (statusCode == 403)
+        {
+            errorMessage = L"MyAnimeList blocked that public list request or the list is private.";
+            return false;
+        }
+        if (statusCode < 200 || statusCode >= 300)
+        {
+            errorMessage = L"MyAnimeList returned HTTP " + std::to_wstring(statusCode) + L". Please try again later.";
+            return false;
+        }
+    }
+
+    return ReadInternetResponseLimited(
+        request,
+        kMaxMyAnimeListResponseBytes,
+        L"MyAnimeList",
+        responseBody,
+        errorMessage);
 }
 
 std::wstring Utf8ToWide(const std::string& text)
@@ -1129,6 +1267,47 @@ std::string AnimeImportQuery()
 })";
 }
 
+std::string AnimeByMalIdsQuery()
+{
+    return R"(query ($ids: [Int], $page: Int, $perPage: Int) {
+  Page(page: $page, perPage: $perPage) {
+    pageInfo { currentPage hasNextPage }
+    media(idMal_in: $ids, type: ANIME, sort: ID) {
+      id
+      idMal
+      title { romaji english native userPreferred }
+      coverImage { large medium }
+      format
+      status
+      episodes
+      season
+      seasonYear
+      startDate { year month day }
+      siteUrl
+      nextAiringEpisode { airingAt timeUntilAiring episode }
+      relations {
+        edges {
+          relationType
+          node {
+            id
+            title { userPreferred english romaji }
+            format
+            status
+            episodes
+            season
+            seasonYear
+            startDate { year month day }
+            coverImage { large medium }
+            siteUrl
+            nextAiringEpisode { airingAt timeUntilAiring episode }
+          }
+        }
+      }
+    }
+  }
+})";
+}
+
 std::string BuildSearchBody(const std::wstring& searchText, int page, int perPage)
 {
     std::ostringstream body;
@@ -1160,6 +1339,23 @@ std::string BuildImportBody(const std::wstring& userName)
     return body.str();
 }
 
+std::string BuildMalIdsBody(const std::vector<int>& malIds)
+{
+    std::ostringstream body;
+    body << "{\"query\":" << JsonEscape(Utf8ToWide(AnimeByMalIdsQuery())) << ",\"variables\":{"
+        << "\"ids\":[";
+    for (size_t index = 0; index < malIds.size(); ++index)
+    {
+        if (index > 0)
+        {
+            body << ",";
+        }
+        body << malIds[index];
+    }
+    body << "],\"page\":1,\"perPage\":" << static_cast<int>(malIds.size()) << "}}";
+    return body.str();
+}
+
 AnimeUserStatus UserStatusFromAniListStatus(const std::wstring& status)
 {
     if (status == L"CURRENT" || status == L"REPEATING")
@@ -1179,6 +1375,71 @@ AnimeUserStatus UserStatusFromAniListStatus(const std::wstring& status)
         return AnimeUserStatus::Dropped;
     }
     return AnimeUserStatus::Planned;
+}
+
+AnimeUserStatus UserStatusFromMyAnimeListStatus(int status)
+{
+    switch (status)
+    {
+    case 1:
+        return AnimeUserStatus::Watching;
+    case 2:
+        return AnimeUserStatus::Completed;
+    case 3:
+        return AnimeUserStatus::OnHold;
+    case 4:
+        return AnimeUserStatus::Dropped;
+    case 6:
+    default:
+        return AnimeUserStatus::Planned;
+    }
+}
+
+struct MyAnimeListImportItem
+{
+    int idMal = 0;
+    int currentEpisode = 0;
+    int status = 6;
+};
+
+std::vector<MyAnimeListImportItem> ParseMyAnimeListItems(const std::string& responseBody, std::wstring& errorMessage)
+{
+    std::vector<MyAnimeListImportItem> items;
+    Json::Value root;
+    Json::Parser parser(responseBody);
+    if (!parser.Parse(root) || root.type != Json::Type::Array)
+    {
+        errorMessage = L"Could not read the MyAnimeList import response.";
+        return items;
+    }
+
+    std::set<int> seen;
+    for (const Json::Value& itemValue : root.arrayValue)
+    {
+        const int idMal = Json::Int(Json::At(itemValue, "anime_id"));
+        if (idMal <= 0 || seen.find(idMal) != seen.end())
+        {
+            continue;
+        }
+
+        MyAnimeListImportItem item;
+        item.idMal = idMal;
+        item.currentEpisode = std::max(0, Json::Int(Json::At(itemValue, "num_watched_episodes")));
+        item.status = Json::Int(Json::At(itemValue, "status"));
+        if (item.status == 0)
+        {
+            item.status = Json::Int(Json::At(itemValue, "watching_status"));
+        }
+        if (item.status == 0)
+        {
+            item.status = 6;
+        }
+
+        seen.insert(idMal);
+        items.push_back(item);
+    }
+
+    return items;
 }
 
 std::string SerializeAiringInfo(const AiringInfo& info, const char* indent)
@@ -1375,6 +1636,55 @@ std::optional<AnimeSearchResult> AniListApiClient::FetchAnimeById(int anilistId,
     return ParseMedia(media->arrayValue.front());
 }
 
+std::vector<AnimeSearchResult> AniListApiClient::FetchAnimeByMalIds(const std::vector<int>& malIds, std::wstring& errorMessage) const
+{
+    std::vector<AnimeSearchResult> results;
+    if (malIds.empty())
+    {
+        return results;
+    }
+
+    std::string responseBody;
+    if (!ExecuteGraphQl(BuildMalIdsBody(malIds), responseBody, errorMessage))
+    {
+        return results;
+    }
+
+    Json::Value root;
+    Json::Parser parser(responseBody);
+    if (!parser.Parse(root))
+    {
+        errorMessage = L"Could not read the AniList MAL mapping response.";
+        return results;
+    }
+
+    if (Json::At(root, "errors"))
+    {
+        errorMessage = L"AniList could not map those MyAnimeList entries.";
+        return results;
+    }
+
+    const Json::Value* data = Json::At(root, "data");
+    const Json::Value* pageValue = data ? Json::At(*data, "Page") : nullptr;
+    const Json::Value* media = pageValue ? Json::At(*pageValue, "media") : nullptr;
+    if (!media || media->type != Json::Type::Array)
+    {
+        errorMessage = L"AniList did not return MAL mappings.";
+        return results;
+    }
+
+    for (const Json::Value& mediaValue : media->arrayValue)
+    {
+        AnimeSearchResult result = ParseMedia(mediaValue);
+        if (result.anilistId != 0 && result.idMal != 0)
+        {
+            results.push_back(std::move(result));
+        }
+    }
+
+    return results;
+}
+
 AnimeImportResult AniListApiClient::ImportPublicAnimeList(const std::wstring& userName, std::wstring& errorMessage) const
 {
     AnimeImportResult importResult;
@@ -1449,6 +1759,120 @@ AnimeImportResult AniListApiClient::ImportPublicAnimeList(const std::wstring& us
     if (importResult.entries.empty())
     {
         errorMessage = L"That public AniList profile did not have any anime entries to import.";
+    }
+    return importResult;
+}
+
+AnimeImportResult MyAnimeListApiClient::ImportPublicAnimeList(
+    const std::wstring& userName,
+    const AniListApiClient& aniListClient,
+    std::wstring& errorMessage) const
+{
+    AnimeImportResult importResult;
+    std::vector<MyAnimeListImportItem> items;
+    std::set<int> seenMalIds;
+    constexpr int kMyAnimeListPageSize = 300;
+    for (int offset = 0; offset <= 15000; offset += kMyAnimeListPageSize)
+    {
+        std::string responseBody;
+        if (!ExecuteMyAnimeListGet(userName, offset, responseBody, errorMessage))
+        {
+            return importResult;
+        }
+
+        std::wstring parseError;
+        std::vector<MyAnimeListImportItem> pageItems = ParseMyAnimeListItems(responseBody, parseError);
+        if (!parseError.empty())
+        {
+            errorMessage = parseError;
+            return importResult;
+        }
+        if (pageItems.empty())
+        {
+            break;
+        }
+
+        for (const MyAnimeListImportItem& item : pageItems)
+        {
+            if (seenMalIds.insert(item.idMal).second)
+            {
+                items.push_back(item);
+            }
+        }
+
+        if (pageItems.size() < static_cast<size_t>(kMyAnimeListPageSize))
+        {
+            break;
+        }
+    }
+
+    if (items.empty())
+    {
+        errorMessage = L"That public MyAnimeList profile did not have any anime entries to import.";
+        return importResult;
+    }
+
+    std::map<int, MyAnimeListImportItem> itemsByMalId;
+    std::vector<int> batch;
+    batch.reserve(kAniListMalMapBatchSize);
+    std::set<int> importedAniListIds;
+    auto flushBatch = [&]() -> bool
+    {
+        if (batch.empty())
+        {
+            return true;
+        }
+
+        std::wstring mappingError;
+        std::vector<AnimeSearchResult> mappedResults = aniListClient.FetchAnimeByMalIds(batch, mappingError);
+        if (!mappingError.empty() && mappedResults.empty())
+        {
+            errorMessage = mappingError;
+            return false;
+        }
+
+        for (const AnimeSearchResult& mediaResult : mappedResults)
+        {
+            const auto item = itemsByMalId.find(mediaResult.idMal);
+            if (item == itemsByMalId.end() || importedAniListIds.find(mediaResult.anilistId) != importedAniListIds.end())
+            {
+                continue;
+            }
+
+            AnimeEntry entry = AnimeTrackerService::EntryFromSearchResult(mediaResult);
+            entry.userStatus = UserStatusFromMyAnimeListStatus(item->second.status);
+            entry.currentEpisode = item->second.currentEpisode;
+            if (entry.totalEpisodes > 0 && entry.currentEpisode > entry.totalEpisodes)
+            {
+                entry.currentEpisode = entry.totalEpisodes;
+            }
+
+            importedAniListIds.insert(mediaResult.anilistId);
+            importResult.entries.push_back(std::move(entry));
+        }
+
+        batch.clear();
+        return true;
+    };
+
+    for (const MyAnimeListImportItem& item : items)
+    {
+        itemsByMalId[item.idMal] = item;
+        batch.push_back(item.idMal);
+        if (batch.size() >= kAniListMalMapBatchSize && !flushBatch())
+        {
+            return importResult;
+        }
+    }
+    if (!flushBatch())
+    {
+        return importResult;
+    }
+
+    importResult.totalEntries = static_cast<int>(importResult.entries.size());
+    if (importResult.entries.empty())
+    {
+        errorMessage = L"MyAnimeList returned entries, but AniList did not have matching anime IDs to import.";
     }
     return importResult;
 }
@@ -1758,7 +2182,23 @@ std::optional<AnimeSearchResult> AnimeTrackerService::RefreshAnime(int anilistId
 
 AnimeImportResult AnimeTrackerService::ImportPublicAnimeList(const std::wstring& userName, std::wstring& errorMessage) const
 {
-    return apiClient_.ImportPublicAnimeList(userName, errorMessage);
+    return ImportPublicAnimeList(userName, AnimeImportSource::AniList, errorMessage);
+}
+
+AnimeImportResult AnimeTrackerService::ImportPublicAnimeList(
+    const std::wstring& userName,
+    AnimeImportSource source,
+    std::wstring& errorMessage) const
+{
+    switch (source)
+    {
+    case AnimeImportSource::MyAnimeList:
+        return myAnimeListClient_.ImportPublicAnimeList(userName, apiClient_, errorMessage);
+    case AnimeImportSource::AniList:
+    case AnimeImportSource::Auto:
+    default:
+        return apiClient_.ImportPublicAnimeList(userName, errorMessage);
+    }
 }
 
 AnimeEntry AnimeTrackerService::EntryFromSearchResult(const AnimeSearchResult& result)

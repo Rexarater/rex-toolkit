@@ -89,6 +89,76 @@ std::wstring Trim(std::wstring value)
     return std::wstring(first, last);
 }
 
+std::wstring NormalizeTransferCodeText(const std::wstring& text)
+{
+    auto isKnownField = [](const std::wstring& line) -> bool
+    {
+        static const std::array<const wchar_t*, 11> prefixes = {
+            L"session=",
+            L"token=",
+            L"expires=",
+            L"lan=",
+            L"direct=",
+            L"capabilities=",
+            L"role=",
+            L"description=",
+            L"sdp=",
+            L"candidates=",
+            L"checksum="
+        };
+        return std::any_of(prefixes.begin(), prefixes.end(), [&](const wchar_t* prefix)
+        {
+            return line.rfind(prefix, 0) == 0;
+        });
+    };
+
+    std::wstring normalized;
+    normalized.reserve(text.size());
+    for (wchar_t ch : text)
+    {
+        if (ch == L'\r')
+        {
+            continue;
+        }
+        normalized.push_back(ch);
+    }
+
+    std::wistringstream input(Trim(normalized));
+    std::vector<std::wstring> lines;
+    std::wstring line;
+    while (std::getline(input, line))
+    {
+        line = Trim(line);
+        if (line.empty())
+        {
+            continue;
+        }
+
+        const bool startsNewField = isKnownField(line) ||
+            line == L"RXT1" ||
+            line == L"RXP2P1";
+        if (startsNewField || lines.empty())
+        {
+            lines.push_back(line);
+        }
+        else
+        {
+            lines.back() += line;
+        }
+    }
+
+    std::wstring output;
+    for (const std::wstring& normalizedLine : lines)
+    {
+        if (!output.empty())
+        {
+            output.push_back(L'\n');
+        }
+        output += normalizedLine;
+    }
+    return output;
+}
+
 std::wstring ToLower(std::wstring value)
 {
     std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch)
@@ -406,7 +476,7 @@ std::wstring EncodeWebRtcPairingCode(const WebRtcPairingCode& code)
 bool DecodeWebRtcPairingCode(const std::wstring& text, WebRtcPairingCode& code, std::wstring& errorMessage)
 {
     code = {};
-    const std::wstring trimmedCode = Trim(text);
+    const std::wstring trimmedCode = NormalizeTransferCodeText(text);
     const std::wstring checksumMarker = L"\nchecksum=";
     const size_t checksumPosition = trimmedCode.rfind(checksumMarker);
     if (checksumPosition == std::wstring::npos)
@@ -955,7 +1025,7 @@ std::wstring TransferCodeService::Encode(const SmartTransferInvite& invite)
 
 bool TransferCodeService::Decode(const std::wstring& code, SmartTransferInvite& invite, std::wstring& errorMessage)
 {
-    const std::wstring trimmedCode = Trim(code);
+    const std::wstring trimmedCode = NormalizeTransferCodeText(code);
     const std::wstring checksumMarker = L"\nchecksum=";
     const size_t checksumPosition = trimmedCode.rfind(checksumMarker);
     if (checksumPosition == std::wstring::npos)

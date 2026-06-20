@@ -158,6 +158,7 @@ struct AutoClickerState
     UINT alternateOutputKey = VK_RETURN;
     OutputMouseButton alternateOutputButton = OutputMouseButton::Right;
     bool alternateOutputEnabled = false;
+    bool toggleModeEnabled = false;
     bool running = false;
 };
 
@@ -246,6 +247,7 @@ private:
     void PaintFileConverter(HDC hdc);
     void PaintMediaDownloader(HDC hdc);
     void PaintAnimeTracker(HDC hdc);
+    void PaintAnimeImportChoiceOverlay(HDC hdc);
     void PaintReminders(HDC hdc);
     void PaintSmartFileTransfer(HDC hdc);
     void PaintSettings(HDC hdc);
@@ -377,7 +379,15 @@ private:
     void StartAnimeImport();
     void FinishAnimeThread();
     void ApplyAnimeSearchResponse(const AnimeSearchResponse& response, const std::wstring& message, bool appendResults);
-    void ApplyAnimeImportResult(const AnimeImportResult& result, const std::wstring& userName, const std::wstring& message);
+    void ApplyAnimeImportResult(const AnimeImportResult& result, const std::wstring& userName, AnimeImportSource source, const std::wstring& message);
+    void ShowAnimeImportSourceChoice(
+        const std::wstring& userName,
+        const AnimeImportResult& aniListResult,
+        const std::wstring& aniListMessage,
+        const AnimeImportResult& myAnimeListResult,
+        const std::wstring& myAnimeListMessage);
+    void ApplyPendingAnimeImportChoice(AnimeImportSource source);
+    void CancelPendingAnimeImportChoice();
     void AddAnimeFromSearch(size_t index);
     void AddAnimeFromRelation(size_t index);
     void RefreshAnimeEntry(size_t index);
@@ -486,6 +496,8 @@ private:
     AnimeWatchList animeWatchList_;
     AnimeSearchResponse animeSearchResponse_;
     std::vector<AnimeSearchResult> animeSearchResults_;
+    AnimeImportResult pendingAnimeAniListImport_;
+    AnimeImportResult pendingAnimeMyAnimeListImport_;
     ReminderList reminderList_;
     ReminderAlert reminderAlert_;
     SmartTransferTab smartTransferTab_ = SmartTransferTab::Send;
@@ -500,6 +512,9 @@ private:
     std::wstring smartTransferSenderPairingCode_;
     std::wstring smartTransferReceiverResponseCode_;
     std::wstring animeStatusMessage_;
+    std::wstring pendingAnimeImportUserName_;
+    std::wstring pendingAnimeAniListMessage_;
+    std::wstring pendingAnimeMyAnimeListMessage_;
     std::wstring reminderStatusMessage_;
     std::wstring smartTransferStatusMessage_;
     std::wstring smartTransferReceiveStatusMessage_;
@@ -531,6 +546,7 @@ private:
     std::atomic<int> autoClickerAlternateOutputButton_ = static_cast<int>(OutputMouseButton::Right);
     std::atomic_bool autoClickerAlternateOutputEnabled_ = false;
     std::atomic_bool autoClickerUseAlternateNext_ = false;
+    bool autoClickerActivationHeld_ = false;
     std::atomic_bool smartTransferCancelRequested_ = false;
     bool mediaAnalyzing_ = false;
     bool mediaMusicAnalyzing_ = false;
@@ -551,6 +567,7 @@ private:
     bool animeSearching_ = false;
     bool animeRefreshing_ = false;
     bool animeImporting_ = false;
+    bool animeImportSourceChoiceOpen_ = false;
     bool animeSearchHasRun_ = false;
     bool animeCanLoadMore_ = false;
     bool animeAppendSearch_ = false;
@@ -603,6 +620,7 @@ private:
     RECT activationKeyButtonRect_ {};
     RECT outputButtonButtonRect_ {};
     RECT alternateOutputToggleRect_ {};
+    RECT toggleModeToggleRect_ {};
     RECT alternateOutputButtonRect_ {};
     RECT speedSliderTrackRect_ {};
     RECT speedSliderThumbRect_ {};
@@ -708,6 +726,10 @@ private:
     RECT animeFilterButtonRect_ {};
     RECT animeImportEditRect_ {};
     RECT animeImportButtonRect_ {};
+    RECT animeImportChoicePanelRect_ {};
+    RECT animeImportChoiceAniListButtonRect_ {};
+    RECT animeImportChoiceMyAnimeListButtonRect_ {};
+    RECT animeImportChoiceCancelButtonRect_ {};
     RECT animeStatusButtonRect_ {};
     RECT animeEpisodeMinusButtonRect_ {};
     RECT animeEpisodePlusButtonRect_ {};
