@@ -1,11 +1,11 @@
 {
-  "latestVersion": "0.5.0",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.5.0/RexsToolkit_v0.5.0.zip",
+  "latestVersion": "0.6.0",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.6.0/RexsToolkit_v0.6.0.zip",
   "releaseNotes": [
-    "Added MyAnimeList public profile import to Anime Tracker, with source selection when AniList and MyAnimeList both match a username.",
-    "Improved Smart File Transfer beta behavior, including transfer-code normalization for shared codes and clearer beta labeling.",
-    "Added Auto Clicker toggle mode so the activation bind can turn clicking on/off instead of requiring hold.",
-    "Improved Reminders smart-title parsing for shorthand times like 3m, 3 min, and 1h30m, with safer handling of oversized numbers.",
-    "Polished update, reminder, anime import, and settings UI details."
+    "Added Macro Recorder with recording, playback, a floating control strip, and driver-enhanced playback support through Interception when installed.",
+    "Improved macro playback accuracy, emergency stop cleanup, loop controls, and recorder workflow so macros can be tested before saving.",
+    "Added All Tools search filtering and startup settings for opening minimized to tray so reminders can keep working in the background.",
+    "Improved Reminder smart-title parsing for dates, shorthand durations, and larger values without crashing.",
+    "Polished settings, About details, and macro recorder UI layout."
   ]
 }
