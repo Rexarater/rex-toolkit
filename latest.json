@@ -1,11 +1,9 @@
 {
-  "latestVersion": "0.6.0",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.6.0/RexsToolkit_v0.6.0.zip",
+  "latestVersion": "0.6.1",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.6.1/RexsToolkit_v0.6.1.zip",
   "releaseNotes": [
-    "Added Macro Recorder with recording, playback, a floating control strip, and driver-enhanced playback support through Interception when installed.",
-    "Improved macro playback accuracy, emergency stop cleanup, loop controls, and recorder workflow so macros can be tested before saving.",
-    "Added All Tools search filtering and startup settings for opening minimized to tray so reminders can keep working in the background.",
-    "Improved Reminder smart-title parsing for dates, shorthand durations, and larger values without crashing.",
-    "Polished settings, About details, and macro recorder UI layout."
+    "Fixed smart reminder titles with standalone times such as 'go to the gym at 1:30'.",
+    "Fixed the Autoclicker activation bind remaining active while the Autoclicker tool was not open.",
+    "Leaving the Autoclicker tool now safely stops held and toggled clicking."
   ]
 }
