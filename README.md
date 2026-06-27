@@ -1,119 +1,77 @@
-# Rex's Toolkit
+<p align="center">
+  <img src="assets/rex_toolkit_logo.png" alt="Rex's Toolkit logo" width="180">
+</p>
 
-Rex's Toolkit is a native Windows C++ desktop app for a future all-in-one utility toolkit.
+<h1 align="center">Rex's Toolkit</h1>
 
-The current version provides:
+<p align="center">
+  A free, all-in-one Windows utility app built to keep useful everyday tools in one polished place.
+</p>
 
-- A standalone Windows desktop window titled `Rex's Toolkit`
-- A dark, modern layout
-- Top navigation between `Favorites` and `All Tools`
-- A 3-wide icon card grid for tools
-- Favorite stars for adding or removing tools from Favorites
-- A first tool: `Auto Clicker`
-- A real image-focused `File Converter`
-- A media-focused `YouTube & SoundCloud Downloader`
-- An AniList-powered `Anime Tracker`
-- A local `Reminders` tool
-- A `Smart File Transfer` tool with LAN, Direct Host, and manual WebRTC P2P fallback
-- A sectioned Settings page with startup, output folder, clock, theme, update, and about options
-- Empty states where no favorites or tools are available
-- A clear tool registration section for future expansion
+<p align="center">
+  <a href="https://github.com/Rexarater/rex-toolkit/releases/latest"><strong>Download the latest release</strong></a>
+  &nbsp;|&nbsp;
+  <a href="https://github.com/Rexarater/rex-toolkit/issues/new">Report an issue</a>
+</p>
 
-Favorites are saved between launches in `%APPDATA%\RexToolkit\favorites.txt`.
+Rex's Toolkit is a native Windows desktop app with a customizable interface, saved favorites, multiple themes, built-in update support, and a growing collection of practical tools. It is free to download and use.
 
-## Current Tools
+## Getting Started
 
-### Auto Clicker
+1. Open the [latest release](https://github.com/Rexarater/rex-toolkit/releases/latest).
+2. Download the `RexsToolkit_v*.zip` file under **Assets**.
+3. Extract the entire ZIP to a folder of your choice.
+4. Run `RexToolkit.exe`.
 
-The Auto Clicker includes:
+Keep `RexToolkit.exe` and the included `tools` folder together. The release already contains the helper programs needed by features such as media downloading, music analysis, file transfer, and driver-enhanced macro playback.
 
-- Speed slider, 1-100 clicks/sec
-- Hold-to-test button
-- Bindable activation input, including keyboard keys and side mouse buttons
-- Bindable output mouse button
-- Running/stopped status text
+Rex's Toolkit currently supports Windows 10 and Windows 11. Windows may show a SmartScreen prompt for a newly downloaded build; review the publisher and file before choosing to run it.
 
-Hold the activation input to spam the selected output button. Release it to stop.
+## Included Tools
 
-### File Converter
+| Tool | What it does |
+| --- | --- |
+| **Auto Clicker** | Repeats a keyboard or mouse output while an activation bind is held, or toggles clicking on and off when Toggle Mode is enabled. Supports keyboard keys, mouse buttons, alternating outputs, adjustable speed, and remembered binds. The activation bind only runs while the Auto Clicker page is open. |
+| **Macro Recorder** | Records keyboard and mouse actions with timing, lets you test a recording before saving it, and replays it with configurable looping and emergency-stop controls. A compact always-on-top control strip is included for games and other full-screen workflows. |
+| **File Converter** | Converts one or more images between WEBP, PNG, JPG/JPEG, and BMP with drag-and-drop, save-location prompts, conflict handling, and format-specific options. Available WEBP support depends on the Windows codecs installed on the computer. |
+| **YouTube & SoundCloud Downloader** | Analyzes direct YouTube video and SoundCloud track links, then saves authorized media as MP4, MP3, or WAV. Quality selection, metadata preview, and a beta Essentia-powered BPM and key finder are included. |
+| **Anime Tracker** | Searches AniList, displays anime details, characters, and voice actors, and keeps a local watchlist with episode progress, statuses, notes, airing information, and sequels. Public AniList and MyAnimeList profiles can be imported without sharing a password. |
+| **Reminders** | Creates local reminders using regular date/time controls or smart titles such as `Call HCC on the 25th at 11am`. Supports recurring reminders, categories, priorities, notification sounds, and tray/startup behavior so alerts can continue in the background. |
+| **(Beta) Smart File Transfer** | Sends files directly between Rex's Toolkit users with a transfer code. It tries LAN first, can attempt Direct Host through temporary port mapping, and includes a manual WebRTC peer-to-peer fallback. Availability depends on both users' networks. |
 
-The File Converter currently focuses on images. It supports queueing multiple files, drag-and-drop, file browsing, output format selection, filename conflict handling, quality settings for JPG/WEBP, progress feedback, and per-file errors.
+## App Features
 
-When you click `Convert`, the app asks where to save the result. Single-file conversions use a Windows `Save As` dialog, while multi-file conversions ask for a destination folder.
+- Favorites that persist between launches
+- Searchable **All Tools** grid
+- Dark, light, and additional color themes
+- Configurable default download folder and clock format
+- Choice of opening to Favorites or All Tools
+- Optional minimize-to-tray and start-with-Windows behavior
+- Automatic background update checks with an in-app installer
+- Remembered window size and position
 
-Image conversion is implemented through Windows Imaging Component. PNG, JPG/JPEG, and BMP are supported on standard Windows installs. WEBP decode/encode support depends on the installed Windows WIC codecs; the app detects available encoders and does not fake unsupported output formats.
+## Privacy and Safety
 
-### YouTube & SoundCloud Downloader
+- Settings, favorites, reminders, macros, and anime progress are stored locally in the user's Windows AppData folders.
+- Rex's Toolkit does not require an account.
+- Network access is used only when a feature needs it, such as checking for updates, retrieving AniList data, importing a public anime list, analyzing a media link, or transferring a file.
+- Smart File Transfer does not upload files to project-owned cloud storage. LAN and Direct Host use temporary HTTP hosting; manual P2P uses encrypted WebRTC data channels and public STUN servers. Direct Host may be unavailable on networks that block inbound connections or use CGNAT.
+- The downloader is intended only for media the user is authorized to save. DRM-protected media is not bypassed.
+- Driver-enhanced Macro Recorder input is optional. Enabling it for the first time launches the bundled Interception installer, requests administrator permission, and requires a Windows restart. Standard recording and playback remain available without the driver.
 
-The Media Downloader supports authorized YouTube and SoundCloud links and can save media as MP4, MP3, or WAV. It uses external tools rather than custom download logic:
+## Updates
 
-- `yt-dlp` for metadata and media retrieval
-- `FFmpeg` for merging, audio extraction, and conversion
-- `Essentia` for optional BPM and musical key analysis
+Rex's Toolkit silently checks for new releases when it opens and can also be checked manually from **Settings > Updates**. When an update is accepted, the app downloads the release package, installs it over the existing copy, and relaunches while preserving local settings and saved data.
 
-`yt-dlp.exe`, `ffmpeg.exe`, and the Essentia music extractor are bundled with the app and copied to the build output under the `tools` folder. To update a helper later, replace the matching file in `tools`.
+Installing the app in a protected Windows folder may prevent an update from replacing files. A normal user-owned folder, such as a folder inside Documents, is recommended.
 
-The app first looks for bundled media helpers beside the app, then falls back to tools available on `PATH`. If a dependency is missing, it shows a setup message instead of crashing.
+## Building From Source
 
-The downloader remembers its last selected format and quality in `%APPDATA%\RexToolkit\media_downloader.txt`. The default output folder is managed in Settings.
-
-## Settings
-
-Settings are saved in `%APPDATA%\RexToolkit\settings.txt`. The Settings page includes:
-
-- Default output folder
-- Startup page: Favorites or All Tools
-- Date/time format for the top-right clock
-- Theme selection, including light mode
-- Manual update checks
-- About details, project links, licenses, and bundled third-party tools
-
-### Anime Tracker
-
-The Anime Tracker lets you search AniList, add anime to a local watchlist, track watched episodes, change watch status, save local notes, refresh metadata, and see upcoming episodes or sequel relations when AniList provides them.
-
-It does not require a login, does not scrape streaming sites, and does not include piracy or playback features. Watchlist data is saved locally in `%APPDATA%\RexsToolkit\anime_tracker.json`.
-
-### Reminders
-
-The Reminders tool lets you create, edit, complete, snooze, delete, filter, and sort local reminders. Reminders support title, due date/time, all-day mode, notes, category, priority, recurrence, alert timing, and birthday-style yearly reminders.
-
-When reminders are due soon, due now, or overdue, Rex's Toolkit can show a thin alert banner above the main content with Snooze, Complete, View, and close actions. Reminder data is saved locally in `%APPDATA%\RexToolkit\reminders.json`.
-
-### Smart File Transfer
-
-Smart File Transfer sends selected files directly between Rex's Toolkit users. It tries LAN first, then Direct Host if the sender enables temporary UPnP port mapping. If both direct HTTP routes fail, the app can guide both users through manual WebRTC P2P pairing with sender and receiver response codes.
-
-Manual P2P uses WebRTC data channels through bundled `libdatachannel`, with public STUN servers only. There is no cloud storage, no paid signaling server, and no TURN relay in this version. Files are streamed in chunks and receivers write `.part` files before finalizing completed downloads.
-
-## Manual Update Checks
-
-Rex's Toolkit checks this file when you click `Check for Updates` on the Settings page:
-
-```text
-https://raw.githubusercontent.com/Rexarater/rex-toolkit/main/latest.json
-```
-
-The app compares its local `APP_VERSION` value with the `latestVersion` field in that JSON file. If a newer version exists, it shows the release notes and downloads the update package when you click `Download Update`.
-
-After the package downloads, Rex's Toolkit closes, copies the updated files into the current app folder, and relaunches. If the app is installed in a protected folder, Windows permissions may prevent the copy from completing.
-
-To publish a new update:
-
-1. Build a new version of the app.
-2. Change `APP_VERSION` in `src/AppConstants.h`.
-3. Zip the app.
-4. Create a new GitHub Release.
-5. Upload the zip.
-6. Update `latest.json` with the new `latestVersion`, `downloadUrl`, and release notes.
-
-## Build Requirements
+Most users only need the packaged ZIP from the Releases page. To build the project yourself, install:
 
 - Windows 10 or newer
-- CMake 3.20+
-- A C++17 compiler, such as Visual Studio 2026 or Visual Studio Build Tools
-
-## Build
+- CMake 3.20 or newer
+- Visual Studio with **Desktop development with C++**
 
 From a Developer PowerShell or Developer Command Prompt:
 
@@ -122,28 +80,32 @@ cmake --preset windows-release
 cmake --build --preset windows-release
 ```
 
-## Run
+The executable is created at:
 
-```powershell
-.\build\windows-release\RexToolkit.exe
+```text
+build\windows-release\RexToolkit.exe
 ```
 
-## Visual Studio
+Visual Studio can also open the repository as a CMake project. Select the `windows-debug` or `windows-release` preset. If an older configuration used the wrong generator, remove the generated `build` folder and configure the project again.
 
-Open this folder in Visual Studio, then select the `windows-debug` or `windows-release` CMake preset.
+New tools are registered in `CreateToolRegistry()` inside `src/ToolkitApp.cpp`. The registry supplies navigation, search, favorites, and launch metadata.
 
-If Visual Studio previously configured the project with the wrong generator, delete the old generated `build` folder and reconfigure with one of the presets above.
+## Third-Party Components
 
-## Bundled Native Dependencies
+Rex's Toolkit bundles or integrates with several third-party projects:
 
-- `yt-dlp`, `FFmpeg`, and `Essentia` power the Media Downloader.
-- `libdatachannel` powers Smart File Transfer's manual WebRTC P2P fallback.
-- Static OpenSSL libraries are bundled under `third_party/openssl-x64-windows-static` for the libdatachannel build.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) for supported media retrieval
+- [FFmpeg](https://ffmpeg.org/) for media processing and conversion
+- [Essentia](https://essentia.upf.edu/) for music analysis
+- [libdatachannel](https://github.com/paullouisageneau/libdatachannel) and [OpenSSL](https://www.openssl.org/) for WebRTC file transfer
+- [Interception](https://github.com/oblitum/Interception) for optional driver-enhanced macro input
+- Windows Imaging Component for image conversion
+- AniList's public API for anime metadata
 
-`libdatachannel` is MPL-2.0 licensed. OpenSSL license files are included in the bundled vcpkg package folders under `third_party/openssl-x64-windows-static/share/openssl`.
+Applicable third-party license files are included with the bundled components.
 
-## Adding Tools Later
+## Feedback
 
-Future tools are registered in `src/ToolkitApp.cpp` inside `CreateToolRegistry()`.
+Found a bug or have an idea for another useful tool? [Open a GitHub issue](https://github.com/Rexarater/rex-toolkit/issues/new) with a clear description, the Windows version being used, and steps to reproduce the problem when possible.
 
-Add new `ToolDefinition` entries there, then wire each tool to its own view or command handler as the toolkit grows.
+Developed by **Rexarater**, with special thanks to **Addion**.
