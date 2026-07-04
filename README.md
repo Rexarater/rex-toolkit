@@ -34,6 +34,7 @@ Rex's Toolkit currently supports Windows 10 and Windows 11. Windows may show a S
 | **Auto Clicker** | Repeats a keyboard or mouse output while an activation bind is held, or toggles clicking on and off when Toggle Mode is enabled. Supports keyboard keys, mouse buttons, alternating outputs, adjustable speed, and remembered binds. The activation bind only runs while the Auto Clicker page is open. |
 | **Macro Recorder** | Records keyboard and mouse actions with timing, lets you test a recording before saving it, and replays it with configurable looping and emergency-stop controls. A compact always-on-top control strip is included for games and other full-screen workflows. |
 | **File Converter** | Converts one or more images between WEBP, PNG, JPG/JPEG, and BMP with drag-and-drop, save-location prompts, conflict handling, and format-specific options. Available WEBP support depends on the Windows codecs installed on the computer. |
+| **Video Compressor** | Compresses a video to fit under a chosen file size using FFmpeg. Accurate mode uses two-pass H.264 encoding; Fast mode uses a quicker one-pass encode. The tool verifies output size and can retry automatically at a lower bitrate. |
 | **YouTube & SoundCloud Downloader** | Analyzes direct YouTube video and SoundCloud track links, then saves authorized media as MP4, MP3, or WAV. Quality selection, metadata preview, and a beta Essentia-powered BPM and key finder are included. |
 | **Anime Tracker** | Searches AniList, displays anime details, characters, and voice actors, and keeps a local watchlist with episode progress, statuses, notes, airing information, and sequels. Public AniList and MyAnimeList profiles can be imported without sharing a password. |
 | **Reminders** | Creates local reminders using regular date/time controls or smart titles such as `Call HCC on the 25th at 11am`. Supports recurring reminders, categories, priorities, notification sounds, and tray/startup behavior so alerts can continue in the background. |
@@ -49,6 +50,10 @@ Rex's Toolkit currently supports Windows 10 and Windows 11. Windows may show a S
 - Optional minimize-to-tray and start-with-Windows behavior
 - Automatic background update checks with an in-app installer
 - Remembered window size and position
+
+## Video Compressor Notes
+
+Video Compressor version 1 accepts MP4, MOV, MKV, WEBM, AVI, and M4V inputs and creates MP4 output. CPU encoding is the quality-first default and Accurate mode uses two passes. Automatic GPU mode detects supported NVIDIA, Intel, or AMD hardware and falls back to CPU when hardware encoding is unavailable. Very small targets can cause poor visual quality. Metadata is removed by default; subtitles and additional audio tracks may not be preserved.
 
 ## Privacy and Safety
 

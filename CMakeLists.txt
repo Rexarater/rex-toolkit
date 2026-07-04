@@ -12,6 +12,8 @@ add_executable(RexToolkit WIN32
     src/main.cpp
     src/MediaDownloadService.cpp
     src/MediaDownloadService.h
+    src/MacroRecorderService.cpp
+    src/MacroRecorderService.h
     src/ReminderService.cpp
     src/ReminderService.h
     src/SmartFileTransferService.cpp
@@ -20,6 +22,8 @@ add_executable(RexToolkit WIN32
     src/ToolkitApp.h
     src/UpdateChecker.cpp
     src/UpdateChecker.h
+    src/VideoCompressionService.cpp
+    src/VideoCompressionService.h
     src/resource.h
 )
 
@@ -67,6 +71,17 @@ if (EXISTS "${LIBDATACHANNEL_STATIC_LIB}" AND EXISTS "${LIBDATACHANNEL_JUICE_LIB
     )
 endif()
 
+set(BUNDLED_FFPROBE "${CMAKE_CURRENT_SOURCE_DIR}/tools/ffprobe.exe")
+if (EXISTS "${BUNDLED_FFPROBE}")
+    add_custom_command(TARGET RexToolkit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RexToolkit>/tools"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${BUNDLED_FFPROBE}"
+            "$<TARGET_FILE_DIR:RexToolkit>/tools/ffprobe.exe"
+        COMMENT "Copying bundled FFprobe"
+    )
+endif()
+
 set(BUNDLED_YT_DLP "${CMAKE_CURRENT_SOURCE_DIR}/tools/yt-dlp.exe")
 if (EXISTS "${BUNDLED_YT_DLP}")
     add_custom_command(TARGET RexToolkit POST_BUILD
@@ -107,6 +122,16 @@ if (EXISTS "${BUNDLED_ESSENTIA_DIR}")
             "${BUNDLED_ESSENTIA_DIR}"
             "$<TARGET_FILE_DIR:RexToolkit>/tools/essentia"
         COMMENT "Copying bundled Essentia folder"
+    )
+endif()
+
+set(BUNDLED_INTERCEPTION_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tools/interception")
+if (EXISTS "${BUNDLED_INTERCEPTION_DIR}")
+    add_custom_command(TARGET RexToolkit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${BUNDLED_INTERCEPTION_DIR}"
+            "$<TARGET_FILE_DIR:RexToolkit>/tools/interception"
+        COMMENT "Copying optional Interception backend"
     )
 endif()
 

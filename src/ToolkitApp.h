@@ -2,16 +2,19 @@
 
 #include "AnimeTrackerService.h"
 #include "FileConversionService.h"
+#include "MacroRecorderService.h"
 #include "MediaDownloadService.h"
 #include "ReminderService.h"
 #include "SmartFileTransferService.h"
 #include "UpdateChecker.h"
+#include "VideoCompressionService.h"
 
 #include <windows.h>
 #include <gdiplus.h>
 
 #include <atomic>
 #include <condition_variable>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -36,7 +39,9 @@ enum class ToolKind
     MediaDownloader,
     AnimeTracker,
     Reminders,
-    SmartFileTransfer
+    SmartFileTransfer,
+    MacroRecorder,
+    VideoCompressor
 };
 
 enum class OutputMouseButton
@@ -88,7 +93,21 @@ enum class DropdownKind
     SettingsStartPage,
     SettingsClockFormat,
     SettingsTheme,
-    SmartTransferExpiration
+    SmartTransferExpiration,
+    MacroMouseMode,
+    MacroCaptureRate,
+    MacroPlaybackSpeed,
+    MacroPlaybackBackend,
+    MacroLoopMode,
+    MacroStartDelay,
+    VideoCompressionUnit,
+    VideoCompressionMode,
+    VideoCompressionResolution,
+    VideoCompressionFps,
+    VideoCompressionAudio,
+    VideoCompressionPreset,
+    VideoCompressionEncoder,
+    VideoCompressionConflict
 };
 
 enum class AnimeTrackerTab
@@ -107,6 +126,7 @@ enum class SettingsSection
 {
     General,
     SmartTransfer,
+    MacroRecorder,
     Appearance,
     Updates,
     About
@@ -169,6 +189,7 @@ struct AppSettings
     ClockFormat clockFormat = ClockFormat::MonthDay24;
     AppTheme theme = AppTheme::Dark;
     bool minimizeToTrayOnClose = false;
+    bool startWithWindowsToTray = false;
     bool smartTransferWebRtcFallback = true;
     bool smartTransferWebRtcDiagnostics = false;
     std::wstring smartTransferStunServers = L"stun:stun.l.google.com:19302";
@@ -180,15 +201,18 @@ class ToolkitApp
 public:
     explicit ToolkitApp(HINSTANCE instance);
 
-    static bool ActivateExistingInstanceIfRunning();
+    static bool ActivateExistingInstanceIfRunning(bool restoreExisting = true);
 
     int Run(int showCommand);
+    void SetStartMinimizedToTray(bool value);
 
 private:
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK MacroOverlayWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     static LRESULT CALLBACK KeyboardHookProc(int code, WPARAM wParam, LPARAM lParam);
     static LRESULT CALLBACK MouseHookProc(int code, WPARAM wParam, LPARAM lParam);
     LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam);
+    LRESULT HandleMacroOverlayMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
     bool RegisterWindowClass();
     bool CreateMainWindow(int showCommand);
@@ -207,6 +231,12 @@ private:
     void SaveWindowSettings() const;
     void LoadAppSettings();
     void SaveAppSettings() const;
+    void ApplyStartupRegistration();
+    bool SetStartWithWindowsRegistration(bool enabled, std::wstring& errorMessage) const;
+    std::filesystem::path AppExecutablePath() const;
+    std::wstring StartupLaunchCommand() const;
+    std::filesystem::path BundledInterceptionInstallerPath() const;
+    bool PromptAndLaunchInterceptionInstaller();
     void LoadMediaDownloadSettings();
     void SaveMediaDownloadSettings() const;
     void LoadAutoClickerSettings();
@@ -250,6 +280,10 @@ private:
     void PaintAnimeImportChoiceOverlay(HDC hdc);
     void PaintReminders(HDC hdc);
     void PaintSmartFileTransfer(HDC hdc);
+    void PaintMacroRecorder(HDC hdc);
+    void PaintVideoCompressor(HDC hdc);
+    void PaintVideoCompressorIcon(HDC hdc, const RECT& bounds);
+    void PaintMacroOverlay(HWND hwnd, HDC hdc);
     void PaintSettings(HDC hdc);
     void PaintReminderBanner(HDC hdc);
     void PaintUpdateBanner(HDC hdc);
@@ -313,6 +347,88 @@ private:
     void ApplySmartTransferDownloadProgress(const SmartTransferDownloadProgress& progress);
     void PollSmartTransferWebRtc();
     void ShowSmartTransferExpirationDropdown();
+    void LoadMacroRecorderData();
+    void SaveMacroRecorderSettings() const;
+    std::wstring MacroRecorderSettingsFilePath() const;
+    std::filesystem::path MacroDirectory() const;
+    void CreateAllToolsSearchControl();
+    void UpdateAllToolsSearchControl();
+    void CreateMacroRecorderControls();
+    void UpdateMacroRecorderControls();
+    void ShowMacroOverlay();
+    void ToggleMacroOverlay();
+    void HideMacroOverlay();
+    void LayoutMacroOverlay(HWND hwnd);
+    void InvalidateMacroOverlay();
+    void ApplyTitleBarTheme(HWND hwnd);
+    void RegisterMacroHotkeys();
+    void UnregisterMacroHotkeys();
+    void BeginMacroHotkeyBinding(int hotkeyId);
+    void CancelMacroHotkeyBinding();
+    void HandleMacroHotkey(int id);
+    void StartMacroRecording();
+    void StopMacroRecording();
+    void CancelMacroRecording();
+    void SaveMacroRecordingOrDetails();
+    void StartMacroPlayback();
+    void StopMacroPlayback();
+    void ImportMacro();
+    void ExportSelectedMacro();
+    void DeleteSelectedMacro();
+    void DuplicateSelectedMacro();
+    void SelectMacro(size_t index);
+    void NewMacroDraft();
+    void ShowMacroMouseModeDropdown();
+    void ShowMacroCaptureRateDropdown();
+    void ShowMacroPlaybackSpeedDropdown();
+    void ShowMacroPlaybackBackendDropdown();
+    void ShowMacroLoopModeDropdown();
+    void ShowMacroStartDelayDropdown();
+    std::wstring MacroRecordHotkeyLabel() const;
+    std::wstring MacroPlayHotkeyLabel() const;
+    std::wstring MacroStopHotkeyLabel() const;
+    std::wstring MacroMouseModeLabel() const;
+    std::wstring MacroCaptureRateLabel() const;
+    std::wstring MacroPlaybackSpeedLabel() const;
+    std::wstring MacroPlaybackBackendLabel() const;
+    std::wstring MacroLoopModeLabel() const;
+    std::wstring MacroStartDelayLabel() const;
+    std::wstring MacroRecorderStatusLabel() const;
+    std::wstring MacroPlaybackStatusLabel() const;
+    double MacroPlaybackProgress() const;
+    const MacroDefinition* MacroForPlayback() const;
+    const MacroDefinition* SelectedMacro() const;
+    MacroDefinition* SelectedMacro();
+    RECT MacroListRowRect(size_t index) const;
+    void CreateVideoCompressorControls();
+    void UpdateVideoCompressorControls();
+    void BrowseVideoCompressorInput();
+    void SelectVideoCompressorInput(const std::filesystem::path& path);
+    void ClearVideoCompressorInput();
+    void BrowseVideoCompressorOutputFolder();
+    void StartVideoCompressorAnalysis(const std::filesystem::path& path);
+    void StartVideoCompression();
+    void CancelVideoCompression();
+    void FinishVideoCompressorThread();
+    void ApplyVideoCompressionProgress(const VideoCompressionProgress& progress);
+    void ApplyVideoCompressionResult(const VideoCompressionResult& result);
+    void RecalculateVideoCompressionPlan();
+    void ResetVideoCompressor();
+    void OpenVideoCompressorOutputFile();
+    void OpenVideoCompressorOutputFolder();
+    unsigned long long VideoCompressorTargetBytes() const;
+    std::wstring VideoCompressorOutputPreview() const;
+    void ShowVideoCompressionUnitDropdown();
+    void ShowVideoCompressionModeDropdown();
+    void ShowVideoCompressionResolutionDropdown();
+    void ShowVideoCompressionFpsDropdown();
+    void ShowVideoCompressionAudioDropdown();
+    void ShowVideoCompressionPresetDropdown();
+    void ShowVideoCompressionEncoderDropdown();
+    void ShowVideoCompressionConflictDropdown();
+    void LoadVideoCompressorSettings();
+    void SaveVideoCompressorSettings() const;
+    std::wstring VideoCompressorSettingsFilePath() const;
     void BrowseMediaOutputFolder();
     void BrowseDefaultOutputFolder();
     void AnalyzeMediaUrl();
@@ -323,505 +439,4 @@ private:
     void ApplyMediaJobUpdate(const MediaDownloadJob& job);
     void StartUpdateCheck(bool silent = false);
     void FinishUpdateThread();
-    void ApplyUpdateCheckResult(const UpdateCheckResult& result);
-    void StartUpdateInstall();
-    std::wstring ResolveUpdatePackageUrl() const;
-    bool DownloadUpdatePackage(const std::wstring& downloadUrl, std::filesystem::path& packagePath, std::wstring& errorMessage) const;
-    bool CreateAndLaunchUpdateInstaller(const std::filesystem::path& packagePath, std::wstring& errorMessage) const;
-    void ShowMediaFormatDropdown();
-    void ShowMediaQualityDropdown();
-    void ShowSettingsStartPageDropdown();
-    void ShowSettingsClockFormatDropdown();
-    void ShowSettingsThemeDropdown();
-    void LoadRemindersData();
-    void SaveRemindersData();
-    std::wstring RemindersFilePath() const;
-    void CreateReminderControls();
-    void UpdateReminderControls();
-    void SetReminderFormDefaults();
-    void LoadReminderFormFromSelection();
-    void SaveReminderFromForm();
-    void CompleteReminderAt(size_t index);
-    void DeleteReminderAt(size_t index);
-    void SnoozeReminderAt(size_t index, int minutes);
-    void SnoozeReminderAlert(int minutes);
-    void DismissReminderBanner();
-    void ViewReminderFromBanner();
-    void UpdateReminderBanner();
-    void HandleReminderDueNowNotification();
-    bool ShouldShowUpdateNotification(const UpdateCheckResult& result) const;
-    void DismissUpdateNotification();
-    void PlayReminderNotificationSound() const;
-    void BringReminderWindowToFront();
-    std::wstring ReminderNotificationSoundFilePath() const;
-    int FindReminderIndexById(const std::wstring& id) const;
-    void ShowReminderFilterDropdown();
-    void ShowReminderSortDropdown();
-    void ShowReminderPresetDropdown();
-    void ShowReminderPriorityDropdown();
-    void ShowReminderRepeatDropdown();
-    void ShowReminderAlertDropdown();
-    void ShowReminderSnoozeDropdown(int reminderIndex, const RECT& anchor);
-    void ShowReminderAmPmDropdown();
-    void ShowReminderCalendar();
-    bool HandleReminderCalendarClick(POINT point);
-    RECT ReminderCalendarDayRect(int day) const;
-    void SetReminderDateFromCalendar(int day);
-    std::vector<size_t> VisibleReminderIndexes() const;
-    RECT ReminderRowRect(size_t visibleIndex) const;
-    RECT ReminderActionRect(size_t visibleIndex, int actionIndex) const;
-    void LoadAnimeTrackerData();
-    void SaveAnimeTrackerData();
-    std::wstring AnimeTrackerFilePath() const;
-    void CreateAnimeTrackerControls();
-    void UpdateAnimeTrackerControls();
-    void StartAnimeSearch(bool appendResults);
-    void StartAnimeImport();
-    void FinishAnimeThread();
-    void ApplyAnimeSearchResponse(const AnimeSearchResponse& response, const std::wstring& message, bool appendResults);
-    void ApplyAnimeImportResult(const AnimeImportResult& result, const std::wstring& userName, AnimeImportSource source, const std::wstring& message);
-    void ShowAnimeImportSourceChoice(
-        const std::wstring& userName,
-        const AnimeImportResult& aniListResult,
-        const std::wstring& aniListMessage,
-        const AnimeImportResult& myAnimeListResult,
-        const std::wstring& myAnimeListMessage);
-    void ApplyPendingAnimeImportChoice(AnimeImportSource source);
-    void CancelPendingAnimeImportChoice();
-    void AddAnimeFromSearch(size_t index);
-    void AddAnimeFromRelation(size_t index);
-    void RefreshAnimeEntry(size_t index);
-    void RefreshAllAnime();
-    void ApplyAnimeRefreshResult(const AnimeSearchResult& result, int listIndex, const std::wstring& message);
-    void SelectAnimeEntry(int index);
-    void RemoveAnimeEntry(size_t index);
-    void IncrementAnimeEpisode(size_t index);
-    void DecrementSelectedAnimeEpisode();
-    void CycleSelectedAnimeStatus();
-    void ToggleSelectedAnimeFavorite();
-    void SaveSelectedAnimeNotes();
-    void ShowAnimeFilterDropdown();
-    std::vector<size_t> VisibleAnimeEntryIndexes() const;
-    std::vector<AnimeRelation> VisibleUpcomingSequels() const;
-    std::wstring AnimeSearchText() const;
-    std::wstring AnimeStatusText(const AnimeEntry& entry) const;
-    std::wstring AnimeProgressText(const AnimeEntry& entry) const;
-    RECT AnimeSearchResultCardRect(size_t index) const;
-    RECT AnimeSearchResultAddRect(size_t index) const;
-    RECT AnimeListRowRect(size_t visibleIndex) const;
-    RECT AnimeListActionRect(size_t visibleIndex, int actionIndex) const;
-    RECT AnimeSequelActionRect(size_t index, int actionIndex) const;
-    void InstallInputHooks();
-    void RemoveInputHooks();
-    bool HandleKeyboardHook(WPARAM message, const KBDLLHOOKSTRUCT& keyboard);
-    bool HandleMouseHook(WPARAM message, const MSLLHOOKSTRUCT& mouse);
-    bool IsActivationMouseMessage(WPARAM message, const MSLLHOOKSTRUCT& mouse, bool down) const;
-
-    void OpenDropdown(DropdownKind kind, const RECT& anchor, const std::vector<std::wstring>& labels, const std::vector<int>& values, const std::vector<bool>& enabled, int selectedValue);
-    void CloseDropdown();
-    void PaintDropdown(HDC hdc);
-    bool HandleDropdownClick(POINT point);
-    RECT ButtonRectAtPoint(POINT point) const;
-    void UpdateButtonHover(POINT point);
-    std::vector<ToolDefinition> VisibleToolsForCurrentPage() const;
-    const ToolDefinition* FindTool(ToolKind tool) const;
-    RECT ToolCardRect(size_t index) const;
-    RECT ToolFavoriteRect(const RECT& card) const;
-    void ToggleFavorite(ToolKind tool);
-    std::wstring ActivationKeyLabel() const;
-    std::wstring OutputButtonLabel() const;
-    std::wstring StatusLabel(ConversionStatus status) const;
-    std::wstring OutputFormatLabel(ImageFormat format) const;
-    std::wstring ConflictBehaviorLabel() const;
-    double ConverterProgress() const;
-    bool CanStartMediaDownload() const;
-    std::wstring MediaQualityLabel() const;
-    std::wstring MediaSetupMessage() const;
-    std::wstring CurrentDateTimeLabel() const;
-    std::wstring StartPageLabel() const;
-    std::wstring ClockFormatLabel() const;
-    std::wstring ThemeLabel() const;
-    std::wstring SmartTransferExpirationLabel() const;
-    std::wstring SmartTransferHostStatusLabel() const;
-    std::wstring SmartTransferClientStatusLabel() const;
-    void ApplyTheme();
-    std::wstring ReminderFilterLabel() const;
-    std::wstring ReminderSortLabel() const;
-    std::wstring ReminderCategoryText() const;
-    std::wstring ReminderAlertSummaryLabel() const;
-    void MinimizeToTray();
-    void RestoreFromTray();
-    void AddTrayIcon();
-    void RemoveTrayIcon();
-    void ShowTrayMenu(POINT screenPoint);
-    int Dips(int value) const;
-
-    HINSTANCE instance_ = nullptr;
-    HWND hwnd_ = nullptr;
-    ULONG_PTR gdiplusToken_ = 0;
-    std::unique_ptr<Gdiplus::Bitmap> logo_;
-    std::unique_ptr<Gdiplus::Bitmap> autoClickerIcon_;
-    std::unique_ptr<Gdiplus::Bitmap> fileConverterIcon_;
-    std::unique_ptr<Gdiplus::Bitmap> mediaDownloaderIcon_;
-    std::unique_ptr<Gdiplus::Bitmap> remindersIcon_;
-    std::unique_ptr<Gdiplus::Bitmap> smartFileTransferIcon_;
-    std::unique_ptr<Gdiplus::Bitmap> allToolsIcon_;
-    std::unique_ptr<Gdiplus::Bitmap> settingsIcon_;
-    std::unique_ptr<Gdiplus::Bitmap> autoClickerIconTinted_;
-    std::unique_ptr<Gdiplus::Bitmap> fileConverterIconTinted_;
-    std::unique_ptr<Gdiplus::Bitmap> mediaDownloaderIconTinted_;
-    std::unique_ptr<Gdiplus::Bitmap> remindersIconTinted_;
-    std::unique_ptr<Gdiplus::Bitmap> smartFileTransferIconTinted_;
-    std::unique_ptr<Gdiplus::Bitmap> allToolsIconTinted_;
-    std::unique_ptr<Gdiplus::Bitmap> settingsIconTinted_;
-    HHOOK keyboardHook_ = nullptr;
-    HHOOK mouseHook_ = nullptr;
-    HANDLE singleInstanceMutex_ = nullptr;
-    Page currentPage_ = Page::Favorites;
-    ToolKind currentTool_ = ToolKind::None;
-    std::vector<ToolDefinition> tools_;
-    AppSettings appSettings_;
-    AutoClickerState autoClicker_;
-    FileConversionService fileConversionService_;
-    MediaDownloadService mediaDownloadService_;
-    AnimeTrackerService animeTrackerService_;
-    ReminderService reminderService_;
-    SmartFileTransferService smartFileTransferService_;
-    std::vector<ConversionJob> conversionJobs_;
-    ConversionOptions conversionOptions_;
-    MediaDownloadOptions mediaDownloadOptions_;
-    MediaDownloadJob mediaDownloadJob_;
-    ExternalToolStatus mediaExternalTools_;
-    UpdateChecker updateChecker_;
-    AnimeWatchList animeWatchList_;
-    AnimeSearchResponse animeSearchResponse_;
-    std::vector<AnimeSearchResult> animeSearchResults_;
-    AnimeImportResult pendingAnimeAniListImport_;
-    AnimeImportResult pendingAnimeMyAnimeListImport_;
-    ReminderList reminderList_;
-    ReminderAlert reminderAlert_;
-    SmartTransferTab smartTransferTab_ = SmartTransferTab::Send;
-    SmartTransferSendOptions smartTransferOptions_;
-    SmartTransferHostSnapshot smartTransferHostSnapshot_;
-    SmartTransferManifest smartTransferReceiveManifest_;
-    SmartTransferInvite smartTransferReceiveInvite_;
-    SmartTransferDownloadProgress smartTransferDownloadProgress_;
-    SmartTransferWebRtcSnapshot smartTransferWebRtcSnapshot_;
-    std::vector<SmartTransferFile> smartTransferFiles_;
-    std::filesystem::path smartTransferSaveFolder_;
-    std::wstring smartTransferSenderPairingCode_;
-    std::wstring smartTransferReceiverResponseCode_;
-    std::wstring animeStatusMessage_;
-    std::wstring pendingAnimeImportUserName_;
-    std::wstring pendingAnimeAniListMessage_;
-    std::wstring pendingAnimeMyAnimeListMessage_;
-    std::wstring reminderStatusMessage_;
-    std::wstring smartTransferStatusMessage_;
-    std::wstring smartTransferReceiveStatusMessage_;
-    std::wstring smartTransferReceiveWebRtcMessage_;
-    std::wstring lastReminderNotificationKey_;
-    std::map<std::wstring, std::unique_ptr<Gdiplus::Bitmap>> animeCoverCache_;
-    std::vector<ImageFormat> supportedOutputFormats_;
-    int selectedConversionJob_ = -1;
-    int selectedAnimeSearchIndex_ = -1;
-    std::wstring fileConverterSummary_;
-    bool fileConverterConverting_ = false;
-    std::thread conversionThread_;
-    std::atomic_bool conversionCancelRequested_ = false;
-    std::thread mediaThread_;
-    std::atomic_bool mediaCancelRequested_ = false;
-    std::thread updateThread_;
-    std::thread animeThread_;
-    std::thread smartTransferThread_;
-    std::thread autoClickThread_;
-    std::mutex autoClickMutex_;
-    std::condition_variable autoClickCondition_;
-    std::atomic_bool autoClickThreadStop_ = true;
-    std::atomic<int> autoClickerCps_ = 8;
-    std::atomic<int> autoClickerOutputKind_ = static_cast<int>(OutputInputKind::MouseButton);
-    std::atomic<unsigned int> autoClickerOutputKey_ = VK_SPACE;
-    std::atomic<int> autoClickerOutputButton_ = static_cast<int>(OutputMouseButton::Left);
-    std::atomic<int> autoClickerAlternateOutputKind_ = static_cast<int>(OutputInputKind::MouseButton);
-    std::atomic<unsigned int> autoClickerAlternateOutputKey_ = VK_RETURN;
-    std::atomic<int> autoClickerAlternateOutputButton_ = static_cast<int>(OutputMouseButton::Right);
-    std::atomic_bool autoClickerAlternateOutputEnabled_ = false;
-    std::atomic_bool autoClickerUseAlternateNext_ = false;
-    bool autoClickerActivationHeld_ = false;
-    std::atomic_bool smartTransferCancelRequested_ = false;
-    bool mediaAnalyzing_ = false;
-    bool mediaMusicAnalyzing_ = false;
-    bool mediaDownloading_ = false;
-    std::wstring mediaStatusText_;
-    UpdateCheckResult updateResult_;
-    bool updateChecking_ = false;
-    bool updateInstalling_ = false;
-    bool updateCheckSilent_ = false;
-    bool updateNotificationVisible_ = false;
-    bool smartTransferConnecting_ = false;
-    bool smartTransferDownloading_ = false;
-    bool smartTransferHosting_ = false;
-    bool smartTransferWebRtcFallbackOffered_ = false;
-    bool smartTransferWebRtcDependencyMissing_ = false;
-    bool smartTransferWebRtcBusy_ = false;
-    bool smartTransferWebRtcReceiverActive_ = false;
-    bool animeSearching_ = false;
-    bool animeRefreshing_ = false;
-    bool animeImporting_ = false;
-    bool animeImportSourceChoiceOpen_ = false;
-    bool animeSearchHasRun_ = false;
-    bool animeCanLoadMore_ = false;
-    bool animeAppendSearch_ = false;
-    bool hasUpdateResult_ = false;
-    std::wstring updateInstallStatus_;
-    int animeCurrentPage_ = 1;
-    int selectedAnimeIndex_ = -1;
-    AnimeUserStatus animeFilter_ = AnimeUserStatus::Watching;
-    bool animeFilterAll_ = true;
-    AnimeTrackerTab animeTrackerTab_ = AnimeTrackerTab::Search;
-    ReminderFilter reminderFilter_ = ReminderFilter::All;
-    ReminderSort reminderSort_ = ReminderSort::SoonestFirst;
-    ReminderPriority reminderFormPriority_ = ReminderPriority::Normal;
-    ReminderRepeatType reminderFormRepeat_ = ReminderRepeatType::None;
-    int reminderFormAlertMinutes_ = 15;
-    std::vector<int> reminderFormAlertMinutesList_ { 15 };
-    bool reminderFormPm_ = false;
-    int selectedReminderIndex_ = -1;
-    int pendingReminderSnoozeIndex_ = -1;
-    bool reminderFormAllDay_ = false;
-    bool reminderFormBirthday_ = false;
-    bool editingReminder_ = false;
-    bool reminderMoreOptionsOpen_ = false;
-    bool reminderNotificationsArmed_ = false;
-    bool reminderCalendarOpen_ = false;
-    int reminderCalendarYear_ = 2026;
-    int reminderCalendarMonth_ = 1;
-    SettingsSection settingsSection_ = SettingsSection::General;
-    bool suppressAnimeNotesChange_ = false;
-    std::wstring animeNotesStatusText_;
-    SIZE savedWindowSize_ { 1060, 680 };
-    bool savedWindowMaximized_ = false;
-
-    RECT clientRect_ {};
-    RECT headerRect_ {};
-    RECT favoritesNavRect_ {};
-    RECT allToolsNavRect_ {};
-    RECT settingsNavRect_ {};
-    RECT dateTimeRect_ {};
-    RECT reminderBannerRect_ {};
-    RECT reminderBannerSnoozeButtonRect_ {};
-    RECT reminderBannerCompleteButtonRect_ {};
-    RECT reminderBannerViewButtonRect_ {};
-    RECT reminderBannerCloseButtonRect_ {};
-    RECT updateBannerUpdateButtonRect_ {};
-    RECT updateBannerCloseButtonRect_ {};
-    RECT contentRect_ {};
-    RECT backButtonRect_ {};
-    RECT startStopButtonRect_ {};
-    RECT activationKeyButtonRect_ {};
-    RECT outputButtonButtonRect_ {};
-    RECT alternateOutputToggleRect_ {};
-    RECT toggleModeToggleRect_ {};
-    RECT alternateOutputButtonRect_ {};
-    RECT speedSliderTrackRect_ {};
-    RECT speedSliderThumbRect_ {};
-    RECT converterDropZoneRect_ {};
-    RECT converterBrowseButtonRect_ {};
-    RECT converterFormatButtonRect_ {};
-    RECT converterAdvancedToggleRect_ {};
-    RECT converterConflictButtonRect_ {};
-    RECT converterJpgBackgroundButtonRect_ {};
-    RECT converterQualityTrackRect_ {};
-    RECT converterQualityThumbRect_ {};
-    RECT converterWebpLosslessRect_ {};
-    RECT converterConvertButtonRect_ {};
-    RECT converterCancelButtonRect_ {};
-    RECT converterClearButtonRect_ {};
-    RECT converterRemoveFailedButtonRect_ {};
-    RECT converterProgressRect_ {};
-    RECT converterQueueRect_ {};
-    RECT mediaUrlEditRect_ {};
-    RECT mediaAnalyzeButtonRect_ {};
-    RECT mediaClearButtonRect_ {};
-    RECT mediaMetadataRect_ {};
-    RECT mediaMusicPanelRect_ {};
-    RECT mediaMusicAnalyzeButtonRect_ {};
-    RECT mediaFormatButtonRect_ {};
-    RECT mediaQualityButtonRect_ {};
-    RECT mediaOutputFolderRect_ {};
-    RECT mediaBrowseButtonRect_ {};
-    RECT mediaFileNameEditRect_ {};
-    RECT mediaDownloadButtonRect_ {};
-    RECT mediaCancelButtonRect_ {};
-    RECT mediaProgressRect_ {};
-    RECT mediaOpenFileButtonRect_ {};
-    RECT mediaOpenFolderButtonRect_ {};
-    RECT mediaCopyPathButtonRect_ {};
-    RECT smartTransferSendTabRect_ {};
-    RECT smartTransferReceiveTabRect_ {};
-    RECT smartTransferDropZoneRect_ {};
-    RECT smartTransferBrowseButtonRect_ {};
-    RECT smartTransferClearButtonRect_ {};
-    RECT smartTransferCreateButtonRect_ {};
-    RECT smartTransferStopButtonRect_ {};
-    RECT smartTransferCopyCodeButtonRect_ {};
-    RECT smartTransferExpirationButtonRect_ {};
-    RECT smartTransferApprovalToggleRect_ {};
-    RECT smartTransferStopAfterToggleRect_ {};
-    RECT smartTransferMultiReceiverToggleRect_ {};
-    RECT smartTransferDirectHostToggleRect_ {};
-    RECT smartTransferNameEditRect_ {};
-    RECT smartTransferCodeBoxRect_ {};
-    RECT smartTransferAllowButtonRect_ {};
-    RECT smartTransferDenyButtonRect_ {};
-    RECT smartTransferSendFileListRect_ {};
-    RECT smartTransferWebRtcSendPanelRect_ {};
-    RECT smartTransferCopyPairingButtonRect_ {};
-    RECT smartTransferReceiverResponseEditRect_ {};
-    RECT smartTransferApplyResponseButtonRect_ {};
-    RECT smartTransferReceiveCodeEditRect_ {};
-    RECT smartTransferConnectButtonRect_ {};
-    RECT smartTransferClearCodeButtonRect_ {};
-    RECT smartTransferWebRtcReceivePanelRect_ {};
-    RECT smartTransferSenderPairingEditRect_ {};
-    RECT smartTransferGenerateResponseButtonRect_ {};
-    RECT smartTransferCopyResponseButtonRect_ {};
-    RECT smartTransferManifestRect_ {};
-    RECT smartTransferSaveFolderRect_ {};
-    RECT smartTransferBrowseSaveButtonRect_ {};
-    RECT smartTransferDownloadButtonRect_ {};
-    RECT smartTransferCancelButtonRect_ {};
-    RECT smartTransferOpenFolderButtonRect_ {};
-    RECT smartTransferProgressRect_ {};
-    RECT settingsCheckUpdatesButtonRect_ {};
-    RECT settingsDownloadUpdateButtonRect_ {};
-    RECT settingsGeneralTabRect_ {};
-    RECT settingsSmartTransferTabRect_ {};
-    RECT settingsAppearanceTabRect_ {};
-    RECT settingsUpdatesTabRect_ {};
-    RECT settingsAboutTabRect_ {};
-    RECT settingsDefaultFolderRect_ {};
-    RECT settingsBrowseDefaultFolderButtonRect_ {};
-    RECT settingsStartPageButtonRect_ {};
-    RECT settingsMinimizeToTrayToggleRect_ {};
-    RECT settingsWebRtcFallbackToggleRect_ {};
-    RECT settingsWebRtcDiagnosticsToggleRect_ {};
-    RECT settingsWebRtcStunServersRect_ {};
-    RECT settingsClockFormatButtonRect_ {};
-    RECT settingsThemeButtonRect_ {};
-    RECT settingsGithubButtonRect_ {};
-    RECT settingsReportIssueButtonRect_ {};
-    RECT animeSearchTabRect_ {};
-    RECT animeListTabRect_ {};
-    RECT animeSearchEditRect_ {};
-    RECT animeSearchButtonRect_ {};
-    RECT animeLoadMoreButtonRect_ {};
-    RECT animeSearchDetailBackButtonRect_ {};
-    RECT animeSearchDetailAddButtonRect_ {};
-    RECT animeSearchDetailOpenButtonRect_ {};
-    RECT animeResultsRect_ {};
-    RECT animeListRect_ {};
-    RECT animeUpcomingRect_ {};
-    RECT animeSequelsRect_ {};
-    RECT animeRefreshAllButtonRect_ {};
-    RECT animeFilterButtonRect_ {};
-    RECT animeImportEditRect_ {};
-    RECT animeImportButtonRect_ {};
-    RECT animeImportChoicePanelRect_ {};
-    RECT animeImportChoiceAniListButtonRect_ {};
-    RECT animeImportChoiceMyAnimeListButtonRect_ {};
-    RECT animeImportChoiceCancelButtonRect_ {};
-    RECT animeStatusButtonRect_ {};
-    RECT animeEpisodeMinusButtonRect_ {};
-    RECT animeEpisodePlusButtonRect_ {};
-    RECT animeFavoriteButtonRect_ {};
-    RECT animeSaveNotesButtonRect_ {};
-    RECT animeNotesEditRect_ {};
-    RECT reminderNewButtonRect_ {};
-    RECT reminderQuickPanelRect_ {};
-    RECT reminderTitleEditRect_ {};
-    RECT reminderDateEditRect_ {};
-    RECT reminderDatePickerButtonRect_ {};
-    RECT reminderTimeEditRect_ {};
-    RECT reminderTimeAmPmButtonRect_ {};
-    RECT reminderPresetButtonRect_ {};
-    RECT reminderAddButtonRect_ {};
-    RECT reminderCategoryEditRect_ {};
-    RECT reminderPriorityButtonRect_ {};
-    RECT reminderRepeatButtonRect_ {};
-    RECT reminderAlertButtonRect_ {};
-    RECT reminderMoreOptionsToggleRect_ {};
-    RECT reminderAllDayToggleRect_ {};
-    RECT reminderBirthdayToggleRect_ {};
-    RECT reminderNotesEditRect_ {};
-    RECT reminderListRect_ {};
-    RECT reminderSearchEditRect_ {};
-    RECT reminderFilterButtonRect_ {};
-    RECT reminderSortButtonRect_ {};
-    RECT reminderCalendarRect_ {};
-    RECT reminderCalendarPrevButtonRect_ {};
-    RECT reminderCalendarNextButtonRect_ {};
-    RECT scrollBarTrackRect_ {};
-    RECT scrollBarThumbRect_ {};
-    RECT hoveredButtonRect_ {};
-    RECT pressedButtonRect_ {};
-    bool hasHoveredButton_ = false;
-    bool hasPressedButton_ = false;
-    DropdownKind activeDropdown_ = DropdownKind::None;
-    RECT dropdownRect_ {};
-    std::vector<std::wstring> dropdownLabels_;
-    std::vector<int> dropdownValues_;
-    std::vector<bool> dropdownEnabled_;
-    int dropdownSelectedValue_ = 0;
-    int hoverDropdownIndex_ = -1;
-    HWND mediaUrlEdit_ = nullptr;
-    HWND mediaFileNameEdit_ = nullptr;
-    HWND smartTransferNameEdit_ = nullptr;
-    HWND smartTransferCodeEdit_ = nullptr;
-    HWND smartTransferReceiverResponseEdit_ = nullptr;
-    HWND smartTransferSenderPairingEdit_ = nullptr;
-    HWND animeSearchEdit_ = nullptr;
-    HWND animeImportEdit_ = nullptr;
-    HWND animeNotesEdit_ = nullptr;
-    HWND reminderTitleEdit_ = nullptr;
-    HWND reminderDateEdit_ = nullptr;
-    HWND reminderTimeEdit_ = nullptr;
-    HWND reminderCategoryEdit_ = nullptr;
-    HWND reminderNotesEdit_ = nullptr;
-    HWND reminderSearchEdit_ = nullptr;
-    HBRUSH editBackgroundBrush_ = nullptr;
-    HDC backBufferDc_ = nullptr;
-    HBITMAP backBufferBitmap_ = nullptr;
-    HBITMAP backBufferPreviousBitmap_ = nullptr;
-    SIZE backBufferSize_ {};
-    int hoverNavIndex_ = -1;
-    int hoverToolIndex_ = -1;
-    int hoverAnimeSearchResultIndex_ = -1;
-    bool speedSliderDragging_ = false;
-    bool converterQualityDragging_ = false;
-    bool scrollBarDragging_ = false;
-    bool liveResize_ = false;
-    bool resizeLayoutPending_ = false;
-    bool minimizedToTray_ = false;
-    bool trayIconVisible_ = false;
-    bool trayRestoreMaximized_ = false;
-    bool forceClose_ = false;
-    int scrollBarDragOffsetY_ = 0;
-    int scrollOffsetY_ = 0;
-    int animeSearchResultsScrollOffset_ = 0;
-    int maxScrollOffsetY_ = 0;
-    int scrollContentHeight_ = 0;
-    bool fileConverterAdvancedOpen_ = false;
-    bool mouseLeaveTracking_ = false;
-    bool testButtonHeld_ = false;
-    bool awaitingActivationKey_ = false;
-    bool awaitingOutputButton_ = false;
-    bool awaitingAlternateOutputButton_ = false;
-
-    HFONT titleFont_ = nullptr;
-    HFONT navFont_ = nullptr;
-    HFONT headingFont_ = nullptr;
-    HFONT bodyFont_ = nullptr;
-    HFONT searchInputFont_ = nullptr;
-    HFONT monospaceFont_ = nullptr;
-    int dpi_ = 96;
-};
+    void ApplyUpdateCheckResult(constãz¶‰Ëkºwµç@€‰½½°Íµ…ÉÑQÉ…¹Í™•É!½ÍÑ¥¹|€ô™…±Í”ì(€€€‰½½°Íµ…ÉÑQÉ…¹Í™•É]•‰IÑ…±±‰…­=™™•É•‘|€ô™…±Í”ì(€€€‰½½°Íµ…ÉÑQÉ…¹Í™•É]•‰IÑ•Á•¹‘•¹å5¥ÍÍ¥¹|€ô™…±Í”ì(€€€‰½½°Íµ…ÉÑQÉ…¹Í™•É]•‰IÑ	ÕÍå|€ô™…±Í”ì(€€€‰½½°Íµ…ÉÑQÉ…¹Í™•É]•‰IÑI••¥Ù•ÉÑ¥Ù•|€ô™…±Í”ì(€€€‰½½°µ…É½I•½É‘•ÉÉµ•‘|€ô™…±Í”ì(€€€‰½½°µ…É½!…ÍA•¹‘¥¹I•½É‘¥¹|€ô™…±Í”ì(€€€‰½½°…İ…¥Ñ¥¹5…É½I•½É‘!½Ñ­•å|€ô™…±Í”ì(€€€‰½½°…İ…¥Ñ¥¹5…É½A±…å!½Ñ­•å|€ô™…±Í”ì(€€€‰½½°…İ…¥Ñ¥¹5…É½MÑ½Á!½Ñ­•å|€ô™…±Í”ì(€€€‰½½°…¹¥µ•M•…É¡¥¹|€ô™…±Í”ì(€€€‰½½°…¹¥µ•I•™É•Í¡¥¹|€ô™…±Í”ì(€€€‰½½°…¹¥µ•%µÁ½ÉÑ¥¹|€ô™…±Í”ì(€€€‰½½°…¹¥µ•%µÁ½ÉÑM½ÕÉ•¡½¥•=Á•¹|€ô™…±Í”ì(€€€‰½½°…¹¥µ•M•…É¡!…ÍIÕ¹|€ô™…±Í”ì(€€€‰½½°…¹¥µ•…¹1½…‘5½É•|€ô™…±Í”ì(€€€‰½½°…¹¥µ•ÁÁ•¹‘M•…É¡|€ô™…±Í”ì(€€€‰½½°¡…ÍUÁ‘…Ñ•I•ÍÕ±Ñ|€ô™…±Í”ì(€€€ÍÑèéİÍÑÉ¥¹œÕÁ‘…Ñ•%¹ÍÑ…±±MÑ…ÑÕÍ|ì(€€€¥¹Ğ…¹¥µ•ÕÉÉ•¹ÑA…•|€ô€Äì(€€€¥¹ĞÍ•±•Ñ•‘¹¥µ•%¹‘•á|€ô€´Äì(€€€¥¹ĞÍ•±•Ñ•‘5…É½%¹‘•á|€ô€´Äì(€€€5…É½I•½É‘¥¹5½‘”µ…É½I•½É‘¥¹5½‘•|ì(€€€5…É½!½Ñ­•äµ…É½I•½É‘!½Ñ­•å|ì€À°Y-}àôì(€€€5…É½!½Ñ­•äµ…É½A±…å!½Ñ­•å|ì€À°Y-}äôì(€€€5…É½!½Ñ­•äµ…É½MÑ½Á!½Ñ­•å|ì€À°Y-}MAôì(€€€5…É½A±…å‰…­=ÁÑ¥½¹Ìµ…É½A±…å‰…­=ÁÑ¥½¹Í|ì(€€€¹¥µ•UÍ•ÉMÑ…ÑÕÌ…¹¥µ•¥±Ñ•É|€ô¹¥µ•UÍ•ÉMÑ…ÑÕÌèé]…Ñ¡¥¹œì(€€€‰½½°…¹¥µ•¥±Ñ•É±±|€ôÑÉÕ”ì(€€€¹¥µ•QÉ…­•ÉQ…ˆ…¹¥µ•QÉ…­•ÉQ…‰|€ô¹¥µ•QÉ…­•ÉQ…ˆèéM•…É ì(€€€I•µ¥¹‘•É¥±Ñ•ÈÉ•µ¥¹‘•É¥±Ñ•É|€ôI•µ¥¹‘•É¥±Ñ•Èèé±°ì(€€€I•µ¥¹‘•ÉM½ÉĞÉ•µ¥¹‘•ÉM½ÉÑ|€ôI•µ¥¹‘•ÉM½ÉĞèéM½½¹•ÍÑ¥ÉÍĞì(€€€I•µ¥¹‘•ÉAÉ¥½É¥ÑäÉ•µ¥¹‘•É½ÉµAÉ¥½É¥Ñå|€ôI•µ¥¹‘•ÉAÉ¥½É¥Ñäèé9½Éµ…°ì(€€€I•µ¥¹‘•ÉI•Á•…ÑQåÁ”É•µ¥¹‘•É½ÉµI•Á•…Ñ|€ôI•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé9½¹”ì(€€€¥¹ĞÉ•µ¥¹‘•É½Éµ±•ÉÑ5¥¹ÕÑ•Í|€ô€ÄÔì(€€€ÍÑèéÙ•Ñ½Èñ¥¹ĞøÉ•µ¥¹‘•É½Éµ±•ÉÑ5¥¹ÕÑ•Í1¥ÍÑ|ì€ÄÔôì(€€€‰½½°É•µ¥¹‘•É½ÉµAµ|€ô™…±Í”ì(€€€¥¹ĞÍ•±•Ñ•‘I•µ¥¹‘•É%¹‘•á|€ô€´Äì(€€€¥¹ĞÁ•¹‘¥¹I•µ¥¹‘•ÉM¹½½é•%¹‘•á|€ô€´Äì(€€€‰½½°É•µ¥¹‘•É½Éµ±±…å|€ô™…±Í”ì(€€€‰½½°É•µ¥¹‘•É½Éµ	¥ÉÑ¡‘…å|€ô™…±Í”ì(€€€‰½½°•‘¥Ñ¥¹I•µ¥¹‘•É|€ô™…±Í”ì(€€€‰½½°É•µ¥¹‘•É5½É•=ÁÑ¥½¹Í=Á•¹|€ô™…±Í”ì(€€€‰½½°É•µ¥¹‘•É9½Ñ¥™¥…Ñ¥½¹ÍÉµ•‘|€ô™…±Í”ì(€€€‰½½°É•µ¥¹‘•É…±•¹‘…É=Á•¹|€ô™…±Í”ì(€€€¥¹ĞÉ•µ¥¹‘•É…±•¹‘…Ée•…É|€ô€ÈÀÈØì(€€€¥¹ĞÉ•µ¥¹‘•É…±•¹‘…É5½¹Ñ¡|€ô€Äì(€€€M•ÑÑ¥¹ÍM•Ñ¥½¸Í•ÑÑ¥¹ÍM•Ñ¥½¹|€ôM•ÑÑ¥¹ÍM•Ñ¥½¸èé•¹•É…°ì(€€€‰½½°ÍÕÁÁÉ•ÍÍ¹¥µ•9½Ñ•Í¡…¹•|€ô™…±Í”ì(€€€ÍÑèéİÍÑÉ¥¹œ…¹¥µ•9½Ñ•ÍMÑ…ÑÕÍQ•áÑ|ì(€€€M%iÍ…Ù•‘]¥¹‘½İM¥é•|ì€ÄÀØÀ°€ØàÀôì(€€€‰½½°Í…Ù•‘]¥¹‘½İ5…á¥µ¥é•‘|€ô™…±Í”ì((€€€IP±¥•¹ÑI•Ñ|íôì(€€€IP¡•…‘•ÉI•Ñ|íôì(€€€IP™…Ù½É¥Ñ•Í9…ÙI•Ñ|íôì(€€€IP…±±Q½½±Í9…ÙI•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í9…ÙI•Ñ|íôì(€€€IP‘…Ñ•Q¥µ•I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É	…¹¹•ÉI•Ñ|íôì(€€€IPÉ•µ¥¹‘•É	…¹¹•ÉM¹½½é•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É	…¹¹•É½µÁ±•Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É	…¹¹•ÉY¥•İ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É	…¹¹•É±½Í•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÕÁ‘…Ñ•	…¹¹•ÉUÁ‘…Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÕÁ‘…Ñ•	…¹¹•É±½Í•	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ñ•¹ÑI•Ñ|íôì(€€€IP‰…­	ÕÑÑ½¹I•Ñ|íôì(€€€IP…±±Q½½±ÍM•…É¡I•Ñ|íôì(€€€IP…±±Q½½±ÍM•…É¡‘¥ÑI•Ñ|íôì(€€€IPÍÑ…ÉÑMÑ½Á	ÕÑÑ½¹I•Ñ|íôì(€€€IP…Ñ¥Ù…Ñ¥½¹-•å	ÕÑÑ½¹I•Ñ|íôì(€€€IP½ÕÑÁÕÑ	ÕÑÑ½¹	ÕÑÑ½¹I•Ñ|íôì(€€€IP…±Ñ•É¹…Ñ•=ÕÑÁÕÑQ½±•I•Ñ|íôì(€€€IPÑ½±•5½‘•Q½±•I•Ñ|íôì(€€€IP…±Ñ•É¹…Ñ•=ÕÑÁÕÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍÁ••‘M±¥‘•ÉQÉ…­I•Ñ|íôì(€€€IPÍÁ••‘M±¥‘•ÉQ¡Õµ‰I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•ÉÉ½Ái½¹•I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É	É½İÍ•	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É½Éµ…Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É‘Ù…¹•‘Q½±•I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É½¹™±¥Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É)Á	…­É½Õ¹‘	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•ÉEÕ…±¥ÑåQÉ…­I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•ÉEÕ…±¥ÑåQ¡Õµ‰I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É]•‰Á1½ÍÍ±•ÍÍI•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É½¹Ù•ÉÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É…¹•±	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•É±•…É	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•ÉI•µ½Ù•…¥±•‘	ÕÑÑ½¹I•Ñ|íôì(€€€IP½¹Ù•ÉÑ•ÉAÉ½É•ÍÍI•Ñ|íôì(€€€IP½¹Ù•ÉÑ•ÉEÕ•Õ•I•Ñ|íôì(€€€IPµ•‘¥…UÉ±‘¥ÑI•Ñ|íôì(€€€IPµ•‘¥…¹…±åé•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…±•…É	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…5•Ñ…‘…Ñ…I•Ñ|íôì(€€€IPµ•‘¥…5ÕÍ¥A…¹•±I•Ñ|íôì(€€€IPµ•‘¥…5ÕÍ¥¹…±åé•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…½Éµ…Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…EÕ…±¥Ñå	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…=ÕÑÁÕÑ½±‘•ÉI•Ñ|íôì(€€€IPµ•‘¥…	É½İÍ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…¥±•9…µ•‘¥ÑI•Ñ|íôì(€€€IPµ•‘¥…½İ¹±½…‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥……¹•±	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…AÉ½É•ÍÍI•Ñ|íôì(€€€IPµ•‘¥…=Á•¹¥±•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…=Á•¹½±‘•É	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ•‘¥…½ÁåA…Ñ¡	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉÉ½Ái½¹•I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É	É½İÍ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É±•…É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É%¹™½I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉQ…É•ÑA…¹•±I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉQ…É•Ñ‘¥ÑI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉU¹¥Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É5½‘•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É=ÕÑÁÕÑ½±‘•ÉI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É	É½İÍ•=ÕÑÁÕÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É½µÁÉ•ÍÍ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É…¹•±	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉAÉ•Í•ĞÄÁI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉAÉ•Í•ĞÈÕI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉAÉ•Í•ĞÔÁI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉAÉ•Í•ĞÄÀÁI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉAÉ•Í•ĞÌÀÁI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉAÉ•Í•ĞÔÀÁI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É‘Ù…¹•‘Q½±•I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É‘Ù…¹•‘A…¹•±I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉI•Í½±ÕÑ¥½¹	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉÁÍ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉÕ‘¥½	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉAÉ•Í•Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É¹½‘•É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É½¹™±¥Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉY•É¥™åQ½±•I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉI•ÑÉåQ½±•I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É5•Ñ…‘…Ñ…Q½±•I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉÍÑ¥µ…Ñ•I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½ÉAÉ½É•ÍÍI•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É=Á•¹¥±•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É=Á•¹½±‘•É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÙ¥‘•½½µÁÉ•ÍÍ½É¹½Ñ¡•É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉM•¹‘Q…‰I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉI••¥Ù•Q…‰I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉÉ½Ái½¹•I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É	É½İÍ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É±•…É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉÉ•…Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉMÑ½Á	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É½Áå½‘•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉáÁ¥É…Ñ¥½¹	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉÁÁÉ½Ù…±Q½±•I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉMÑ½Á™Ñ•ÉQ½±•I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É5Õ±Ñ¥I••¥Ù•ÉQ½±•I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É¥É•Ñ!½ÍÑQ½±•I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É9…µ•‘¥ÑI•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É½‘•	½áI•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É±±½İ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É•¹å	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉM•¹‘¥±•1¥ÍÑI•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É]•‰IÑM•¹‘A…¹•±I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É½ÁåA…¥É¥¹	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉI••¥Ù•ÉI•ÍÁ½¹Í•‘¥ÑI•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉÁÁ±åI•ÍÁ½¹Í•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉI••¥Ù•½‘•‘¥ÑI•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É½¹¹•Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É±•…É½‘•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É]•‰IÑI••¥Ù•A…¹•±I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉM•¹‘•ÉA…¥É¥¹‘¥ÑI•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É•¹•É…Ñ•I•ÍÁ½¹Í•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É½ÁåI•ÍÁ½¹Í•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É5…¹¥™•ÍÑI•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉM…Ù•½±‘•ÉI•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É	É½İÍ•M…Ù•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É½İ¹±½…‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É…¹•±	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•É=Á•¹½±‘•É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍµ…ÉÑQÉ…¹Í™•ÉAÉ½É•ÍÍI•Ñ|íôì(€€€IPµ…É½1¥ÍÑA…¹•±I•Ñ|íôì(€€€IPµ…É½9•İ	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½%µÁ½ÉÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½áÁ½ÉÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½•±•Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½ÕÁ±¥…Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½=Ù•É±…å	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½•Ñ…¥±ÍA…¹•±I•Ñ|íôì(€€€IPµ…É½9…µ•‘¥ÑI•Ñ|íôì(€€€IPµ…É½M…Ù•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½I•½É‘A…¹•±I•Ñ|íôì(€€€IPµ…É½I•½É‘!½Ñ­•å	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½A±…å!½Ñ­•å	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½MÑ½Á!½Ñ­•å	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½Éµ	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½MÑ…ÉÑI•½É‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½MÑ½ÁI•½É‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½…¹•±I•½É‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½A±…å‰…­A…¹•±I•Ñ|íôì(€€€IPµ…É½A±…å=¹•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½1½½Á	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½1½½ÁU¹Ñ¥±MÑ½ÁÁ•‘Q½±•I•Ñ|íôì(€€€IPµ…É½MÑ½ÁA±…å‰…­	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½A±…å‰…­MÁ••‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½A±…å‰…­	…­•¹‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½MÑ…ÉÑ•±…å	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½I•ÅÕ¥É•Q…É•ÑQ½±•I•Ñ|íôì(€€€IPµ…É½AÉ½É•ÍÍI•Ñ|íôì(€€€IPµ…É½M•ÑÑ¥¹ÍA…¹•±I•Ñ|íôì(€€€IPµ…É½5½ÕÍ•5½‘•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½…ÁÑÕÉ•I…Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½Ù•¹ÑAÉ•Ù¥•İI•Ñ|íôì(€€€IPµ…É½=Ù•É±…åÉµ	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½=Ù•É±…åMÑ…ÉÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½=Ù•É±…åMÑ½ÁI•½É‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½=Ù•É±…åA±…å	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½=Ù•É±…åMÑ½ÁA±…å‰…­	ÕÑÑ½¹I•Ñ|íôì(€€€IPµ…É½=Ù•É±…å±½Í•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í¡•­UÁ‘…Ñ•Í	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í½İ¹±½…‘UÁ‘…Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í•¹•É…±Q…‰I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹ÍMµ…ÉÑQÉ…¹Í™•ÉQ…‰I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½I•½É‘•ÉQ…‰I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹ÍÁÁ•…É…¹•Q…‰I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹ÍUÁ‘…Ñ•ÍQ…‰I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í‰½ÕÑQ…‰I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í•™…Õ±Ñ½±‘•ÉI•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í	É½İÍ••™…Õ±Ñ½±‘•É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹ÍMÑ…ÉÑA…•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5¥¹¥µ¥é•Q½QÉ…åQ½±•I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹ÍMÑ…ÉÑ]¥Ñ¡]¥¹‘½İÍQ½±•I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í]•‰IÑ…±±‰…­Q½±•I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í]•‰IÑ¥…¹½ÍÑ¥ÍQ½±•I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í]•‰IÑMÑÕ¹M•ÉÙ•ÉÍI•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½I•½É‘!½Ñ­•å	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½A±…å!½Ñ­•å	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½MÑ½Á!½Ñ­•å	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½5½ÕÍ•5½‘•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½…ÁÑÕÉ•I…Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½A±…å‰…­MÁ••‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½MÑ…ÉÑ•±…å	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½1½½ÁQ½±•I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í5…É½Q…É•ÑQ½±•I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í±½­½Éµ…Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹ÍQ¡•µ•	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹Í¥Ñ¡Õ‰	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍ•ÑÑ¥¹ÍI•Á½ÉÑ%ÍÍÕ•	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•M•…É¡Q…‰I•Ñ|íôì(€€€IP…¹¥µ•1¥ÍÑQ…‰I•Ñ|íôì(€€€IP…¹¥µ•M•…É¡‘¥ÑI•Ñ|íôì(€€€IP…¹¥µ•M•…É¡	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•1½…‘5½É•	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•M•…É¡•Ñ…¥±	…­	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•M•…É¡•Ñ…¥±‘‘	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•M•…É¡•Ñ…¥±I•µ¥¹‘•É	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•M•…É¡•Ñ…¥±=Á•¹	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•I•ÍÕ±ÑÍI•Ñ|íôì(€€€IP…¹¥µ•1¥ÍÑI•Ñ|íôì(€€€IP…¹¥µ•UÁ½µ¥¹I•Ñ|íôì(€€€IP…¹¥µ•M•ÅÕ•±ÍI•Ñ|íôì(€€€IP…¹¥µ•I•™É•Í¡±±	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•¥±Ñ•É	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•%µÁ½ÉÑ‘¥ÑI•Ñ|íôì(€€€IP…¹¥µ•%µÁ½ÉÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•%µÁ½ÉÑ¡½¥•A…¹•±I•Ñ|íôì(€€€IP…¹¥µ•%µÁ½ÉÑ¡½¥•¹¥1¥ÍÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•%µÁ½ÉÑ¡½¥•5å¹¥µ•1¥ÍÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•%µÁ½ÉÑ¡½¥•…¹•±	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•MÑ…ÑÕÍ	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•Á¥Í½‘•5¥¹ÕÍ	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•Á¥Í½‘•A±ÕÍ	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•…Ù½É¥Ñ•	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•I•µ¥¹‘•É	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•M…Ù•9½Ñ•Í	ÕÑÑ½¹I•Ñ|íôì(€€€IP…¹¥µ•9½Ñ•Í‘¥ÑI•Ñ|íôì(€€€IPÉ•µ¥¹‘•É9•İ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉEÕ¥­A…¹•±I•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉQ¥Ñ±•‘¥ÑI•Ñ|íôì(€€€IPÉ•µ¥¹‘•É…Ñ•‘¥ÑI•Ñ|íôì(€€€IPÉ•µ¥¹‘•É…Ñ•A¥­•É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉQ¥µ•‘¥ÑI•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉQ¥µ•µAµ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉAÉ•Í•Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É‘‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É…Ñ•½Éå‘¥ÑI•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉAÉ¥½É¥Ñå	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉI•Á•…Ñ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É±•ÉÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É5½É•=ÁÑ¥½¹ÍQ½±•I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É±±…åQ½±•I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É	¥ÉÑ¡‘…åQ½±•I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É9½Ñ•Í‘¥ÑI•Ñ|íôì(€€€IPÉ•µ¥¹‘•É1¥ÍÑI•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉM•…É¡‘¥ÑI•Ñ|íôì(€€€IPÉ•µ¥¹‘•É¥±Ñ•É	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•ÉM½ÉÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É…±•¹‘…ÉI•Ñ|íôì(€€€IPÉ•µ¥¹‘•É…±•¹‘…ÉAÉ•Ù	ÕÑÑ½¹I•Ñ|íôì(€€€IPÉ•µ¥¹‘•É…±•¹‘…É9•áÑ	ÕÑÑ½¹I•Ñ|íôì(€€€IPÍÉ½±±	…ÉQÉ…­I•Ñ|íôì(€€€IPÍÉ½±±	…ÉQ¡Õµ‰I•Ñ|íôì(€€€IP¡½Ù•É•‘	ÕÑÑ½¹I•Ñ|íôì(€€€IPÁÉ•ÍÍ•‘	ÕÑÑ½¹I•Ñ|íôì(€€€‰½½°¡…Í!½Ù•É•‘	ÕÑÑ½¹|€ô™…±Í”ì(€€€‰½½°¡…ÍAÉ•ÍÍ•‘	ÕÑÑ½¹|€ô™…±Í”ì(€€€É½Á‘½İ¹-¥¹…Ñ¥Ù•É½Á‘½İ¹|€ôÉ½Á‘½İ¹-¥¹èé9½¹”ì(€€€IP‘É½Á‘½İ¹I•Ñ|íôì(€€€ÍÑèéÙ•Ñ½ÈñÍÑèéİÍÑÉ¥¹œø‘É½Á‘½İ¹1…‰•±Í|ì(€€€ÍÑèéÙ•Ñ½Èñ¥¹Ğø‘É½Á‘½İ¹Y…±Õ•Í|ì(€€€ÍÑèéÙ•Ñ½Èñ‰½½°ø‘É½Á‘½İ¹¹…‰±•‘|ì(€€€¥¹Ğ‘É½Á‘½İ¹M•±•Ñ•‘Y…±Õ•|€ô€Àì(€€€¥¹Ğ¡½Ù•ÉÉ½Á‘½İ¹%¹‘•á|€ô€´Äì(€€€!]9µ•‘¥…UÉ±‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9µ•‘¥…¥±•9…µ•‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9Ù¥‘•½½µÁÉ•ÍÍ½ÉQ…É•Ñ‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9Íµ…ÉÑQÉ…¹Í™•É9…µ•‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9Íµ…ÉÑQÉ…¹Í™•É½‘•‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9Íµ…ÉÑQÉ…¹Í™•ÉI••¥Ù•ÉI•ÍÁ½¹Í•‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9Íµ…ÉÑQÉ…¹Í™•ÉM•¹‘•ÉA…¥É¥¹‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9…±±Q½½±ÍM•…É¡‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9…¹¥µ•M•…É¡‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9…¹¥µ•%µÁ½ÉÑ‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9…¹¥µ•9½Ñ•Í‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9É•µ¥¹‘•ÉQ¥Ñ±•‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9É•µ¥¹‘•É…Ñ•‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9É•µ¥¹‘•ÉQ¥µ•‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9É•µ¥¹‘•É…Ñ•½Éå‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9É•µ¥¹‘•É9½Ñ•Í‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9É•µ¥¹‘•ÉM•…É¡‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9µ…É½9…µ•‘¥Ñ|€ô¹Õ±±ÁÑÈì(€€€!]9µ…É½=Ù•É±…å]¥¹‘½İ|€ô¹Õ±±ÁÑÈì(€€€!	IUM •‘¥Ñ	…­É½Õ¹‘	ÉÕÍ¡|€ô¹Õ±±ÁÑÈì(€€€!‰…­	Õ™™•É|€ô¹Õ±±ÁÑÈì(€€€!	%Q5@‰…­	Õ™™•É	¥Ñµ…Á|€ô¹Õ±±ÁÑÈì(€€€!	%Q5@‰…­	Õ™™•ÉAÉ•Ù¥½ÕÍ	¥Ñµ…Á|€ô¹Õ±±ÁÑÈì(€€€M%i‰…­	Õ™™•ÉM¥é•|íôì(€€€¥¹Ğ¡½Ù•É9…Ù%¹‘•á|€ô€´Äì(€€€¥¹Ğ¡½Ù•ÉQ½½±%¹‘•á|€ô€´Äì(€€€¥¹Ğ¡½Ù•É¹¥µ•M•…É¡I•ÍÕ±Ñ%¹‘•á|€ô€´Äì(€€€‰½½°ÍÁ••‘M±¥‘•ÉÉ…¥¹|€ô™…±Í”ì(€€€‰½½°½¹Ù•ÉÑ•ÉEÕ…±¥ÑåÉ…¥¹|€ô™…±Í”ì(€€€‰½½°ÍÉ½±±	…ÉÉ…¥¹|€ô™…±Í”ì(€€€‰½½°±¥Ù•I•Í¥é•|€ô™…±Í”ì(€€€‰½½°É•Í¥é•1…å½ÕÑA•¹‘¥¹|€ô™…±Í”ì(€€€‰½½°µ¥¹¥µ¥é•‘Q½QÉ…å|€ô™…±Í”ì(€€€‰½½°ÑÉ…å%½¹Y¥Í¥‰±•|€ô™…±Í”ì(€€€‰½½°ÑÉ…åI•ÍÑ½É•5…á¥µ¥é•‘|€ô™…±Í”ì(€€€‰½½°ÍÑ…ÉÑ5¥¹¥µ¥é•‘Q½QÉ…å|€ô™…±Í”ì(€€€‰½½°…ÕÑ½µ…Ñ¥½¹%¹ÁÕÑÍ¹…‰±•‘|€ô™…±Í”ì(€€€‰½½°™½É•±½Í•|€ô™…±Í”ì(€€€¥¹ĞÍÉ½±±	…ÉÉ…=™™Í•Ñe|€ô€Àì(€€€¥¹ĞÍÉ½±±=™™Í•Ñe|€ô€Àì(€€€¥¹Ğ…¹¥µ•M•…É¡I•ÍÕ±ÑÍMÉ½±±=™™Í•Ñ|€ô€Àì(€€€¥¹Ğµ…áMÉ½±±=™™Í•Ñe|€ô€Àì(€€€¥¹ĞÍÉ½±±½¹Ñ•¹Ñ!•¥¡Ñ|€ô€Àì(€€€‰½½°™¥±•½¹Ù•ÉÑ•É‘Ù…¹•‘=Á•¹|€ô™…±Í”ì(€€€‰½½°µ½ÕÍ•1•…Ù•QÉ…­¥¹|€ô™…±Í”ì(€€€‰½½°Ñ•ÍÑ	ÕÑÑ½¹!•±‘|€ô™…±Í”ì(€€€‰½½°…İ…¥Ñ¥¹Ñ¥Ù…Ñ¥½¹-•å|€ô™…±Í”ì(€€€‰½½°…İ…¥Ñ¥¹=ÕÑÁÕÑ	ÕÑÑ½¹|€ô™…±Í”ì(€€€‰½½°…İ…¥Ñ¥¹±Ñ•É¹…Ñ•=ÕÑÁÕÑ	ÕÑÑ½¹|€ô™…±Í”ì((€€€!=9PÑ¥Ñ±•½¹Ñ|€ô¹Õ±±ÁÑÈì(€€€!=9P¹…Ù½¹Ñ|€ô¹Õ±±ÁÑÈì(€€€!=9P¡•…‘¥¹½¹Ñ|€ô¹Õ±±ÁÑÈì(€€€!=9P‰½‘å½¹Ñ|€ô¹Õ±±ÁÑÈì(€€€!=9PÍ•…É¡%¹ÁÕÑ½¹Ñ|€ô¹Õ±±ÁÑÈì(€€€!=9Pµ½¹½ÍÁ…•½¹Ñ|€ô¹Õ±±ÁÑÈì(€€€¥¹Ğ‘Á¥|€ô€äØì(€€€¥¹Ğµ…É½=Ù•É±…åÁ¥|€ô€äØì)ôì(

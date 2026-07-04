@@ -70,9 +70,11 @@ struct ExternalToolStatus
 {
     bool ytDlpFound = false;
     bool ffmpegFound = false;
+    bool ffprobeFound = false;
     bool essentiaFound = false;
     std::filesystem::path ytDlpPath;
     std::filesystem::path ffmpegPath;
+    std::filesystem::path ffprobePath;
     std::filesystem::path essentiaPath;
 };
 
