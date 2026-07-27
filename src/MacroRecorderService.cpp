@@ -572,4 +572,2352 @@ MacroMouseButton MouseButtonFromMessage(WPARAM message, const MSLLHOOKSTRUCT& mo
         return MacroMouseButton::Middle;
     case WM_XBUTTONDOWN:
     case WM_XBUTTONUP:
-        return HIWORD(mouse.mouseData) == XBUTTON2 ? MacroMouseButton::X2 : MacroMouseButton::XÛMzæÚ$z{-®éÜj×‚ÒVæF–ætÖ÷W6TG…ó°¢WfVçBæG’ÒVæF–ætÖ÷W6TG•ó°¢VæF–ætÖ÷W6TG…òÒ°¢VæF–ætÖ÷W6TG•òÒ°¢VæF–ætÖ÷W6U7F'EW5òÒ°¢Æ7DÖ÷W6TÖ÷fUW5òÒF–ÖUW3°¢FDWfVçB†WfVçB“°§Ğ ¤Ö7&õÆ–&6µ6W'f–6S£¤Ö7&õÆ–&6µ6W'f–6R‚’ÒFVfVÇC° ¤Ö7&õÆ–&6µ6W'f–6S£§äÖ7&õÆ–&6µ6W'f–6R‚§°¢7F÷‚“°§Ğ ¦&ööÂÖ7&õÆ–&6µ6W'f–6S£¥7F'B†6öç7BÖ7&ôFVf–æ—F–öâbÖ7&òÂ6öç7BÖ7&õÆ–&6´÷F–öç2b÷F–öç2Â7FC£§w7G&–ærbW'&÷$ÖW76vR§°¢–b†Ö7&òæWfVçG2æV×G’‚’¢°¢W'&÷$ÖW76vRÒÂ%F†—2Ö7&ò†2æòWfVçG2FòÆ’â#°¢&WGW&âfÇ6S°¢Ğ¢–b„—5Æ––ær‚’¢°¢W'&÷$ÖW76vRÒÂ%Æ–&6²—2Ç&VG’'Vææ–ærâ#°¢&WGW&âfÇ6S°¢Ğ¢–b†÷F–öç2ç&WV—&UF&vWDfö7W6VBbbÖ7&õF&vWEv–æF÷u6W'f–6S£¤—5F&vWDfö7W6VB†Ö7&ò’¢°¢W'&÷$ÖW76vRÒÂ%F&vWBv–æF÷r—2æ÷Bfö7W6VBâ#°¢&WGW&âfÇ6S°¢Ğ ¢7F÷‚“°¢°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢6æ6†÷EòÒ·Ó°¢6æ6†÷Eòç7FGW2Ò÷F–öç2ç7F'DFVÆ•6V6öæG2âòÖ7&õÆ–&6µ7FGW3£¥7F'F–ær¢Ö7&õÆ–&6µ7FGW3£¥Æ––æs°¢6æ6†÷EòæÖW76vRÒ÷F–öç2ç7F'DFVÆ•6V6öæG2â ¢òÂ%Æ–&6²6÷VçFF÷vâ7F'FVBâfö7W2F†RF&vWBv–æF÷ræ÷râ ¢¢Â%Æ––ærÖ7&òâ#°¢6æ6†÷Eòç&WVW7FVDÆö÷2Ò÷F–öç2æÆö÷VçF–Å7F÷VBò¢7FC£¦Ö‚ƒÂ÷F–öç2æÆö÷6÷VçB“°¢6æ6†÷EòçF÷FÅW2ÒÖ7&òæWfVçG2æV×G’‚’ò¢Ö7&òæWfVçG2æ&6²‚’çF–ÖUW3°¢Ğ ¢7F÷&WVW7FVEòç7F÷&R†fÇ6R“°¢Æ–&6µF‡&VEòÒ7FC£§F‡&VB‚dÖ7&õÆ–&6µ6W'f–6S£¥Æ–&6´Æö÷ÂF†—2ÂÖ7&òÂ÷F–öç2“°¢&WGW&âG'VS°§Ğ §fö–BÖ7&õÆ–&6µ6W'f–6S£¥7F÷‚§°¢7F÷&WVW7FVEòç7F÷&R‡G'VR“°¢–b‡Æ–&6µF‡&VEòæ¦ö–æ&ÆR‚’¢°¢Æ–&6µF‡&VEòæ¦ö–â‚“°¢Ğ§Ğ ¦&ööÂÖ7&õÆ–&6µ6W'f–6S£¤—5Æ––ær‚’6öç7@§°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢&WGW&â6æ6†÷Eòç7FGW2ÓÒÖ7&õÆ–&6µ7FGW3£¥7F'F–ærÇÂ6æ6†÷Eòç7FGW2ÓÒÖ7&õÆ–&6µ7FGW3£¥Æ––æs°§Ğ ¤Ö7&õÆ–&6µ6æ6†÷BÖ7&õÆ–&6µ6W'f–6S£¥6æ6†÷B‚’6öç7@§°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢&WGW&â6æ6†÷Eó°§Ğ ¦&ööÂÖ7&õÆ–&6µ6W'f–6S£¤—4–çFW&6WF–öäf–Æ&ÆR‡7FC£§w7G&–ærbW'&÷$ÖW76vR’6öç7@§°¢–çFW&6WF–öåÆ–&6´&6¶VæB&6¶VæC°¢&WGW&â&6¶VæBä–æ—F–Æ—¦R†W'&÷$ÖW76vR“°§Ğ §fö–BÖ7&õÆ–&6µ6W'f–6S£¥Æ–&6´Æö÷„Ö7&ôFVf–æ—F–öâÖ7&òÂÖ7&õÆ–&6´÷F–öç2÷F–öç2§°¢÷F–öç2ç7VVBÒ7FC£¦6Æ×†÷F–öç2ç7VVBÂãÂã“°¢÷F–öç2æÆö÷6÷VçBÒ7FC£¦6Æ×†÷F–öç2æÆö÷6÷VçBÂÂ““’“°¢÷F–öç2ç7F'DFVÆ•6V6öæG2Ò7FC£¦6Æ×†÷F–öç2ç7F'DFVÆ•6V6öæG2ÂÂc“° ¢6öç7B&ööÂF–ÖW%&W6öÇWF–öå&—6VBÒF–ÖT&Vv–åW&–öBƒ’ÓÒD”ÔU%%ôäôU%$õ#°¢6öç7B„äDÄRÆ–&6µF‡&VBÒvWD7W'&VçEF‡&VB‚“°¢6öç7B–çB&Wf–÷W5F‡&VE&–÷&—G’ÒvWEF‡&VE&–÷&—G’‡Æ–&6µF‡&VB“°¢–b‡&Wf–÷W5F‡&VE&–÷&—G’ÒD…$TEõ$”õ$•E•ôU%$õ%õ$UEU$â¢°¢6WEF‡&VE&–÷&—G’‡Æ–&6µF‡&VBÂD…$TEõ$”õ$•E•ô„”t„U5B“°¢Ğ¢WFò&W7F÷&UÆ–&6µF–Ö–ærÒ²eÒ‚¢°¢–b‡&Wf–÷W5F‡&VE&–÷&—G’ÒD…$TEõ$”õ$•E•ôU%$õ%õ$UEU$â¢°¢6WEF‡&VE&–÷&—G’‡Æ–&6µF‡&VBÂ&Wf–÷W5F‡&VE&–÷&—G’“°¢Ğ¢–b‡F–ÖW%&W6öÇWF–öå&—6VB¢°¢F–ÖTVæEW&–öBƒ“°¢Ğ¢Ó° ¢–b†÷F–öç2ç7F'DFVÆ•6V6öæG2â¢°¢–b…v—D–çFW''WF–&ÆR‡7FC£¦6‡&öæó£§6V6öæG2†÷F–öç2ç7F'DFVÆ•6V6öæG2’’¢°¢&W7F÷&UÆ–&6µF–Ö–ær‚“°¢&WGW&ã°¢Ğ¢Ğ ¢6öç7B–çBÖ„Æö÷2Ò÷F–öç2æÆö÷VçF–Å7F÷VBò7FC£¦çVÖW&–5öÆ–Ö—G3Æ–çCã£¦Ö‚‚’¢÷F–öç2æÆö÷6÷VçC°¢–çFW&6WF–öåÆ–&6´&6¶VæB–çFW&6WF–öä&6¶VæC°¢–çFW&6WF–öåÆ–&6´&6¶VæB¢G&—fW$&6¶VæBÒçVÆÇG#°¢–b†÷F–öç2æ&6¶VæBÓÒÖ7&õÆ–&6´&6¶VæC£¤–çFW&6WF–öâ¢°¢7FC£§w7G&–ær&6¶VæDW'&÷#°¢–b‚–çFW&6WF–öä&6¶VæBä–æ—F–Æ—¦R†&6¶VæDW'&÷"’¢°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢6æ6†÷Eòç7FGW2ÒÖ7&õÆ–&6µ7FGW3£¤f–ÆVC°¢6æ6†÷EòæÖW76vRÒ&6¶VæDW'&÷"æV×G’‚¢òÂ$–çFW&6WF–öâÆ–&6²—2Væf–Æ&ÆRâ ¢¢&6¶VæDW'&÷#°¢7F÷&WVW7FVEòç7F÷&R‡G'VR“°¢&W7F÷&UÆ–&6µF–Ö–ær‚“°¢&WGW&ã°¢Ğ¢G&—fW$&6¶VæBÒf–çFW&6WF–öä&6¶VæC°¢Ğ ¢7FC£¦ÖÄEtõ$BÂÖ7&ôWfVçCâ†VÆD¶W—3°¢7FC£§fV7F÷#ÄÖ7&ôÖ÷W6T'WGFöãâ†VÆDÖ÷W6T'WGFöç3°¢WFò&VÖVÖ&W$†VÆD–çWBÒ²eÒ†6öç7BÖ7&ôWfVçBbWfVçB¢°¢–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤¶W”F÷vâ¢°¢†VÆD¶W—5¶WfVçBçf—'GVÄ¶W•ÒÒWfVçC°¢Ğ¢VÇ6R–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤¶W•W¢°¢†VÆD¶W—2æW&6R†WfVçBçf—'GVÄ¶W’“°¢Ğ¢VÇ6R–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤Ö÷W6TF÷vâbbWfVçBæÖ÷W6T'WGFöâÒÖ7&ôÖ÷W6T'WGFöã£¤æöæR¢°¢–b‡7FC£¦f–æB††VÆDÖ÷W6T'WGFöç2æ&Vv–â‚’Â†VÆDÖ÷W6T'WGFöç2æVæB‚’ÂWfVçBæÖ÷W6T'WGFöâ’ÓÒ†VÆDÖ÷W6T'WGFöç2æVæB‚’¢°¢†VÆDÖ÷W6T'WGFöç2çW6…ö&6²†WfVçBæÖ÷W6T'WGFöâ“°¢Ğ¢Ğ¢VÇ6R–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤Ö÷W6UW¢°¢†VÆDÖ÷W6T'WGFöç2æW&6R€¢7FC£§&VÖ÷fR††VÆDÖ÷W6T'WGFöç2æ&Vv–â‚’Â†VÆDÖ÷W6T'WGFöç2æVæB‚’ÂWfVçBæÖ÷W6T'WGFöâ’À¢†VÆDÖ÷W6T'WGFöç2æVæB‚’“°¢Ğ¢Ó° ¢f÷"†–çBÆö÷Ò²Æö÷ÃÒÖ„Æö÷2bb7F÷&WVW7FVEòæÆöB‚“²²¶Æö÷¢°¢°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢6æ6†÷Eòç7FGW2ÒÖ7&õÆ–&6µ7FGW3£¥Æ––æs°¢6æ6†÷EòæÖW76vRÒ÷F–öç2æÆö÷VçF–Å7F÷VBòÂ%Æ––ærÖ7&òVçF–Â7F÷VBâ"¢Â%Æ––ærÖ7&òâ#°¢6æ6†÷Eòæ7W'&VçDÆö÷ÒÆö÷°¢Ğ ¢6öç7BWFòÆö÷7F'BÒ7FC£¦6‡&öæó£§7FVG•ö6Æö6³£¦æ÷r‚“°¢f÷"‡6—¦U÷BWfVçD–æFW‚Ò²WfVçD–æFW‚ÂÖ7&òæWfVçG2ç6—¦R‚“²¢°¢6öç7BÖ7&ôWfVçBbWfVçBÒÖ7&òæWfVçG5¶WfVçD–æFW…Ó°¢6öç7BWFòF&vWDöfg6WBÒ7FC£¦6‡&öæó£¦GW&F–öåö67CÇ7FC£¦6‡&öæó£§7FVG•ö6Æö6³£¦GW&F–öãâ€¢7FC£¦6‡&öæó£¦GW&F–öãÆF÷V&ÆSâ‡7FF–5ö67CÆF÷V&ÆSâ‡7FC£¦ÖƒÆÆöærÆöæsâƒÂWfVçBçF–ÖUW2’’òãò÷F–öç2ç7VVB’“°¢–b…v—EVçF–Ä–çFW''WF–&ÆR†Æö÷7F'B²F&vWDöfg6WB’¢°¢'&V³°¢Ğ¢–b‡7F÷&WVW7FVEòæÆöB‚’¢°¢'&V³°¢Ğ¢–b†÷F–öç2ç&WV—&UF&vWDfö7W6VBbbÖ7&õF&vWEv–æF÷u6W'f–6S£¤—5F&vWDfö7W6VB†Ö7&ò’¢°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢6æ6†÷Eòç7FGW2ÒÖ7&õÆ–&6µ7FGW3£¤f–ÆVC°¢6æ6†÷EòæÖW76vRÒÂ%F&vWBv–æF÷rÆ÷7Bfö7W2âÆ–&6²7F÷VBâ#°¢7F÷&WVW7FVEòç7F÷&R‡G'VR“°¢'&V³°¢Ğ ¢6öç7B&ööÂ6VçBÒ6VæDÖ7&ôWfVçB†WfVçBÂÖ7&òç&V6÷&F–ætÖöFRæÖ÷W6TÖöFRÂG&—fW$&6¶VæB“°¢–b‡6VçB¢°¢&VÖVÖ&W$†VÆD–çWB†WfVçB“°¢²¶WfVçD–æFWƒ°¢Ğ ¢–b‚6VçB¢°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢6æ6†÷Eòç7FGW2ÒÖ7&õÆ–&6µ7FGW3£¤f–ÆVC°¢6æ6†÷EòæÖW76vRÒÂ%v–æF÷w2F–Bæ÷B66WBöæRöbF†R6–×VÆFVB–çWG2â#°¢7F÷&WVW7FVEòç7F÷&R‡G'VR“°¢'&V³°¢Ğ ¢°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢6æ6†÷EòæVÆ6VEW2Ò7FC£¦6‡&öæó£¦GW&F–öåö67CÇ7FC£¦6‡&öæó£¦Ö–7&÷6V6öæG3â€¢7FC£¦6‡&öæó£§7FVG•ö6Æö6³£¦æ÷r‚’ÒÆö÷7F'B’æ6÷VçB‚“°¢Ğ¢Ğ¢Ğ ¢&VÆV6T†VÆD–çWG2††VÆD¶W—2Â†VÆDÖ÷W6T'WGFöç2“° ¢°¢7FC£¦Æö6µöwV&CÇ7FC£¦×WFWƒâÆö6²†×WFW…ò“°¢–b‡6æ6†÷Eòç7FGW2ÒÖ7&õÆ–&6µ7FGW3£¤f–ÆVB¢°¢6æ6†÷Eòç7FGW2Ò7F÷&WVW7FVEòæÆöB‚’òÖ7&õÆ–&6µ7FGW3£¥7F÷VB¢Ö7&õÆ–&6µ7FGW3£¤6ö×ÆWFS°¢6æ6†÷EòæÖW76vRÒ7F÷&WVW7FVEòæÆöB‚’òÂ%Æ–&6²7F÷VBâ"¢Â%Æ–&6²6ö×ÆWFRâ#°¢Ğ¢Ğ ¢7F÷&WVW7FVEòç7F÷&R‡G'VR“°¢&W7F÷&UÆ–&6µF–Ö–ær‚“°§Ğ ¦&ööÂÖ7&õÆ–&6µ6W'f–6S£¤'V–ÆDÖ7&ô–çWB†6öç7BÖ7&ôWfVçBbWfVçBÂÖ7&ôÖ÷W6TÖöFRÖöFRÂ”åUBb–çWB§°¢–çWBÒ·Ó°¢–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤¶W”F÷vâÇÂWfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤¶W•W¢°¢–çWBçG—RÒ”åUEô´U”$ô$C°¢–b†WfVçBç66ä6öFRÒ¢°¢–çWBæ¶’çu66âÒ7FF–5ö67CÅtõ$Câ†WfVçBç66ä6öFR“°¢–çWBæ¶’æGtfÆw2Ò´U”UdTåDeõ44ä4ôDS°¢Ğ¢VÇ6P¢°¢–çWBæ¶’çuf²Ò7FF–5ö67CÅtõ$Câ†WfVçBçf—'GVÄ¶W’“°¢Ğ¢–b‚†WfVçBæ¶W”fÆw2bÄÄ´„eôU…DTäDTB’Ò¢°¢–çWBæ¶’æGtfÆw2ÃÒ´U”UdTåDeôU…DTäDTD´U“°¢Ğ¢–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤¶W•W¢°¢–çWBæ¶’æGtfÆw2ÃÒ´U”UdTåDeô´U•U°¢Ğ¢–çWBæ¶’æGtW‡G&–æfòÒ´Ö7&õÆ–&6´W‡G&–æfó°¢&WGW&âG'VS°¢Ğ ¢–çWBçG—RÒ”åUEôÔõU4S°¢–çWBæÖ’æGtW‡G&–æfòÒ´Ö7&õÆ–&6´W‡G&–æfó°¢–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤Ö÷W6TÖ÷fR¢°¢–b†ÖöFRÓÒÖ7&ôÖ÷W6TÖöFS£¥&VÆF—fRbbWfVçBæ'6öÇWFTÖ÷fR¢°¢–çWBæÖ’æGtfÆw2ÒÔõU4TUdTåDeôÔõdS°¢–çWBæÖ’æG‚ÒWfVçBæGƒ°¢–çWBæÖ’æG’ÒWfVçBæG“°¢Ğ¢VÇ6P¢°¢Äôär‚ÒWfVçBçƒ°¢Äôär’ÒWfVçBç“°¢–b‚WfVçBæ'6öÇWFTÖ÷fRbbÖöFRÓÒÖ7&ôÖ÷W6TÖöFS£¥v–æF÷u&VÆF—fR¢°¢…täBf÷&Vw&÷VæBÒvWDf÷&Vw&÷VæEv–æF÷r‚“°¢$T5B&V7B·Ó°¢–b†f÷&Vw&÷VæBbbvWEv–æF÷u&V7B†f÷&Vw&÷VæBÂg&V7B’¢°¢‚³Ò&V7BæÆVgC°¢’³Ò&V7BçF÷°¢Ğ¢Ğ ¢6öç7B–çB÷&–v–å‚ÒvWE7—7FVÔÖWG&–72…4Õõ…d•%ETÅ45$TTâ“°¢6öç7B–çB÷&–v–å’ÒvWE7—7FVÔÖWG&–72…4Õõ•d•%ETÅ45$TTâ“°¢6öç7B–çBv–GF‚ÒvWE7—7FVÔÖWG&–72…4Õô5…d•%ETÅ45$TTâ“°¢6öç7B–çB†V–v‡BÒvWE7—7FVÔÖWG&–72…4Õô5•d•%ETÅ45$TTâ“°¢–çWBæÖ’æGtfÆw2ÒÔõU4TUdTåDeôÔõdRÂÔõU4TUdTåDeô%4ôÅUDRÂÔõU4TUdTåDeõd•%ETÄDU4³°¢–çWBæÖ’æG‚Òæ÷&ÖÆ—¦T'6öÇWFT6ö÷&F–æFR‡‚Â÷&–v–å‚Âv–GF‚“°¢–çWBæÖ’æG’Òæ÷&ÖÆ—¦T'6öÇWFT6ö÷&F–æFR‡’Â÷&–v–å’Â†V–v‡B“°¢Ğ¢Ğ¢VÇ6R–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤Ö÷W6TF÷vâÇÂWfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤Ö÷W6UW¢°¢–çWBæÖ’æGtfÆw2ÒWfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤Ö÷W6TF÷và¢òÖ÷W6TF÷väfÆr†WfVçBæÖ÷W6T'WGFöâ¢¢Ö÷W6UWfÆr†WfVçBæÖ÷W6T'WGFöâ“°¢–çWBæÖ’æÖ÷W6TFFÒ„'WGFöäFF†WfVçBæÖ÷W6T'WGFöâ“°¢Ğ¢VÇ6R–b†WfVçBçG—RÓÒÖ7&ôWfVçEG—S£¤Ö÷W6Uv†VVÂ¢°¢–çWBæÖ’æGtfÆw2ÒÔõU4TUdTåDeõt„TTÃ°¢–çWBæÖ’æÖ÷W6TFFÒ7FF–5ö67CÄEtõ$Câ†WfVçBçv†VVÄFVÇF“°¢Ğ ¢&WGW&â–çWBæÖ’æGtfÆw2Ò°§Ğ ¦&ööÂÖ7&õÆ–&6µ6W'f–6S£¥6VæDÖ7&ôWfVçB†6öç7BÖ7&ôWfVçBbWfVçBÂÖ7&ôÖ÷W6TÖöFRÖöFRÂfö–B¢G&—fW$&6¶VæB§°¢–b†G&—fW$&6¶VæB¢°¢&WGW&â7FF–5ö67CÄ–çFW&6WF–öåÆ–&6´&6¶VæB£â†G&—fW$&6¶VæB’Óå6VæDWfVçB†WfVçBÂÖöFR“°¢Ğ ¢”åUB–çWB·Ó°¢&WGW&â'V–ÆDÖ7&ô–çWB†WfVçBÂÖöFRÂ–çWB’bb6VæD–çWBƒÂf–çWBÂ6—¦Vöb„”åUB’’ÓÒ°§Ğ §fö–BÖ7&õÆ–&6µ6W'f–6S£¥&VÆV6T†VÆD–çWG2€¢6öç7B7FC£¦ÖÄEtõ$BÂÖ7&ôWfVçCâb†VÆD¶W—2À¢6öç7B7FC£§fV7F÷#ÄÖ7&ôÖ÷W6T'WGFöãâb†VÆDÖ÷W6T'WGFöç2§°¢7FC£§fV7F÷#Ä”åUCâ–çWG3°¢–çWG2ç&W6W'fR††VÆD¶W—2ç6—¦R‚’²†VÆDÖ÷W6T'WGFöç2ç6—¦R‚’“° ¢f÷"†WFò—BÒ†VÆD¶W—2ç&&Vv–â‚“²—BÒ†VÆD¶W—2ç&VæB‚“²²¶—B¢°¢6öç7BÖ7&ôWfVçBbWfVçBÒ—BÓç6V6öæC°¢”åUB–çWB·Ó°¢–çWBçG—RÒ”åUEô´U”$ô$C°¢–b†WfVçBç66ä6öFRÒ¢°¢–çWBæ¶’çu66âÒ7FF–5ö67CÅtõ$Câ†WfVçBç66ä6öFR“°¢–çWBæ¶’æGtfÆw2Ò´U”UdTåDeõ44ä4ôDS°¢Ğ¢VÇ6P¢°¢–çWBæ¶’çuf²Ò7FF–5ö67CÅtõ$Câ†WfVçBçf—'GVÄ¶W’“°¢Ğ¢–b‚†WfVçBæ¶W”fÆw2bÄÄ´„eôU…DTäDTB’Ò¢°¢–çWBæ¶’æGtfÆw2ÃÒ´U”UdTåDeôU…DTäDTD´U“°¢Ğ¢–çWBæ¶’æGtfÆw2ÃÒ´U”UdTåDeô´U•U°¢–çWBæ¶’æGtW‡G&–æfòÒ´Ö7&õÆ–&6´W‡G&–æfó°¢–çWG2çW6…ö&6²†–çWB“°¢Ğ ¢f÷"†WFò—BÒ†VÆDÖ÷W6T'WGFöç2ç&&Vv–â‚“²—BÒ†VÆDÖ÷W6T'WGFöç2ç&VæB‚“²²¶—B¢°¢6öç7BEtõ$BfÆrÒÖ÷W6UWfÆr‚¦—B“°¢–b†fÆrÓÒ¢°¢6öçF–çVS°¢Ğ ¢”åUB–çWB·Ó°¢–çWBçG—RÒ”åUEôÔõU4S°¢–çWBæÖ’æGtfÆw2ÒfÆs°¢–çWBæÖ’æÖ÷W6TFFÒ„'WGFöäFF‚¦—B“°¢–çWBæÖ’æGtW‡G&–æfòÒ´Ö7&õÆ–&6´W‡G&–æfó°¢–çWG2çW6…ö&6²†–çWB“°¢Ğ ¢–b‚–çWG2æV×G’‚’¢°¢6VæD–çWB‡7FF–5ö67CÅT”åCâ†–çWG2ç6—¦R‚’’Â–çWG2æFF‚’Â6—¦Vöb„”åUB’“°¢Ğ§Ğ ¦&ööÂÖ7&õÆ–&6µ6W'f–6S£¥v—D–çFW''WF–&ÆR‡7FC£¦6‡&öæó£§7FVG•ö6Æö6³£¦GW&F–öâGW&F–öâ§°¢6öç7BWFòVæBÒ7FC£¦6‡&öæó£§7FVG•ö6Æö6³£¦æ÷r‚’²GW&F–öã°¢&WGW&âv—EVçF–Ä–çFW''WF–&ÆR†VæB“°§Ğ ¦&ööÂÖ7&õÆ–&6µ6W'f–6S£¥v—EVçF–Ä–çFW''WF–&ÆR‡7FC£¦6‡&öæó£§7FVG•ö6Æö6³£§F–ÖU÷ö–çBF&vWEF–ÖR§°¢v†–ÆR‚7F÷&WVW7FVEòæÆöB‚’¢°¢6öç7BWFòæ÷rÒ7FC£¦6‡&öæó£§7FVG•ö6Æö6³£¦æ÷r‚“°¢–b†æ÷rãÒF&vWEF–ÖR¢°¢&WGW&âfÇ6S°¢Ğ¢6öç7BWFò&VÖ–æ–ærÒF&vWEF–ÖRÒæ÷s°¢–b‡&VÖ–æ–ærâ7FC£¦6‡&öæó£¦Ö–ÆÆ—6V6öæG2ƒ2’¢°¢7FC£§F†—5÷F‡&VC£§6ÆVWöf÷"‡7FC£¦6‡&öæó£¦Ö–ÆÆ—6V6öæG2ƒ’“°¢Ğ¢VÇ6R–b‡&VÖ–æ–ærâ7FC£¦6‡&öæó£¦Ö–7&÷6V6öæG2ƒ“’¢°¢7v—F6…FõF‡&VB‚“°¢Ğ¢VÇ6P¢°¢––VÆE&ö6W76÷"‚“°¢Ğ¢Ğ¢&WGW&âG'VS°§Ğ ¤Ö7&ô†÷F¶W•6W'f–6S£§äÖ7&ô†÷F¶W•6W'f–6R‚’ÒFVfVÇC° ¦&ööÂÖ7&ô†÷F¶W•6W'f–6S£¥&Vv—7FW"„…täB‡væBÂ–çB–BÂ6öç7BÖ7&ô†÷F¶W’b†÷F¶W’Â7FC£§w7G&–ærbW'&÷$ÖW76vR§°¢–b‚‡væBÇÂ—4V×G’††÷F¶W’’¢°¢&WGW&âG'VS°¢Ğ ¢Vç&Vv—7FW"†‡væBÂ–B“°¢–b‚&Vv—7FW$†÷D¶W’†‡væBÂ–BÂ†÷F¶W’æÖöF–f–W'2ÂÔôEôäõ$UTBÂ†÷F¶W’çf—'GVÄ¶W’’¢°¢W'&÷$ÖW76vRÒÂ$6÷VÆBæ÷B&Vv—7FW""²†÷F¶W”Æ&VÂ††÷F¶W’’²Â"âæ÷F†W"Ö’Ç&VG’&RW6–ær—Bâ#°¢&WGW&âfÇ6S°¢Ğ ¢–b‡7FC£¦f–æB‡&Vv—7FW&VD–G5òæ&Vv–â‚’Â&Vv—7FW&VD–G5òæVæB‚’Â–B’ÓÒ&Vv—7FW&VD–G5òæVæB‚’¢°¢&Vv—7FW&VD–G5òçW6…ö&6²†–B“°¢Ğ¢&WGW&âG'VS°§Ğ §fö–BÖ7&ô†÷F¶W•6W'f–6S£¥Vç&Vv—7FW"„…täB‡væBÂ–çB–B§°¢–b†‡væB¢°¢Vç&Vv—7FW$†÷D¶W’†‡væBÂ–B“°¢Ğ¢&Vv—7FW&VD–G5òæW&6R‡7FC£§&VÖ÷fR‡&Vv—7FW&VD–G5òæ&Vv–â‚’Â&Vv—7FW&VD–G5òæVæB‚’Â–B’Â&Vv—7FW&VD–G5òæVæB‚’“°§Ğ §fö–BÖ7&ô†÷F¶W•6W'f–6S£¥Vç&Vv—7FW$ÆÂ„…täB‡væB§°¢f÷"†–çB–B¢&Vv—7FW&VD–G5ò¢°¢–b†‡væB¢°¢Vç&Vv—7FW$†÷D¶W’†‡væBÂ–B“°¢Ğ¢Ğ¢&Vv—7FW&VD–G5òæ6ÆV"‚“°§Ğ §7FC£§w7G&–ærÖ7&ô†÷F¶W•6W'f–6S£¤†÷F¶W”Æ&VÂ†6öç7BÖ7&ô†÷F¶W’b†÷F¶W’§°¢–b„—4V×G’††÷F¶W’’¢°¢&WGW&âÂ%Væ&÷VæB#°¢Ğ ¢7FC£§w7G&–ærÆ&VÃ°¢–b††÷F¶W’æÖöF–f–W'2bÔôEô4ôåE$ôÂ’Æ&VÂ³ÒÂ$7G&Â²#°¢–b††÷F¶W’æÖöF–f–W'2bÔôEõ4„”eB’Æ&VÂ³ÒÂ%6†–gB²#°¢–b††÷F¶W’æÖöF–f–W'2bÔôEôÅB’Æ&VÂ³ÒÂ$ÇB²#°¢Æ&VÂ³Ò¶W”æÖR††÷F¶W’çf—'GVÄ¶W’“°¢&WGW&âÆ&VÃ°§Ğ ¦&ööÂÖ7&ô†÷F¶W•6W'f–6S£¤—4V×G’†6öç7BÖ7&ô†÷F¶W’b†÷F¶W’§°¢&WGW&â†÷F¶W’çf—'GVÄ¶W’ÓÒ°§Ğ
+        return HIWORD(mouse.mouseData) == XBUTTON2 ? MacroMouseButton::X2 : MacroMouseButton::X1;
+    default:
+        return MacroMouseButton::None;
+    }
+}
+
+bool IsMouseDownMessage(WPARAM message)
+{
+    return message == WM_LBUTTONDOWN ||
+        message == WM_RBUTTONDOWN ||
+        message == WM_MBUTTONDOWN ||
+        message == WM_XBUTTONDOWN;
+}
+
+bool IsMouseUpMessage(WPARAM message)
+{
+    return message == WM_LBUTTONUP ||
+        message == WM_RBUTTONUP ||
+        message == WM_MBUTTONUP ||
+        message == WM_XBUTTONUP;
+}
+
+void WriteStringField(std::ostringstream& output, const char* indent, const char* key, const std::wstring& value, bool comma = true)
+{
+    output << indent << "\"" << key << "\": " << JsonEscape(value);
+    if (comma)
+    {
+        output << ",";
+    }
+    output << "\n";
+}
+
+std::filesystem::path MacroFilePath(const std::filesystem::path& directory, const MacroDefinition& macro)
+{
+    const std::wstring id = macro.id.empty() ? MacroStorageService::GenerateId() : macro.id;
+    return directory / (id + L".rexmacro");
+}
+
+bool ReadFileBytes(const std::filesystem::path& path, std::string& bytes)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file)
+    {
+        return false;
+    }
+    bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    if (bytes.size() >= 3 &&
+        static_cast<unsigned char>(bytes[0]) == 0xEF &&
+        static_cast<unsigned char>(bytes[1]) == 0xBB &&
+        static_cast<unsigned char>(bytes[2]) == 0xBF)
+    {
+        bytes.erase(0, 3);
+    }
+    return true;
+}
+
+MacroEvent EventFromJson(const std::string& object)
+{
+    MacroEvent event;
+    event.timeUs = ExtractInt64(object, "timeUs", ExtractInt64(object, "timeMs", 0) * 1000);
+    event.type = EventTypeFromName(ExtractString(object, "type"));
+    event.virtualKey = static_cast<DWORD>(ExtractInt(object, "keyCode"));
+    event.scanCode = static_cast<DWORD>(ExtractInt(object, "scanCode"));
+    event.keyFlags = static_cast<DWORD>(ExtractInt(object, "keyFlags"));
+    event.mouseButton = MouseButtonFromName(ExtractString(object, "mouseButton"));
+    event.x = static_cast<LONG>(ExtractInt(object, "x"));
+    event.y = static_cast<LONG>(ExtractInt(object, "y"));
+    event.dx = static_cast<LONG>(ExtractInt(object, "dx"));
+    event.dy = static_cast<LONG>(ExtractInt(object, "dy"));
+    event.wheelDelta = ExtractInt(object, "wheelDelta");
+    event.absoluteMove = ExtractBool(object, "absoluteMove");
+    event.shift = ExtractBool(object, "shift");
+    event.ctrl = ExtractBool(object, "ctrl");
+    event.alt = ExtractBool(object, "alt");
+    return event;
+}
+
+std::optional<MacroDefinition> MacroFromJson(const std::string& json)
+{
+    if (json.find("\"events\"") == std::string::npos)
+    {
+        return std::nullopt;
+    }
+
+    MacroDefinition macro;
+    macro.version = ExtractInt(json, "version", 1);
+    macro.id = ExtractString(json, "id");
+    macro.name = ExtractString(json, "name");
+    macro.description = ExtractString(json, "description");
+    macro.createdAt = ExtractString(json, "createdAt");
+    macro.updatedAt = ExtractString(json, "updatedAt");
+    macro.targetWindowTitle = ExtractString(json, "targetWindowTitle");
+    macro.targetProcessName = ExtractString(json, "targetProcessName");
+    macro.defaultPlaybackSpeed = std::clamp(ExtractDouble(json, "defaultPlaybackSpeed", 1.0), 0.1, 10.0);
+    macro.defaultLoopCount = std::clamp(ExtractInt(json, "defaultLoopCount", 1), 1, 999);
+    macro.defaultLoopUntilStopped = ExtractBool(json, "defaultLoopUntilStopped");
+    macro.requireTargetFocused = ExtractBool(json, "requireTargetFocused");
+
+    const std::string modeObject = ExtractObject(json, "recordingMode");
+    if (!modeObject.empty())
+    {
+        macro.recordingMode.mouseMode = MouseModeFromName(ExtractString(modeObject, "mouseMode"));
+        macro.recordingMode.captureRateHz = std::clamp(ExtractInt(modeObject, "captureRateHz", 120), 30, 240);
+    }
+
+    for (const std::string& object : ExtractObjectsInArray(json, "events"))
+    {
+        MacroEvent event = EventFromJson(object);
+        if (event.timeUs >= 0)
+        {
+            macro.events.push_back(event);
+        }
+    }
+
+    std::sort(macro.events.begin(), macro.events.end(), [](const MacroEvent& left, const MacroEvent& right)
+    {
+        return left.timeUs < right.timeUs;
+    });
+
+    if (macro.id.empty())
+    {
+        macro.id = MacroStorageService::GenerateId();
+    }
+    if (Trim(macro.name).empty())
+    {
+        macro.name = L"Imported Macro";
+    }
+    if (macro.createdAt.empty())
+    {
+        macro.createdAt = MacroStorageService::FormatLocalIso(std::chrono::system_clock::now());
+    }
+    if (macro.updatedAt.empty())
+    {
+        macro.updatedAt = macro.createdAt;
+    }
+    if (macro.events.empty())
+    {
+        return std::nullopt;
+    }
+
+    return macro;
+}
+
+std::string MacroToJson(const MacroDefinition& macro)
+{
+    std::ostringstream output;
+    output << "{\n";
+    output << "  \"version\": 1,\n";
+    WriteStringField(output, "  ", "id", macro.id);
+    WriteStringField(output, "  ", "name", macro.name);
+    WriteStringField(output, "  ", "description", macro.description);
+    WriteStringField(output, "  ", "createdAt", macro.createdAt);
+    WriteStringField(output, "  ", "updatedAt", macro.updatedAt);
+    WriteStringField(output, "  ", "targetWindowTitle", macro.targetWindowTitle);
+    WriteStringField(output, "  ", "targetProcessName", macro.targetProcessName);
+    output << "  \"recordingMode\": {\n";
+    WriteStringField(output, "    ", "mouseMode", MouseModeName(macro.recordingMode.mouseMode));
+    output << "    \"captureRateHz\": " << macro.recordingMode.captureRateHz << "\n";
+    output << "  },\n";
+    output << "  \"defaultPlaybackSpeed\": " << std::fixed << std::setprecision(2) << macro.defaultPlaybackSpeed << ",\n";
+    output << "  \"defaultLoopCount\": " << macro.defaultLoopCount << ",\n";
+    output << "  \"defaultLoopUntilStopped\": " << (macro.defaultLoopUntilStopped ? "true" : "false") << ",\n";
+    output << "  \"requireTargetFocused\": " << (macro.requireTargetFocused ? "true" : "false") << ",\n";
+    output << "  \"events\": [\n";
+    for (size_t index = 0; index < macro.events.size(); ++index)
+    {
+        const MacroEvent& event = macro.events[index];
+        output << "    {\n";
+        output << "      \"timeUs\": " << event.timeUs << ",\n";
+        WriteStringField(output, "      ", "type", EventTypeName(event.type));
+        output << "      \"keyCode\": " << event.virtualKey << ",\n";
+        output << "      \"scanCode\": " << event.scanCode << ",\n";
+        output << "      \"keyFlags\": " << event.keyFlags << ",\n";
+        WriteStringField(output, "      ", "mouseButton", MouseButtonName(event.mouseButton));
+        output << "      \"x\": " << event.x << ",\n";
+        output << "      \"y\": " << event.y << ",\n";
+        output << "      \"dx\": " << event.dx << ",\n";
+        output << "      \"dy\": " << event.dy << ",\n";
+        output << "      \"wheelDelta\": " << event.wheelDelta << ",\n";
+        output << "      \"absoluteMove\": " << (event.absoluteMove ? "true" : "false") << ",\n";
+        output << "      \"shift\": " << (event.shift ? "true" : "false") << ",\n";
+        output << "      \"ctrl\": " << (event.ctrl ? "true" : "false") << ",\n";
+        output << "      \"alt\": " << (event.alt ? "true" : "false") << "\n";
+        output << "    }" << (index + 1 == macro.events.size() ? "\n" : ",\n");
+    }
+    output << "  ]\n";
+    output << "}\n";
+    return output.str();
+}
+
+std::wstring ProcessNameFromId(DWORD processId)
+{
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+    if (!process)
+    {
+        return {};
+    }
+
+    wchar_t path[MAX_PATH] {};
+    DWORD length = static_cast<DWORD>(std::size(path));
+    std::wstring result;
+    if (QueryFullProcessImageNameW(process, 0, path, &length) && length > 0)
+    {
+        result = std::filesystem::path(path).filename().wstring();
+    }
+    CloseHandle(process);
+    return result;
+}
+
+std::wstring KeyName(UINT virtualKey)
+{
+    if (virtualKey == 0)
+    {
+        return L"Unbound";
+    }
+
+    UINT scanCode = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC);
+    LONG lParam = static_cast<LONG>(scanCode << 16);
+    if (virtualKey == VK_LEFT || virtualKey == VK_UP || virtualKey == VK_RIGHT || virtualKey == VK_DOWN ||
+        virtualKey == VK_PRIOR || virtualKey == VK_NEXT || virtualKey == VK_END || virtualKey == VK_HOME ||
+        virtualKey == VK_INSERT || virtualKey == VK_DELETE || virtualKey == VK_DIVIDE || virtualKey == VK_NUMLOCK)
+    {
+        lParam |= (1 << 24);
+    }
+
+    wchar_t name[64] {};
+    if (GetKeyNameTextW(lParam, name, static_cast<int>(std::size(name))) > 0)
+    {
+        return name;
+    }
+
+    if (virtualKey >= 'A' && virtualKey <= 'Z')
+    {
+        return std::wstring(1, static_cast<wchar_t>(virtualKey));
+    }
+    if (virtualKey >= '0' && virtualKey <= '9')
+    {
+        return std::wstring(1, static_cast<wchar_t>(virtualKey));
+    }
+
+    return L"VK " + std::to_wstring(virtualKey);
+}
+
+LONG NormalizeAbsoluteCoordinate(LONG value, int origin, int size)
+{
+    if (size <= 1)
+    {
+        return 0;
+    }
+    return static_cast<LONG>(std::clamp(
+        static_cast<long long>(value - origin) * 65535ll / static_cast<long long>(size - 1),
+        0ll,
+        65535ll));
+}
+
+bool CurrentModifiersMatch(UINT modifiers)
+{
+    const bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    const bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    if (((modifiers & MOD_SHIFT) != 0) != shift) return false;
+    if (((modifiers & MOD_CONTROL) != 0) != ctrl) return false;
+    if (((modifiers & MOD_ALT) != 0) != alt) return false;
+    return true;
+}
+
+bool IsCursorShowing()
+{
+    CURSORINFO cursorInfo {};
+    cursorInfo.cbSize = sizeof(cursorInfo);
+    return GetCursorInfo(&cursorInfo) &&
+        (cursorInfo.flags & CURSOR_SHOWING) != 0;
+}
+
+std::filesystem::path ExecutableDirectory()
+{
+    std::vector<wchar_t> buffer(MAX_PATH, L'\0');
+    while (true)
+    {
+        const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+        if (length == 0)
+        {
+            return {};
+        }
+        if (length < buffer.size() - 1)
+        {
+            return std::filesystem::path(std::wstring(buffer.data(), length)).parent_path();
+        }
+        buffer.resize(buffer.size() * 2, L'\0');
+    }
+}
+
+unsigned short InterceptionMouseStateForButton(MacroMouseButton button, bool down)
+{
+    switch (button)
+    {
+    case MacroMouseButton::Left:
+        return down ? kInterceptionMouseLeftDown : kInterceptionMouseLeftUp;
+    case MacroMouseButton::Right:
+        return down ? kInterceptionMouseRightDown : kInterceptionMouseRightUp;
+    case MacroMouseButton::Middle:
+        return down ? kInterceptionMouseMiddleDown : kInterceptionMouseMiddleUp;
+    case MacroMouseButton::X1:
+        return down ? kInterceptionMouseButton4Down : kInterceptionMouseButton4Up;
+    case MacroMouseButton::X2:
+        return down ? kInterceptionMouseButton5Down : kInterceptionMouseButton5Up;
+    case MacroMouseButton::None:
+        break;
+    }
+    return 0;
+}
+
+class InterceptionPlaybackBackend
+{
+public:
+    ~InterceptionPlaybackBackend()
+    {
+        if (context_ && destroyContext_)
+        {
+            destroyContext_(context_);
+        }
+        if (module_)
+        {
+            FreeLibrary(module_);
+        }
+    }
+
+    bool Initialize(std::wstring& errorMessage)
+    {
+        const std::filesystem::path bundledPath = ExecutableDirectory() / kInterceptionDllRelativePath;
+        module_ = LoadLibraryW(bundledPath.c_str());
+        if (!module_)
+        {
+            module_ = LoadLibraryW(L"interception.dll");
+        }
+        if (!module_)
+        {
+            errorMessage = L"Interception playback is unavailable. The bundled interception.dll was not found beside Rex's Toolkit.";
+            return false;
+        }
+
+        createContext_ = reinterpret_cast<CreateContextProc>(GetProcAddress(module_, "interception_create_context"));
+        destroyContext_ = reinterpret_cast<DestroyContextProc>(GetProcAddress(module_, "interception_destroy_context"));
+        send_ = reinterpret_cast<SendProc>(GetProcAddress(module_, "interception_send"));
+        getHardwareId_ = reinterpret_cast<GetHardwareIdProc>(GetProcAddress(module_, "interception_get_hardware_id"));
+        if (!createContext_ || !destroyContext_ || !send_ || !getHardwareId_)
+        {
+            errorMessage = L"Interception playback is unavailable. The bundled interception.dll is missing required functions.";
+            return false;
+        }
+
+        context_ = createContext_();
+        if (!context_)
+        {
+            errorMessage = L"Interception playback is unavailable. Install the bundled Interception driver as administrator, then restart Rex's Toolkit.";
+            return false;
+        }
+
+        keyboardDevice_ = FindDevice(kInterceptionKeyboardBase, kInterceptionMaxKeyboard);
+        mouseDevice_ = FindDevice(kInterceptionMouseBase, kInterceptionMaxMouse);
+        if (keyboardDevice_ <= 0 && mouseDevice_ <= 0)
+        {
+            errorMessage = L"Interception playback is unavailable. No Interception keyboard or mouse devices were found. Install the driver as administrator, then restart Rex's Toolkit.";
+            return false;
+        }
+
+        return true;
+    }
+
+    bool SendEvent(const MacroEvent& event, MacroMouseMode mode)
+    {
+        if (event.type == MacroEventType::KeyDown || event.type == MacroEventType::KeyUp)
+        {
+            if (keyboardDevice_ <= 0)
+            {
+                return false;
+            }
+
+            InterceptionKeyStroke key {};
+            key.code = static_cast<unsigned short>(event.scanCode != 0
+                ? event.scanCode
+                : MapVirtualKeyW(event.virtualKey, MAPVK_VK_TO_VSC));
+            if (key.code == 0)
+            {
+                return false;
+            }
+            key.state = (event.type == MacroEventType::KeyUp ? kInterceptionKeyUp : 0);
+            if ((event.keyFlags & LLKHF_EXTENDED) != 0)
+            {
+                key.state |= kInterceptionKeyE0;
+            }
+            key.information = static_cast<unsigned int>(kMacroPlaybackExtraInfo);
+
+            InterceptionStroke stroke {};
+            std::memcpy(stroke, &key, sizeof(key));
+            return send_(context_, keyboardDevice_, &stroke, 1) == 1;
+        }
+
+        if (mouseDevice_ <= 0)
+        {
+            return false;
+        }
+
+        InterceptionMouseStroke mouse {};
+        mouse.information = static_cast<unsigned int>(kMacroPlaybackExtraInfo);
+        if (event.type == MacroEventType::MouseMove)
+        {
+            if (mode == MacroMouseMode::Relative && !event.absoluteMove)
+            {
+                mouse.flags = kInterceptionMouseMoveRelative;
+                mouse.x = event.dx;
+                mouse.y = event.dy;
+            }
+            else
+            {
+                LONG x = event.x;
+                LONG y = event.y;
+                if (!event.absoluteMove && mode == MacroMouseMode::WindowRelative)
+                {
+                    HWND foreground = GetForegroundWindow();
+                    RECT rect {};
+                    if (foreground && GetWindowRect(foreground, &rect))
+                    {
+                        x += rect.left;
+                        y += rect.top;
+                    }
+                }
+
+                const int originX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                const int originY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                const int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+                const int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+                mouse.flags = kInterceptionMouseMoveAbsolute | kInterceptionMouseVirtualDesktop;
+                mouse.x = NormalizeAbsoluteCoordinate(x, originX, width);
+                mouse.y = NormalizeAbsoluteCoordinate(y, originY, height);
+            }
+        }
+        else if (event.type == MacroEventType::MouseDown || event.type == MacroEventType::MouseUp)
+        {
+            mouse.state = InterceptionMouseStateForButton(event.mouseButton, event.type == MacroEventType::MouseDown);
+        }
+        else if (event.type == MacroEventType::MouseWheel)
+        {
+            mouse.state = kInterceptionMouseWheel;
+            mouse.rolling = static_cast<short>(event.wheelDelta);
+        }
+
+        if (mouse.state == 0 && mouse.flags == 0 && event.type != MacroEventType::MouseMove)
+        {
+            return false;
+        }
+
+        InterceptionStroke stroke {};
+        std::memcpy(stroke, &mouse, sizeof(mouse));
+        return send_(context_, mouseDevice_, &stroke, 1) == 1;
+    }
+
+private:
+    using CreateContextProc = InterceptionContext (*)();
+    using DestroyContextProc = void (*)(InterceptionContext);
+    using SendProc = int (*)(InterceptionContext, InterceptionDevice, const InterceptionStroke*, unsigned int);
+    using GetHardwareIdProc = unsigned int (*)(InterceptionContext, InterceptionDevice, void*, unsigned int);
+
+    InterceptionDevice FindDevice(int base, int count) const
+    {
+        wchar_t hardwareId[512] {};
+        for (int index = 0; index < count; ++index)
+        {
+            const InterceptionDevice device = base + index;
+            std::memset(hardwareId, 0, sizeof(hardwareId));
+            if (getHardwareId_(context_, device, hardwareId, sizeof(hardwareId)) > 0)
+            {
+                return device;
+            }
+        }
+        return 0;
+    }
+
+    HMODULE module_ = nullptr;
+    InterceptionContext context_ = nullptr;
+    InterceptionDevice keyboardDevice_ = 0;
+    InterceptionDevice mouseDevice_ = 0;
+    CreateContextProc createContext_ = nullptr;
+    DestroyContextProc destroyContext_ = nullptr;
+    SendProc send_ = nullptr;
+    GetHardwareIdProc getHardwareId_ = nullptr;
+};
+}
+
+class InterceptionCaptureSession
+{
+public:
+    explicit InterceptionCaptureSession(MacroRecorderService& owner) : owner_(owner) {}
+
+    ~InterceptionCaptureSession()
+    {
+        Stop();
+        if (context_ && destroyContext_)
+        {
+            destroyContext_(context_);
+        }
+        if (module_)
+        {
+            FreeLibrary(module_);
+        }
+    }
+
+    bool Initialize(std::wstring& errorMessage)
+    {
+        const std::filesystem::path bundledPath = ExecutableDirectory() / kInterceptionDllRelativePath;
+        module_ = LoadLibraryW(bundledPath.c_str());
+        if (!module_)
+        {
+            module_ = LoadLibraryW(L"interception.dll");
+        }
+        if (!module_)
+        {
+            errorMessage = L"Driver-enhanced recording is unavailable. The bundled interception.dll was not found beside Rex's Toolkit.";
+            return false;
+        }
+
+        createContext_ = reinterpret_cast<CreateContextProc>(GetProcAddress(module_, "interception_create_context"));
+        destroyContext_ = reinterpret_cast<DestroyContextProc>(GetProcAddress(module_, "interception_destroy_context"));
+        setFilter_ = reinterpret_cast<SetFilterProc>(GetProcAddress(module_, "interception_set_filter"));
+        waitWithTimeout_ = reinterpret_cast<WaitWithTimeoutProc>(GetProcAddress(module_, "interception_wait_with_timeout"));
+        receive_ = reinterpret_cast<ReceiveProc>(GetProcAddress(module_, "interception_receive"));
+        send_ = reinterpret_cast<SendProc>(GetProcAddress(module_, "interception_send"));
+        isKeyboard_ = reinterpret_cast<PredicateProc>(GetProcAddress(module_, "interception_is_keyboard"));
+        isMouse_ = reinterpret_cast<PredicateProc>(GetProcAddress(module_, "interception_is_mouse"));
+        if (!createContext_ || !destroyContext_ || !setFilter_ || !waitWithTimeout_ || !receive_ || !send_ || !isKeyboard_ || !isMouse_)
+        {
+            errorMessage = L"Driver-enhanced recording is unavailable. The bundled interception.dll is missing required functions.";
+            return false;
+        }
+
+        context_ = createContext_();
+        if (!context_)
+        {
+            errorMessage = L"Driver-enhanced recording is unavailable. Install the bundled Interception driver as administrator, then restart Windows.";
+            return false;
+        }
+
+        return true;
+    }
+
+    bool Start(std::wstring& errorMessage)
+    {
+        if (!context_ || !setFilter_ || !waitWithTimeout_ || !receive_ || !send_)
+        {
+            errorMessage = L"Driver-enhanced recording is unavailable.";
+            return false;
+        }
+
+        stopRequested_.store(false);
+        setFilter_(context_, isKeyboard_, kInterceptionFilterAll);
+        setFilter_(context_, isMouse_, kInterceptionFilterAll);
+
+        try
+        {
+            captureThread_ = std::thread(&InterceptionCaptureSession::CaptureLoop, this);
+        }
+        catch (const std::system_error&)
+        {
+            setFilter_(context_, isKeyboard_, 0);
+            setFilter_(context_, isMouse_, 0);
+            stopRequested_.store(true);
+            errorMessage = L"Driver-enhanced recording could not start its capture thread.";
+            return false;
+        }
+        return true;
+    }
+
+    void Stop()
+    {
+        stopRequested_.store(true);
+        if (context_ && setFilter_)
+        {
+            setFilter_(context_, isKeyboard_, 0);
+            setFilter_(context_, isMouse_, 0);
+        }
+        if (captureThread_.joinable())
+        {
+            captureThread_.join();
+        }
+    }
+
+private:
+    using PredicateProc = int (*)(InterceptionDevice);
+    using CreateContextProc = InterceptionContext (*)();
+    using DestroyContextProc = void (*)(InterceptionContext);
+    using SetFilterProc = void (*)(InterceptionContext, PredicateProc, unsigned short);
+    using WaitWithTimeoutProc = InterceptionDevice (*)(InterceptionContext, unsigned long);
+    using ReceiveProc = int (*)(InterceptionContext, InterceptionDevice, InterceptionStroke*, unsigned int);
+    using SendProc = int (*)(InterceptionContext, InterceptionDevice, const InterceptionStroke*, unsigned int);
+
+    void CaptureLoop()
+    {
+        const bool timerResolutionRaised = timeBeginPeriod(1) == TIMERR_NOERROR;
+        const HANDLE currentThread = GetCurrentThread();
+        const int previousThreadPriority = GetThreadPriority(currentThread);
+        if (previousThreadPriority != THREAD_PRIORITY_ERROR_RETURN)
+        {
+            SetThreadPriority(currentThread, THREAD_PRIORITY_TIME_CRITICAL);
+        }
+
+        while (!stopRequested_.load())
+        {
+            const InterceptionDevice device = waitWithTimeout_(context_, 5);
+            if (device <= 0)
+            {
+                continue;
+            }
+
+            InterceptionStroke stroke {};
+            if (receive_(context_, device, &stroke, 1) <= 0)
+            {
+                continue;
+            }
+
+            const long long eventTimeUs = owner_.ElapsedUs();
+
+            // Pass the real hardware event through immediately; recording work happens after that.
+            send_(context_, device, &stroke, 1);
+
+            if (isKeyboard_(device))
+            {
+                InterceptionKeyStroke key {};
+                std::memcpy(&key, &stroke, sizeof(key));
+                owner_.RecordInterceptionKeyboard(key.code, key.state, key.information, eventTimeUs);
+            }
+            else if (isMouse_(device))
+            {
+                InterceptionMouseStroke mouse {};
+                std::memcpy(&mouse, &stroke, sizeof(mouse));
+                owner_.RecordInterceptionMouse(mouse.state, mouse.flags, mouse.rolling, mouse.x, mouse.y, mouse.information, eventTimeUs);
+            }
+        }
+
+        if (previousThreadPriority != THREAD_PRIORITY_ERROR_RETURN)
+        {
+            SetThreadPriority(currentThread, previousThreadPriority);
+        }
+        if (timerResolutionRaised)
+        {
+            timeEndPeriod(1);
+        }
+    }
+
+    MacroRecorderService& owner_;
+    HMODULE module_ = nullptr;
+    InterceptionContext context_ = nullptr;
+    std::thread captureThread_;
+    std::atomic_bool stopRequested_ = true;
+    CreateContextProc createContext_ = nullptr;
+    DestroyContextProc destroyContext_ = nullptr;
+    SetFilterProc setFilter_ = nullptr;
+    WaitWithTimeoutProc waitWithTimeout_ = nullptr;
+    ReceiveProc receive_ = nullptr;
+    SendProc send_ = nullptr;
+    PredicateProc isKeyboard_ = nullptr;
+    PredicateProc isMouse_ = nullptr;
+};
+
+void MacroTargetWindowService::CaptureForegroundTarget(std::wstring& title, std::wstring& processName)
+{
+    title.clear();
+    processName.clear();
+
+    HWND foreground = GetForegroundWindow();
+    if (!foreground)
+    {
+        return;
+    }
+
+    wchar_t titleBuffer[256] {};
+    GetWindowTextW(foreground, titleBuffer, static_cast<int>(std::size(titleBuffer)));
+    title = titleBuffer;
+
+    DWORD processId = 0;
+    GetWindowThreadProcessId(foreground, &processId);
+    if (processId != 0)
+    {
+        processName = ProcessNameFromId(processId);
+    }
+}
+
+bool MacroTargetWindowService::IsTargetFocused(const MacroDefinition& macro)
+{
+    if (macro.targetWindowTitle.empty() && macro.targetProcessName.empty())
+    {
+        return true;
+    }
+
+    std::wstring title;
+    std::wstring processName;
+    CaptureForegroundTarget(title, processName);
+    if (!macro.targetProcessName.empty() && processName == macro.targetProcessName)
+    {
+        return true;
+    }
+    return !macro.targetWindowTitle.empty() && title == macro.targetWindowTitle;
+}
+
+std::wstring MacroTargetWindowService::ForegroundWindowLabel()
+{
+    std::wstring title;
+    std::wstring processName;
+    CaptureForegroundTarget(title, processName);
+    if (title.empty() && processName.empty())
+    {
+        return L"No foreground window detected";
+    }
+    if (processName.empty())
+    {
+        return title;
+    }
+    if (title.empty())
+    {
+        return processName;
+    }
+    return title + L" (" + processName + L")";
+}
+
+std::wstring MacroStorageService::GenerateId()
+{
+    GUID guid {};
+    if (FAILED(CoCreateGuid(&guid)))
+    {
+        return L"macro_" + std::to_wstring(GetTickCount64());
+    }
+
+    wchar_t buffer[64] {};
+    StringFromGUID2(guid, buffer, static_cast<int>(std::size(buffer)));
+    std::wstring text = buffer;
+    text.erase(std::remove(text.begin(), text.end(), L'{'), text.end());
+    text.erase(std::remove(text.begin(), text.end(), L'}'), text.end());
+    return text;
+}
+
+std::wstring MacroStorageService::FormatLocalIso(std::chrono::system_clock::time_point value)
+{
+    const std::time_t timeValue = std::chrono::system_clock::to_time_t(value);
+    std::tm local {};
+    localtime_s(&local, &timeValue);
+    wchar_t buffer[32] {};
+    wcsftime(buffer, std::size(buffer), L"%Y-%m-%dT%H:%M:%S", &local);
+    return buffer;
+}
+
+std::vector<MacroDefinition> MacroStorageService::LoadAll(const std::filesystem::path& directory, std::wstring& warning) const
+{
+    std::vector<MacroDefinition> macros;
+    std::error_code error;
+    if (!std::filesystem::exists(directory, error))
+    {
+        return macros;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(directory, error))
+    {
+        if (error || !entry.is_regular_file())
+        {
+            continue;
+        }
+
+        const std::wstring extension = entry.path().extension().wstring();
+        if (extension != L".rexmacro" && extension != L".json")
+        {
+            continue;
+        }
+
+        std::string json;
+        if (!ReadFileBytes(entry.path(), json))
+        {
+            warning = L"Some macros could not be read and were skipped.";
+            continue;
+        }
+
+        auto macro = MacroFromJson(json);
+        if (macro)
+        {
+            macros.push_back(std::move(*macro));
+        }
+        else
+        {
+            warning = L"Some macros were invalid and were skipped.";
+        }
+    }
+
+    std::sort(macros.begin(), macros.end(), [](const MacroDefinition& left, const MacroDefinition& right)
+    {
+        return left.updatedAt > right.updatedAt;
+    });
+    return macros;
+}
+
+bool MacroStorageService::Save(const std::filesystem::path& directory, const MacroDefinition& macro, std::wstring& errorMessage) const
+{
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (error)
+    {
+        errorMessage = L"Could not create the macro storage folder.";
+        return false;
+    }
+
+    const std::filesystem::path path = MacroFilePath(directory, macro);
+    if (std::filesystem::exists(path, error))
+    {
+        std::filesystem::copy_file(path, path.wstring() + L".bak", std::filesystem::copy_options::overwrite_existing, error);
+        error.clear();
+    }
+
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file)
+    {
+        errorMessage = L"Could not save the macro file.";
+        return false;
+    }
+
+    const std::string json = MacroToJson(macro);
+    file.write(json.data(), static_cast<std::streamsize>(json.size()));
+    return file.good();
+}
+
+bool MacroStorageService::Delete(const std::filesystem::path& directory, const MacroDefinition& macro, std::wstring& errorMessage) const
+{
+    std::error_code error;
+    std::filesystem::remove(MacroFilePath(directory, macro), error);
+    if (error)
+    {
+        errorMessage = L"Could not delete the macro file.";
+        return false;
+    }
+    return true;
+}
+
+bool MacroStorageService::ExportMacro(const MacroDefinition& macro, const std::filesystem::path& path, std::wstring& errorMessage) const
+{
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file)
+    {
+        errorMessage = L"Could not export the macro.";
+        return false;
+    }
+
+    const std::string json = MacroToJson(macro);
+    file.write(json.data(), static_cast<std::streamsize>(json.size()));
+    return file.good();
+}
+
+std::optional<MacroDefinition> MacroStorageService::ImportMacro(const std::filesystem::path& path, std::wstring& errorMessage) const
+{
+    std::string json;
+    if (!ReadFileBytes(path, json))
+    {
+        errorMessage = L"Could not read the selected macro file.";
+        return std::nullopt;
+    }
+
+    auto macro = MacroFromJson(json);
+    if (!macro)
+    {
+        errorMessage = L"That file is not a valid Rex macro.";
+        return std::nullopt;
+    }
+
+    macro->id = GenerateId();
+    macro->createdAt = FormatLocalIso(std::chrono::system_clock::now());
+    macro->updatedAt = macro->createdAt;
+    return macro;
+}
+
+MacroRecorderService::MacroRecorderService() = default;
+
+MacroRecorderService::~MacroRecorderService()
+{
+    CancelRecording();
+}
+
+bool MacroRecorderService::StartRecording(
+    HINSTANCE instance,
+    HWND rawInputWindow,
+    const MacroRecordingMode& mode,
+    MacroPlaybackBackend inputBackend,
+    const std::vector<MacroHotkey>& ignoredHotkeys,
+    std::wstring& errorMessage)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (status_ == MacroRecorderStatus::Recording)
+    {
+        errorMessage = L"Recording is already running.";
+        return false;
+    }
+
+    events_.clear();
+    events_.reserve(65536);
+    mode_ = mode;
+    mode_.captureRateHz = std::clamp(mode_.captureRateHz, 30, 240);
+    ignoredHotkeys_ = ignoredHotkeys;
+    haveLastMousePoint_ = false;
+    haveLastAbsoluteMousePoint_ = false;
+    lastMouseMoveUs_ = 0;
+    lastAbsoluteMouseMoveUs_ = 0;
+    pendingMouseStartUs_ = 0;
+    pendingMouseDx_ = 0;
+    pendingMouseDy_ = 0;
+    rawInputWindow_ = rawInputWindow;
+    rawMouseRegistered_ = false;
+    rawKeyboardRegistered_ = false;
+    interceptionRecording_ = false;
+    interceptionCaptureSession_.reset();
+    rawKeyDown_.clear();
+    MacroTargetWindowService::CaptureForegroundTarget(targetWindowTitle_, targetProcessName_);
+    startTime_ = std::chrono::steady_clock::now();
+    lastEventTime_ = startTime_;
+    startTickMs_ = GetTickCount();
+
+    if (inputBackend == MacroPlaybackBackend::Interception)
+    {
+        auto session = std::make_unique<InterceptionCaptureSession>(*this);
+        if (!session->Initialize(errorMessage))
+        {
+            status_ = MacroRecorderStatus::Idle;
+            return false;
+        }
+
+        status_ = MacroRecorderStatus::Recording;
+        interceptionRecording_ = true;
+        interceptionCaptureSession_ = std::move(session);
+        if (!interceptionCaptureSession_->Start(errorMessage))
+        {
+            interceptionCaptureSession_.reset();
+            interceptionRecording_ = false;
+            status_ = MacroRecorderStatus::Idle;
+            return false;
+        }
+        return true;
+    }
+
+    g_macroRecorder = this;
+    if (mode_.mouseMode == MacroMouseMode::Relative)
+    {
+        rawMouseRegistered_ = RegisterRawMouseInput(rawInputWindow_);
+        rawKeyboardRegistered_ = RegisterRawKeyboardInput(rawInputWindow_);
+    }
+
+    const bool needsKeyboardHook = !rawKeyboardRegistered_;
+    const bool needsMouseHook = mode_.mouseMode != MacroMouseMode::Relative || !rawMouseRegistered_;
+    if (needsKeyboardHook)
+    {
+        keyboardHook_ = SetWindowsHookExW(WH_KEYBOARD_LL, MacroRecorderService::KeyboardHookProc, instance, 0);
+    }
+    if (needsMouseHook)
+    {
+        mouseHook_ = SetWindowsHookExW(WH_MOUSE_LL, MacroRecorderService::MouseHookProc, instance, 0);
+    }
+
+    if ((needsKeyboardHook && !keyboardHook_) || (needsMouseHook && !mouseHook_))
+    {
+        if (keyboardHook_)
+        {
+            UnhookWindowsHookEx(keyboardHook_);
+            keyboardHook_ = nullptr;
+        }
+        if (mouseHook_)
+        {
+            UnhookWindowsHookEx(mouseHook_);
+            mouseHook_ = nullptr;
+        }
+        UnregisterRawMouseInput();
+        UnregisterRawKeyboardInput();
+        g_macroRecorder = nullptr;
+        status_ = MacroRecorderStatus::Idle;
+        errorMessage = L"Could not start recording. Windows did not allow the input hooks.";
+        return false;
+    }
+
+    status_ = MacroRecorderStatus::Recording;
+    return true;
+}
+
+MacroDefinition MacroRecorderService::StopRecording(const std::wstring& requestedName)
+{
+    std::unique_ptr<InterceptionCaptureSession> captureSession;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        captureSession = std::move(interceptionCaptureSession_);
+    }
+    if (captureSession)
+    {
+        captureSession->Stop();
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (mode_.mouseMode == MacroMouseMode::Relative && (pendingMouseDx_ != 0 || pendingMouseDy_ != 0))
+    {
+        MacroEvent event;
+        event.timeUs = ElapsedUs();
+        event.type = MacroEventType::MouseMove;
+        event.dx = pendingMouseDx_;
+        event.dy = pendingMouseDy_;
+        events_.push_back(event);
+        pendingMouseDx_ = 0;
+        pendingMouseDy_ = 0;
+        pendingMouseStartUs_ = 0;
+    }
+    if (keyboardHook_)
+    {
+        UnhookWindowsHookEx(keyboardHook_);
+        keyboardHook_ = nullptr;
+    }
+    if (mouseHook_)
+    {
+        UnhookWindowsHookEx(mouseHook_);
+        mouseHook_ = nullptr;
+    }
+    UnregisterRawMouseInput();
+    UnregisterRawKeyboardInput();
+    g_macroRecorder = nullptr;
+    interceptionRecording_ = false;
+    status_ = MacroRecorderStatus::Stopped;
+
+    MacroDefinition macro;
+    macro.id = MacroStorageService::GenerateId();
+    macro.name = Trim(requestedName).empty() ? L"New Macro" : Trim(requestedName);
+    macro.createdAt = MacroStorageService::FormatLocalIso(std::chrono::system_clock::now());
+    macro.updatedAt = macro.createdAt;
+    macro.targetWindowTitle = targetWindowTitle_;
+    macro.targetProcessName = targetProcessName_;
+    macro.recordingMode = mode_;
+    macro.events = events_;
+    std::stable_sort(macro.events.begin(), macro.events.end(), [](const MacroEvent& left, const MacroEvent& right)
+    {
+        return left.timeUs < right.timeUs;
+    });
+    return macro;
+}
+
+void MacroRecorderService::CancelRecording()
+{
+    std::unique_ptr<InterceptionCaptureSession> captureSession;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        captureSession = std::move(interceptionCaptureSession_);
+    }
+    if (captureSession)
+    {
+        captureSession->Stop();
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (keyboardHook_)
+    {
+        UnhookWindowsHookEx(keyboardHook_);
+        keyboardHook_ = nullptr;
+    }
+    if (mouseHook_)
+    {
+        UnhookWindowsHookEx(mouseHook_);
+        mouseHook_ = nullptr;
+    }
+    UnregisterRawMouseInput();
+    UnregisterRawKeyboardInput();
+    if (g_macroRecorder == this)
+    {
+        g_macroRecorder = nullptr;
+    }
+    status_ = MacroRecorderStatus::Idle;
+    interceptionRecording_ = false;
+    events_.clear();
+    rawKeyDown_.clear();
+    pendingMouseDx_ = 0;
+    pendingMouseDy_ = 0;
+    pendingMouseStartUs_ = 0;
+    haveLastAbsoluteMousePoint_ = false;
+    lastAbsoluteMouseMoveUs_ = 0;
+}
+
+bool MacroRecorderService::HandleRawInput(LPARAM lParam)
+{
+    if (mode_.mouseMode != MacroMouseMode::Relative || status_ != MacroRecorderStatus::Recording)
+    {
+        return false;
+    }
+
+    RAWINPUT stackInput {};
+    UINT size = sizeof(stackInput);
+    UINT bytesRead = GetRawInputData(
+        reinterpret_cast<HRAWINPUT>(lParam),
+        RID_INPUT,
+        &stackInput,
+        &size,
+        sizeof(RAWINPUTHEADER));
+
+    std::vector<BYTE> buffer;
+    const RAWINPUT* rawInput = nullptr;
+    if (bytesRead != static_cast<UINT>(-1))
+    {
+        rawInput = &stackInput;
+    }
+    else if (size > sizeof(stackInput))
+    {
+        buffer.resize(size);
+        bytesRead = GetRawInputData(
+            reinterpret_cast<HRAWINPUT>(lParam),
+            RID_INPUT,
+            buffer.data(),
+            &size,
+            sizeof(RAWINPUTHEADER));
+        if (bytesRead == static_cast<UINT>(-1) || bytesRead == 0)
+        {
+            return false;
+        }
+        rawInput = reinterpret_cast<const RAWINPUT*>(buffer.data());
+    }
+
+    if (!rawInput)
+    {
+        return false;
+    }
+
+    const long long messageTimeUs = ElapsedUsFromMessageTime(static_cast<DWORD>(GetMessageTime()));
+
+    if (rawInput->header.dwType == RIM_TYPEKEYBOARD && rawKeyboardRegistered_)
+    {
+        const RAWKEYBOARD& keyboard = rawInput->data.keyboard;
+        DWORD virtualKey = keyboard.VKey;
+        if (virtualKey == 255)
+        {
+            return true;
+        }
+
+        if (virtualKey == VK_SHIFT)
+        {
+            const UINT mapped = MapVirtualKeyW(keyboard.MakeCode, MAPVK_VSC_TO_VK_EX);
+            if (mapped != 0)
+            {
+                virtualKey = mapped;
+            }
+        }
+
+        const bool keyUp = (keyboard.Flags & RI_KEY_BREAK) != 0;
+        if (ShouldIgnoreKeyboardEvent(virtualKey, keyUp ? WM_KEYUP : WM_KEYDOWN))
+        {
+            return true;
+        }
+
+        const DWORD identity = (virtualKey << 16) | keyboard.MakeCode | ((keyboard.Flags & RI_KEY_E0) ? 0x01000000u : 0u);
+        const bool alreadyDown = rawKeyDown_.find(identity) != rawKeyDown_.end();
+        if (!keyUp && alreadyDown)
+        {
+            return true;
+        }
+        if (keyUp && !alreadyDown)
+        {
+            return true;
+        }
+
+        if (keyUp)
+        {
+            rawKeyDown_.erase(identity);
+        }
+        else
+        {
+            rawKeyDown_[identity] = true;
+        }
+
+        MacroEvent event;
+        event.timeUs = messageTimeUs;
+        event.type = keyUp ? MacroEventType::KeyUp : MacroEventType::KeyDown;
+        event.virtualKey = virtualKey;
+        event.scanCode = keyboard.MakeCode;
+        event.keyFlags = ((keyboard.Flags & RI_KEY_E0) != 0 || (keyboard.Flags & RI_KEY_E1) != 0) ? LLKHF_EXTENDED : 0;
+        event.shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+        event.ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+        event.alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        FlushPendingRelativeMouseMove(event.timeUs);
+        AddEvent(event);
+        return true;
+    }
+
+    if (rawInput->header.dwType != RIM_TYPEMOUSE || !rawMouseRegistered_)
+    {
+        return false;
+    }
+
+    const RAWMOUSE& mouse = rawInput->data.mouse;
+    const long long nowUs = messageTimeUs;
+    POINT cursor {};
+    bool haveCursor = false;
+    bool cursorVisible = false;
+    bool cursorVisibilityKnown = false;
+    auto ensureCursor = [&]()
+    {
+        if (!haveCursor)
+        {
+            GetCursorPos(&cursor);
+            haveCursor = true;
+        }
+    };
+    auto isCursorVisible = [&]()
+    {
+        if (!cursorVisibilityKnown)
+        {
+            cursorVisible = IsCursorShowing();
+            cursorVisibilityKnown = true;
+        }
+        return cursorVisible;
+    };
+
+    auto addMouseButton = [&](MacroMouseButton button, bool down)
+    {
+        ensureCursor();
+        FlushPendingRelativeMouseMove(nowUs);
+        if (isCursorVisible())
+        {
+            AddAbsoluteMouseMove(nowUs, cursor, true);
+        }
+        MacroEvent event;
+        event.timeUs = nowUs;
+        event.type = down ? MacroEventType::MouseDown : MacroEventType::MouseUp;
+        event.mouseButton = button;
+        event.x = cursor.x;
+        event.y = cursor.y;
+        AddEvent(event);
+    };
+
+    if ((mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0)
+    {
+        const LONG dx = mouse.lLastX;
+        const LONG dy = mouse.lLastY;
+        if (dx != 0 || dy != 0)
+        {
+            if (isCursorVisible())
+            {
+                ensureCursor();
+                FlushPendingRelativeMouseMove(nowUs);
+                AddAbsoluteMouseMove(nowUs, cursor, false);
+            }
+            else
+            {
+                haveLastAbsoluteMousePoint_ = false;
+                AddRelativeMouseMove(nowUs, dx, dy);
+            }
+        }
+    }
+    else if (isCursorVisible())
+    {
+        ensureCursor();
+        FlushPendingRelativeMouseMove(nowUs);
+        AddAbsoluteMouseMove(nowUs, cursor, false);
+    }
+
+    const USHORT flags = mouse.usButtonFlags;
+    if ((flags & RI_MOUSE_LEFT_BUTTON_DOWN) != 0) addMouseButton(MacroMouseButton::Left, true);
+    if ((flags & RI_MOUSE_LEFT_BUTTON_UP) != 0) addMouseButton(MacroMouseButton::Left, false);
+    if ((flags & RI_MOUSE_RIGHT_BUTTON_DOWN) != 0) addMouseButton(MacroMouseButton::Right, true);
+    if ((flags & RI_MOUSE_RIGHT_BUTTON_UP) != 0) addMouseButton(MacroMouseButton::Right, false);
+    if ((flags & RI_MOUSE_MIDDLE_BUTTON_DOWN) != 0) addMouseButton(MacroMouseButton::Middle, true);
+    if ((flags & RI_MOUSE_MIDDLE_BUTTON_UP) != 0) addMouseButton(MacroMouseButton::Middle, false);
+    if ((flags & RI_MOUSE_BUTTON_4_DOWN) != 0) addMouseButton(MacroMouseButton::X1, true);
+    if ((flags & RI_MOUSE_BUTTON_4_UP) != 0) addMouseButton(MacroMouseButton::X1, false);
+    if ((flags & RI_MOUSE_BUTTON_5_DOWN) != 0) addMouseButton(MacroMouseButton::X2, true);
+    if ((flags & RI_MOUSE_BUTTON_5_UP) != 0) addMouseButton(MacroMouseButton::X2, false);
+
+    if ((flags & RI_MOUSE_WHEEL) != 0 || (flags & RI_MOUSE_HWHEEL) != 0)
+    {
+        ensureCursor();
+        FlushPendingRelativeMouseMove(nowUs);
+        if (isCursorVisible())
+        {
+            AddAbsoluteMouseMove(nowUs, cursor, true);
+        }
+        MacroEvent event;
+        event.timeUs = nowUs;
+        event.type = MacroEventType::MouseWheel;
+        event.wheelDelta = static_cast<SHORT>(mouse.usButtonData);
+        event.x = cursor.x;
+        event.y = cursor.y;
+        AddEvent(event);
+    }
+
+    return true;
+}
+
+MacroRecorderSnapshot MacroRecorderService::Snapshot() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    MacroRecorderSnapshot snapshot;
+    snapshot.status = status_;
+    snapshot.targetWindowTitle = targetWindowTitle_;
+    snapshot.targetProcessName = targetProcessName_;
+    snapshot.eventCount = events_.size();
+    snapshot.durationUs = status_ == MacroRecorderStatus::Recording
+        ? std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTime_).count()
+        : (events_.empty() ? 0 : events_.back().timeUs);
+    if (status_ == MacroRecorderStatus::Recording)
+    {
+        snapshot.message = L"Recording macro... press the record hotkey to stop.";
+    }
+    else if (status_ == MacroRecorderStatus::Stopped)
+    {
+        snapshot.message = L"Recording stopped. Save it when ready.";
+    }
+    else
+    {
+        snapshot.message = L"Idle.";
+    }
+    return snapshot;
+}
+
+bool MacroRecorderService::IsRecording() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return status_ == MacroRecorderStatus::Recording;
+}
+
+LRESULT CALLBACK MacroRecorderService::KeyboardHookProc(int code, WPARAM wParam, LPARAM lParam)
+{
+    if (g_macroRecorder)
+    {
+        return g_macroRecorder->HandleKeyboard(code, wParam, lParam);
+    }
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+LRESULT CALLBACK MacroRecorderService::MouseHookProc(int code, WPARAM wParam, LPARAM lParam)
+{
+    if (g_macroRecorder)
+    {
+        return g_macroRecorder->HandleMouse(code, wParam, lParam);
+    }
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+LRESULT MacroRecorderService::HandleKeyboard(int code, WPARAM wParam, LPARAM lParam)
+{
+    if (code != HC_ACTION)
+    {
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    }
+
+    const auto* keyboard = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+    if (!keyboard || (keyboard->flags & LLKHF_INJECTED))
+    {
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    }
+
+    if (ShouldIgnoreKeyboardEvent(keyboard->vkCode, wParam))
+    {
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    }
+
+    if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN || wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+    {
+        MacroEvent event;
+        event.timeUs = ElapsedUsFromMessageTime(keyboard->time);
+        event.type = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) ? MacroEventType::KeyDown : MacroEventType::KeyUp;
+        event.virtualKey = keyboard->vkCode;
+        event.scanCode = keyboard->scanCode;
+        event.keyFlags = keyboard->flags;
+        event.shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+        event.ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+        event.alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        AddEvent(event);
+    }
+
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+LRESULT MacroRecorderService::HandleMouse(int code, WPARAM wParam, LPARAM lParam)
+{
+    if (code != HC_ACTION)
+    {
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    }
+
+    const auto* mouse = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
+    if (!mouse || (mouse->flags & LLMHF_INJECTED) || mouse->dwExtraInfo == kMacroPlaybackExtraInfo)
+    {
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    }
+
+    const long long nowUs = ElapsedUsFromMessageTime(mouse->time);
+    if (wParam == WM_MOUSEMOVE)
+    {
+        if (mode_.mouseMode == MacroMouseMode::Relative && rawMouseRegistered_)
+        {
+            return CallNextHookEx(nullptr, code, wParam, lParam);
+        }
+
+        LONG dx = 0;
+        LONG dy = 0;
+        if (ShouldCaptureMove(nowUs, mouse->pt, dx, dy))
+        {
+            MacroEvent event;
+            event.timeUs = nowUs;
+            event.type = MacroEventType::MouseMove;
+            event.x = mouse->pt.x;
+            event.y = mouse->pt.y;
+            event.dx = dx;
+            event.dy = dy;
+            if (mode_.mouseMode == MacroMouseMode::WindowRelative)
+            {
+                HWND foreground = GetForegroundWindow();
+                RECT rect {};
+                if (foreground && GetWindowRect(foreground, &rect))
+                {
+                    event.x = mouse->pt.x - rect.left;
+                    event.y = mouse->pt.y - rect.top;
+                }
+            }
+            AddEvent(event);
+        }
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    }
+
+    if (IsMouseDownMessage(wParam) || IsMouseUpMessage(wParam))
+    {
+        MacroEvent event;
+        event.timeUs = nowUs;
+        event.type = IsMouseDownMessage(wParam) ? MacroEventType::MouseDown : MacroEventType::MouseUp;
+        event.mouseButton = MouseButtonFromMessage(wParam, *mouse);
+        event.x = mouse->pt.x;
+        event.y = mouse->pt.y;
+        AddEvent(event);
+    }
+    else if (wParam == WM_MOUSEWHEEL || wParam == WM_MOUSEHWHEEL)
+    {
+        MacroEvent event;
+        event.timeUs = nowUs;
+        event.type = MacroEventType::MouseWheel;
+        event.wheelDelta = static_cast<SHORT>(HIWORD(mouse->mouseData));
+        event.x = mouse->pt.x;
+        event.y = mouse->pt.y;
+        AddEvent(event);
+    }
+
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+void MacroRecorderService::AddEvent(MacroEvent event)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    AddEventLocked(event);
+}
+
+void MacroRecorderService::AddEventLocked(MacroEvent event)
+{
+    if (status_ != MacroRecorderStatus::Recording)
+    {
+        return;
+    }
+    events_.push_back(event);
+    lastEventTime_ = std::chrono::steady_clock::now();
+}
+
+long long MacroRecorderService::ElapsedUs() const
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - startTime_).count();
+}
+
+long long MacroRecorderService::ElapsedUsFromMessageTime(DWORD messageTime) const
+{
+    if (messageTime == 0)
+    {
+        return ElapsedUs();
+    }
+
+    const DWORD deltaMs = messageTime - startTickMs_;
+    if (deltaMs > 0x7fffffffu)
+    {
+        return 0;
+    }
+    return static_cast<long long>(deltaMs) * 1000ll;
+}
+
+bool MacroRecorderService::ShouldIgnoreKeyboardEvent(DWORD virtualKey, WPARAM message) const
+{
+    if (!(message == WM_KEYDOWN || message == WM_SYSKEYDOWN || message == WM_KEYUP || message == WM_SYSKEYUP))
+    {
+        return false;
+    }
+
+    for (const MacroHotkey& hotkey : ignoredHotkeys_)
+    {
+        if (hotkey.virtualKey == virtualKey && CurrentModifiersMatch(hotkey.modifiers))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool MacroRecorderService::ShouldCaptureMove(long long nowUs, const POINT& point, LONG& dx, LONG& dy)
+{
+    if (!haveLastMousePoint_)
+    {
+        haveLastMousePoint_ = true;
+        lastMousePoint_ = point;
+        lastMouseMoveUs_ = nowUs;
+        pendingMouseDx_ = 0;
+        pendingMouseDy_ = 0;
+        dx = 0;
+        dy = 0;
+        return mode_.mouseMode != MacroMouseMode::Relative;
+    }
+
+    dx = point.x - lastMousePoint_.x;
+    dy = point.y - lastMousePoint_.y;
+    if (dx == 0 && dy == 0)
+    {
+        return false;
+    }
+
+    if (mode_.mouseMode == MacroMouseMode::Relative)
+    {
+        pendingMouseDx_ += dx;
+        pendingMouseDy_ += dy;
+        lastMousePoint_ = point;
+
+        const long long intervalUs = 1000000ll / std::max(30, mode_.captureRateHz);
+        if (nowUs - lastMouseMoveUs_ < intervalUs)
+        {
+            return false;
+        }
+
+        dx = pendingMouseDx_;
+        dy = pendingMouseDy_;
+        pendingMouseDx_ = 0;
+        pendingMouseDy_ = 0;
+        lastMouseMoveUs_ = nowUs;
+        return dx != 0 || dy != 0;
+    }
+
+    const long long intervalUs = 1000000ll / std::max(30, mode_.captureRateHz);
+    if (nowUs - lastMouseMoveUs_ < intervalUs)
+    {
+        lastMousePoint_ = point;
+        return false;
+    }
+
+    lastMousePoint_ = point;
+    lastMouseMoveUs_ = nowUs;
+    return true;
+}
+
+bool MacroRecorderService::ShouldCaptureAbsoluteMove(long long nowUs, const POINT& point, bool force)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return ShouldCaptureAbsoluteMoveLocked(nowUs, point, force);
+}
+
+bool MacroRecorderService::ShouldCaptureAbsoluteMoveLocked(long long nowUs, const POINT& point, bool force)
+{
+    if (!haveLastAbsoluteMousePoint_)
+    {
+        haveLastAbsoluteMousePoint_ = true;
+        lastAbsoluteMousePoint_ = point;
+        lastAbsoluteMouseMoveUs_ = nowUs;
+        return true;
+    }
+
+    if (point.x == lastAbsoluteMousePoint_.x && point.y == lastAbsoluteMousePoint_.y)
+    {
+        return force;
+    }
+
+    if (!force)
+    {
+        const long long intervalUs = 1000000ll / std::max(30, mode_.captureRateHz);
+        if (nowUs - lastAbsoluteMouseMoveUs_ < intervalUs)
+        {
+            lastAbsoluteMousePoint_ = point;
+            return false;
+        }
+    }
+
+    lastAbsoluteMousePoint_ = point;
+    lastAbsoluteMouseMoveUs_ = nowUs;
+    return true;
+}
+
+void MacroRecorderService::AddAbsoluteMouseMove(long long nowUs, const POINT& point, bool force)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    AddAbsoluteMouseMoveLocked(nowUs, point, force);
+}
+
+void MacroRecorderService::AddAbsoluteMouseMoveLocked(long long nowUs, const POINT& point, bool force)
+{
+    if (!ShouldCaptureAbsoluteMoveLocked(nowUs, point, force))
+    {
+        return;
+    }
+
+    MacroEvent event;
+    event.timeUs = nowUs;
+    event.type = MacroEventType::MouseMove;
+    event.x = point.x;
+    event.y = point.y;
+    event.absoluteMove = true;
+    AddEventLocked(event);
+}
+
+void MacroRecorderService::RecordInterceptionKeyboard(
+    unsigned short code,
+    unsigned short state,
+    unsigned int information,
+    long long timeUs)
+{
+    if (information == static_cast<unsigned int>(kMacroPlaybackExtraInfo))
+    {
+        return;
+    }
+
+    const bool keyUp = (state & kInterceptionKeyUp) != 0;
+    UINT scanCodeForMapping = code;
+    if ((state & kInterceptionKeyE0) != 0)
+    {
+        scanCodeForMapping |= 0xE000u;
+    }
+    else if ((state & kInterceptionKeyE1) != 0)
+    {
+        scanCodeForMapping |= 0xE100u;
+    }
+
+    DWORD virtualKey = MapVirtualKeyW(scanCodeForMapping, MAPVK_VSC_TO_VK_EX);
+    if (virtualKey == 0)
+    {
+        virtualKey = MapVirtualKeyW(code, MAPVK_VSC_TO_VK);
+    }
+    if (virtualKey == 0)
+    {
+        virtualKey = code;
+    }
+
+    const WPARAM message = keyUp ? WM_KEYUP : WM_KEYDOWN;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (status_ != MacroRecorderStatus::Recording || !interceptionRecording_)
+    {
+        return;
+    }
+    if (ShouldIgnoreKeyboardEvent(virtualKey, message))
+    {
+        return;
+    }
+
+    const DWORD identity =
+        static_cast<DWORD>(code) |
+        ((state & kInterceptionKeyE0) != 0 ? 0x01000000u : 0u) |
+        ((state & kInterceptionKeyE1) != 0 ? 0x02000000u : 0u);
+    const bool alreadyDown = rawKeyDown_.find(identity) != rawKeyDown_.end();
+    if (!keyUp && alreadyDown)
+    {
+        return;
+    }
+    if (keyUp && !alreadyDown)
+    {
+        return;
+    }
+    if (keyUp)
+    {
+        rawKeyDown_.erase(identity);
+    }
+    else
+    {
+        rawKeyDown_[identity] = true;
+    }
+
+    MacroEvent event;
+    event.timeUs = std::max<long long>(0, timeUs);
+    event.type = keyUp ? MacroEventType::KeyUp : MacroEventType::KeyDown;
+    event.virtualKey = virtualKey;
+    event.scanCode = code;
+    event.keyFlags = ((state & kInterceptionKeyE0) != 0 || (state & kInterceptionKeyE1) != 0) ? LLKHF_EXTENDED : 0;
+    event.shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    event.ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    event.alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    AddEventLocked(event);
+}
+
+void MacroRecorderService::RecordInterceptionMouse(
+    unsigned short state,
+    unsigned short flags,
+    short rolling,
+    int x,
+    int y,
+    unsigned int information,
+    long long timeUs)
+{
+    if (information == static_cast<unsigned int>(kMacroPlaybackExtraInfo))
+    {
+        return;
+    }
+
+    const long long eventTimeUs = std::max<long long>(0, timeUs);
+    const bool moveAbsolute = (flags & kInterceptionMouseMoveAbsolute) != 0;
+    const bool hasMovement = moveAbsolute || x != 0 || y != 0;
+    POINT cursor {};
+    bool haveCursor = false;
+    auto ensureCursor = [&]()
+    {
+        if (!haveCursor)
+        {
+            GetCursorPos(&cursor);
+            haveCursor = true;
+        }
+    };
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (status_ != MacroRecorderStatus::Recording || !interceptionRecording_)
+    {
+        return;
+    }
+
+    if (hasMovement)
+    {
+        if (mode_.mouseMode == MacroMouseMode::Relative && !moveAbsolute && !IsCursorShowing())
+        {
+            MacroEvent event;
+            event.timeUs = eventTimeUs;
+            event.type = MacroEventType::MouseMove;
+            event.dx = x;
+            event.dy = y;
+            AddEventLocked(event);
+        }
+        else
+        {
+            ensureCursor();
+            AddAbsoluteMouseMoveLocked(eventTimeUs, cursor, false);
+        }
+    }
+
+    auto addButtonEvent = [&](MacroMouseButton button, bool down)
+    {
+        ensureCursor();
+        MacroEvent event;
+        event.timeUs = eventTimeUs;
+        event.type = down ? MacroEventType::MouseDown : MacroEventType::MouseUp;
+        event.mouseButton = button;
+        event.x = cursor.x;
+        event.y = cursor.y;
+        AddEventLocked(event);
+    };
+
+    if ((state & kInterceptionMouseLeftDown) != 0) addButtonEvent(MacroMouseButton::Left, true);
+    if ((state & kInterceptionMouseLeftUp) != 0) addButtonEvent(MacroMouseButton::Left, false);
+    if ((state & kInterceptionMouseRightDown) != 0) addButtonEvent(MacroMouseButton::Right, true);
+    if ((state & kInterceptionMouseRightUp) != 0) addButtonEvent(MacroMouseButton::Right, false);
+    if ((state & kInterceptionMouseMiddleDown) != 0) addButtonEvent(MacroMouseButton::Middle, true);
+    if ((state & kInterceptionMouseMiddleUp) != 0) addButtonEvent(MacroMouseButton::Middle, false);
+    if ((state & kInterceptionMouseButton4Down) != 0) addButtonEvent(MacroMouseButton::X1, true);
+    if ((state & kInterceptionMouseButton4Up) != 0) addButtonEvent(MacroMouseButton::X1, false);
+    if ((state & kInterceptionMouseButton5Down) != 0) addButtonEvent(MacroMouseButton::X2, true);
+    if ((state & kInterceptionMouseButton5Up) != 0) addButtonEvent(MacroMouseButton::X2, false);
+
+    if ((state & kInterceptionMouseWheel) != 0)
+    {
+        ensureCursor();
+        MacroEvent event;
+        event.timeUs = eventTimeUs;
+        event.type = MacroEventType::MouseWheel;
+        event.wheelDelta = rolling;
+        event.x = cursor.x;
+        event.y = cursor.y;
+        AddEventLocked(event);
+    }
+}
+
+bool MacroRecorderService::RegisterRawMouseInput(HWND hwnd)
+{
+    if (!hwnd)
+    {
+        return false;
+    }
+
+    RAWINPUTDEVICE device {};
+    device.usUsagePage = 0x01;
+    device.usUsage = 0x02;
+    device.dwFlags = RIDEV_INPUTSINK;
+    device.hwndTarget = hwnd;
+    if (!RegisterRawInputDevices(&device, 1, sizeof(device)))
+    {
+        return false;
+    }
+
+    rawInputWindow_ = hwnd;
+    return true;
+}
+
+bool MacroRecorderService::RegisterRawKeyboardInput(HWND hwnd)
+{
+    if (!hwnd)
+    {
+        return false;
+    }
+
+    RAWINPUTDEVICE device {};
+    device.usUsagePage = 0x01;
+    device.usUsage = 0x06;
+    device.dwFlags = RIDEV_INPUTSINK;
+    device.hwndTarget = hwnd;
+    if (!RegisterRawInputDevices(&device, 1, sizeof(device)))
+    {
+        return false;
+    }
+
+    rawInputWindow_ = hwnd;
+    return true;
+}
+
+void MacroRecorderService::UnregisterRawMouseInput()
+{
+    if (!rawMouseRegistered_)
+    {
+        rawInputWindow_ = nullptr;
+        return;
+    }
+
+    RAWINPUTDEVICE device {};
+    device.usUsagePage = 0x01;
+    device.usUsage = 0x02;
+    device.dwFlags = RIDEV_REMOVE;
+    device.hwndTarget = nullptr;
+    RegisterRawInputDevices(&device, 1, sizeof(device));
+    rawMouseRegistered_ = false;
+    rawInputWindow_ = nullptr;
+}
+
+void MacroRecorderService::UnregisterRawKeyboardInput()
+{
+    if (!rawKeyboardRegistered_)
+    {
+        rawKeyDown_.clear();
+        rawInputWindow_ = nullptr;
+        return;
+    }
+
+    RAWINPUTDEVICE device {};
+    device.usUsagePage = 0x01;
+    device.usUsage = 0x06;
+    device.dwFlags = RIDEV_REMOVE;
+    device.hwndTarget = nullptr;
+    RegisterRawInputDevices(&device, 1, sizeof(device));
+    rawKeyboardRegistered_ = false;
+    rawKeyDown_.clear();
+    rawInputWindow_ = nullptr;
+}
+
+void MacroRecorderService::AddRelativeMouseMove(long long nowUs, LONG dx, LONG dy)
+{
+    if (dx == 0 && dy == 0)
+    {
+        return;
+    }
+
+    pendingMouseDx_ += dx;
+    pendingMouseDy_ += dy;
+    if (pendingMouseStartUs_ <= 0)
+    {
+        pendingMouseStartUs_ = nowUs;
+    }
+
+    constexpr long long kRawMouseFlushIntervalUs = 1000;
+    if (nowUs - pendingMouseStartUs_ >= kRawMouseFlushIntervalUs)
+    {
+        FlushPendingRelativeMouseMove(nowUs);
+    }
+}
+
+void MacroRecorderService::FlushPendingRelativeMouseMove(long long timeUs)
+{
+    if (pendingMouseDx_ == 0 && pendingMouseDy_ == 0)
+    {
+        pendingMouseStartUs_ = 0;
+        return;
+    }
+
+    MacroEvent event;
+    event.timeUs = timeUs;
+    event.type = MacroEventType::MouseMove;
+    event.dx = pendingMouseDx_;
+    event.dy = pendingMouseDy_;
+    pendingMouseDx_ = 0;
+    pendingMouseDy_ = 0;
+    pendingMouseStartUs_ = 0;
+    lastMouseMoveUs_ = timeUs;
+    AddEvent(event);
+}
+
+MacroPlaybackService::MacroPlaybackService() = default;
+
+MacroPlaybackService::~MacroPlaybackService()
+{
+    Stop();
+}
+
+bool MacroPlaybackService::Start(const MacroDefinition& macro, const MacroPlaybackOptions& options, std::wstring& errorMessage)
+{
+    if (macro.events.empty())
+    {
+        errorMessage = L"This macro has no events to play.";
+        return false;
+    }
+    if (IsPlaying())
+    {
+        errorMessage = L"Playback is already running.";
+        return false;
+    }
+    if (options.requireTargetFocused && !MacroTargetWindowService::IsTargetFocused(macro))
+    {
+        errorMessage = L"Target window is not focused.";
+        return false;
+    }
+
+    Stop();
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        snapshot_ = {};
+        snapshot_.status = options.startDelaySeconds > 0 ? MacroPlaybackStatus::Starting : MacroPlaybackStatus::Playing;
+        snapshot_.message = options.startDelaySeconds > 0
+            ? L"Playback countdown started. Focus the target window now."
+            : L"Playing macro.";
+        snapshot_.requestedLoops = options.loopUntilStopped ? 0 : std::max(1, options.loopCount);
+        snapshot_.totalUs = macro.events.empty() ? 0 : macro.events.back().timeUs;
+    }
+
+    stopRequested_.store(false);
+    playbackThread_ = std::thread(&MacroPlaybackService::PlaybackLoop, this, macro, options);
+    return true;
+}
+
+void MacroPlaybackService::Stop()
+{
+    stopRequested_.store(true);
+    if (playbackThread_.joinable())
+    {
+        playbackThread_.join();
+    }
+}
+
+bool MacroPlaybackService::IsPlaying() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return snapshot_.status == MacroPlaybackStatus::Starting || snapshot_.status == MacroPlaybackStatus::Playing;
+}
+
+MacroPlaybackSnapshot MacroPlaybackService::Snapshot() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return snapshot_;
+}
+
+bool MacroPlaybackService::IsInterceptionAvailable(std::wstring& errorMessage) const
+{
+    InterceptionPlaybackBackend backend;
+    return backend.Initialize(errorMessage);
+}
+
+void MacroPlaybackService::PlaybackLoop(MacroDefinition macro, MacroPlaybackOptions options)
+{
+    options.speed = std::clamp(options.speed, 0.1, 10.0);
+    options.loopCount = std::clamp(options.loopCount, 1, 999);
+    options.startDelaySeconds = std::clamp(options.startDelaySeconds, 0, 60);
+
+    const bool timerResolutionRaised = timeBeginPeriod(1) == TIMERR_NOERROR;
+    const HANDLE playbackThread = GetCurrentThread();
+    const int previousThreadPriority = GetThreadPriority(playbackThread);
+    if (previousThreadPriority != THREAD_PRIORITY_ERROR_RETURN)
+    {
+        SetThreadPriority(playbackThread, THREAD_PRIORITY_HIGHEST);
+    }
+    auto restorePlaybackTiming = [&]()
+    {
+        if (previousThreadPriority != THREAD_PRIORITY_ERROR_RETURN)
+        {
+            SetThreadPriority(playbackThread, previousThreadPriority);
+        }
+        if (timerResolutionRaised)
+        {
+            timeEndPeriod(1);
+        }
+    };
+
+    if (options.startDelaySeconds > 0)
+    {
+        if (WaitInterruptible(std::chrono::seconds(options.startDelaySeconds)))
+        {
+            restorePlaybackTiming();
+            return;
+        }
+    }
+
+    const int maxLoops = options.loopUntilStopped ? std::numeric_limits<int>::max() : options.loopCount;
+    InterceptionPlaybackBackend interceptionBackend;
+    InterceptionPlaybackBackend* driverBackend = nullptr;
+    if (options.backend == MacroPlaybackBackend::Interception)
+    {
+        std::wstring backendError;
+        if (!interceptionBackend.Initialize(backendError))
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            snapshot_.status = MacroPlaybackStatus::Failed;
+            snapshot_.message = backendError.empty()
+                ? L"Interception playback is unavailable."
+                : backendError;
+            stopRequested_.store(true);
+            restorePlaybackTiming();
+            return;
+        }
+        driverBackend = &interceptionBackend;
+    }
+
+    std::map<DWORD, MacroEvent> heldKeys;
+    std::vector<MacroMouseButton> heldMouseButtons;
+    auto rememberHeldInput = [&](const MacroEvent& event)
+    {
+        if (event.type == MacroEventType::KeyDown)
+        {
+            heldKeys[event.virtualKey] = event;
+        }
+        else if (event.type == MacroEventType::KeyUp)
+        {
+            heldKeys.erase(event.virtualKey);
+        }
+        else if (event.type == MacroEventType::MouseDown && event.mouseButton != MacroMouseButton::None)
+        {
+            if (std::find(heldMouseButtons.begin(), heldMouseButtons.end(), event.mouseButton) == heldMouseButtons.end())
+            {
+                heldMouseButtons.push_back(event.mouseButton);
+            }
+        }
+        else if (event.type == MacroEventType::MouseUp)
+        {
+            heldMouseButtons.erase(
+                std::remove(heldMouseButtons.begin(), heldMouseButtons.end(), event.mouseButton),
+                heldMouseButtons.end());
+        }
+    };
+
+    for (int loop = 1; loop <= maxLoops && !stopRequested_.load(); ++loop)
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            snapshot_.status = MacroPlaybackStatus::Playing;
+            snapshot_.message = options.loopUntilStopped ? L"Playing macro until stopped." : L"Playing macro.";
+            snapshot_.currentLoop = loop;
+        }
+
+        const auto loopStart = std::chrono::steady_clock::now();
+        for (size_t eventIndex = 0; eventIndex < macro.events.size();)
+        {
+            const MacroEvent& event = macro.events[eventIndex];
+            const auto targetOffset = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(static_cast<double>(std::max<long long>(0, event.timeUs)) / 1000000.0 / options.speed));
+            if (WaitUntilInterruptible(loopStart + targetOffset))
+            {
+                break;
+            }
+            if (stopRequested_.load())
+            {
+                break;
+            }
+            if (options.requireTargetFocused && !MacroTargetWindowService::IsTargetFocused(macro))
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                snapshot_.status = MacroPlaybackStatus::Failed;
+                snapshot_.message = L"Target window lost focus. Playback stopped.";
+                stopRequested_.store(true);
+                break;
+            }
+
+            const bool sent = SendMacroEvent(event, macro.recordingMode.mouseMode, driverBackend);
+            if (sent)
+            {
+                rememberHeldInput(event);
+                ++eventIndex;
+            }
+
+            if (!sent)
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                snapshot_.status = MacroPlaybackStatus::Failed;
+                snapshot_.message = L"Windows did not accept one of the simulated inputs.";
+                stopRequested_.store(true);
+                break;
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                snapshot_.elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - loopStart).count();
+            }
+        }
+    }
+
+    ReleaseHeldInputs(heldKeys, heldMouseButtons);
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (snapshot_.status != MacroPlaybackStatus::Failed)
+        {
+            snapshot_.status = stopRequested_.load() ? MacroPlaybackStatus::Stopped : MacroPlaybackStatus::Complete;
+            snapshot_.message = stopRequested_.load() ? L"Playback stopped." : L"Playback complete.";
+        }
+    }
+
+    stopRequested_.store(true);
+    restorePlaybackTiming();
+}
+
+bool MacroPlaybackService::BuildMacroInput(const MacroEvent& event, MacroMouseMode mode, INPUT& input)
+{
+    input = {};
+    if (event.type == MacroEventType::KeyDown || event.type == MacroEventType::KeyUp)
+    {
+        input.type = INPUT_KEYBOARD;
+        if (event.scanCode != 0)
+        {
+            input.ki.wScan = static_cast<WORD>(event.scanCode);
+            input.ki.dwFlags = KEYEVENTF_SCANCODE;
+        }
+        else
+        {
+            input.ki.wVk = static_cast<WORD>(event.virtualKey);
+        }
+        if ((event.keyFlags & LLKHF_EXTENDED) != 0)
+        {
+            input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+        }
+        if (event.type == MacroEventType::KeyUp)
+        {
+            input.ki.dwFlags |= KEYEVENTF_KEYUP;
+        }
+        input.ki.dwExtraInfo = kMacroPlaybackExtraInfo;
+        return true;
+    }
+
+    input.type = INPUT_MOUSE;
+    input.mi.dwExtraInfo = kMacroPlaybackExtraInfo;
+    if (event.type == MacroEventType::MouseMove)
+    {
+        if (mode == MacroMouseMode::Relative && !event.absoluteMove)
+        {
+            input.mi.dwFlags = MOUSEEVENTF_MOVE;
+            input.mi.dx = event.dx;
+            input.mi.dy = event.dy;
+        }
+        else
+        {
+            LONG x = event.x;
+            LONG y = event.y;
+            if (!event.absoluteMove && mode == MacroMouseMode::WindowRelative)
+            {
+                HWND foreground = GetForegroundWindow();
+                RECT rect {};
+                if (foreground && GetWindowRect(foreground, &rect))
+                {
+                    x += rect.left;
+                    y += rect.top;
+                }
+            }
+
+            const int originX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+            const int originY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+            const int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+            const int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+            input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK;
+            input.mi.dx = NormalizeAbsoluteCoordinate(x, originX, width);
+            input.mi.dy = NormalizeAbsoluteCoordinate(y, originY, height);
+        }
+    }
+    else if (event.type == MacroEventType::MouseDown || event.type == MacroEventType::MouseUp)
+    {
+        input.mi.dwFlags = event.type == MacroEventType::MouseDown
+            ? MouseDownFlag(event.mouseButton)
+            : MouseUpFlag(event.mouseButton);
+        input.mi.mouseData = XButtonData(event.mouseButton);
+    }
+    else if (event.type == MacroEventType::MouseWheel)
+    {
+        input.mi.dwFlags = MOUSEEVENTF_WHEEL;
+        input.mi.mouseData = static_cast<DWORD>(event.wheelDelta);
+    }
+
+    return input.mi.dwFlags != 0;
+}
+
+bool MacroPlaybackService::SendMacroEvent(const MacroEvent& event, MacroMouseMode mode, void* driverBackend)
+{
+    if (driverBackend)
+    {
+        return static_cast<InterceptionPlaybackBackend*>(driverBackend)->SendEvent(event, mode);
+    }
+
+    INPUT input {};
+    return BuildMacroInput(event, mode, input) && SendInput(1, &input, sizeof(INPUT)) == 1;
+}
+
+void MacroPlaybackService::ReleaseHeldInputs(
+    const std::map<DWORD, MacroEvent>& heldKeys,
+    const std::vector<MacroMouseButton>& heldMouseButtons)
+{
+    std::vector<INPUT> inputs;
+    inputs.reserve(heldKeys.size() + heldMouseButtons.size());
+
+    for (auto it = heldKeys.rbegin(); it != heldKeys.rend(); ++it)
+    {
+        const MacroEvent& event = it->second;
+        INPUT input {};
+        input.type = INPUT_KEYBOARD;
+        if (event.scanCode != 0)
+        {
+            input.ki.wScan = static_cast<WORD>(event.scanCode);
+            input.ki.dwFlags = KEYEVENTF_SCANCODE;
+        }
+        else
+        {
+            input.ki.wVk = static_cast<WORD>(event.virtualKey);
+        }
+        if ((event.keyFlags & LLKHF_EXTENDED) != 0)
+        {
+            input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+        }
+        input.ki.dwFlags |= KEYEVENTF_KEYUP;
+        input.ki.dwExtraInfo = kMacroPlaybackExtraInfo;
+        inputs.push_back(input);
+    }
+
+    for (auto it = heldMouseButtons.rbegin(); it != heldMouseButtons.rend(); ++it)
+    {
+        const DWORD flag = MouseUpFlag(*it);
+        if (flag == 0)
+        {
+            continue;
+        }
+
+        INPUT input {};
+        input.type = INPUT_MOUSE;
+        input.mi.dwFlags = flag;
+        input.mi.mouseData = XButtonData(*it);
+        input.mi.dwExtraInfo = kMacroPlaybackExtraInfo;
+        inputs.push_back(input);
+    }
+
+    if (!inputs.empty())
+    {
+        SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
+    }
+}
+
+bool MacroPlaybackService::WaitInterruptible(std::chrono::steady_clock::duration duration)
+{
+    const auto end = std::chrono::steady_clock::now() + duration;
+    return WaitUntilInterruptible(end);
+}
+
+bool MacroPlaybackService::WaitUntilInterruptible(std::chrono::steady_clock::time_point targetTime)
+{
+    while (!stopRequested_.load())
+    {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= targetTime)
+        {
+            return false;
+        }
+        const auto remaining = targetTime - now;
+        if (remaining > std::chrono::milliseconds(3))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        else if (remaining > std::chrono::microseconds(900))
+        {
+            SwitchToThread();
+        }
+        else
+        {
+            YieldProcessor();
+        }
+    }
+    return true;
+}
+
+MacroHotkeyService::~MacroHotkeyService() = default;
+
+bool MacroHotkeyService::Register(HWND hwnd, int id, const MacroHotkey& hotkey, std::wstring& errorMessage)
+{
+    if (!hwnd || IsEmpty(hotkey))
+    {
+        return true;
+    }
+
+    Unregister(hwnd, id);
+    if (!RegisterHotKey(hwnd, id, hotkey.modifiers | MOD_NOREPEAT, hotkey.virtualKey))
+    {
+        errorMessage = L"Could not register " + HotkeyLabel(hotkey) + L". Another app may already be using it.";
+        return false;
+    }
+
+    if (std::find(registeredIds_.begin(), registeredIds_.end(), id) == registeredIds_.end())
+    {
+        registeredIds_.push_back(id);
+    }
+    return true;
+}
+
+void MacroHotkeyService::Unregister(HWND hwnd, int id)
+{
+    if (hwnd)
+    {
+        UnregisterHotKey(hwnd, id);
+    }
+    registeredIds_.erase(std::remove(registeredIds_.begin(), registeredIds_.end(), id), registeredIds_.end());
+}
+
+void MacroHotkeyService::UnregisterAll(HWND hwnd)
+{
+    for (int id : registeredIds_)
+    {
+        if (hwnd)
+        {
+            UnregisterHotKey(hwnd, id);
+        }
+    }
+    registeredIds_.clear();
+}
+
+std::wstring MacroHotkeyService::HotkeyLabel(const MacroHotkey& hotkey)
+{
+    if (IsEmpty(hotkey))
+    {
+        return L"Unbound";
+    }
+
+    std::wstring label;
+    if (hotkey.modifiers & MOD_CONTROL) label += L"Ctrl+";
+    if (hotkey.modifiers & MOD_SHIFT) label += L"Shift+";
+    if (hotkey.modifiers & MOD_ALT) label += L"Alt+";
+    label += KeyName(hotkey.virtualKey);
+    return label;
+}
+
+bool MacroHotkeyService::IsEmpty(const MacroHotkey& hotkey)
+{
+    return hotkey.virtualKey == 0;
+}

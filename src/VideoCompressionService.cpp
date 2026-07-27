@@ -422,4 +422,775 @@ VideoCompressionPlan VideoCompressionPlanner::CreatePlan(const VideoAnalysis& an
     }
     else if (meaningfulSizeReduction && aggressivelyConstrained)
     {
-        plan.warnings.pusã^ý¶‰žËkºwµçMÌ¤€¼ÕÁ‘…Ñ”¹ÁÉ½É•ÍÌì(€€€€€€€ô(€€€€€€€ÍÑèé•ÉÉ½É}½‘”½ÕÑÁÕÑM¥é•ÉÉ½Èì(€€€€€€€¥˜€¡ÍÑèé™¥±•ÍåÍÑ•´èé•á¥ÍÑÌ¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ °½ÕÑÁÕÑM¥é•ÉÉ½È¤¤(€€€€€€€ì(€€€€€€€€€€€ÕÁ‘…Ñ”¹ÕÉÉ•¹Ñ=ÕÑÁÕÑM¥é•	åÑ•Ì€ôÍÑèé™¥±•ÍåÍÑ•´èé™¥±•}Í¥é”¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ °½ÕÑÁÕÑM¥é•ÉÉ½È¤ì(€€€€€€€ô(€€€€€€€ÁÉ½É•ÍÍ…±±‰…¬¡ÕÁ‘…Ñ”¤ì(€€€ôì((€€€±½¹œ±½¹œÙ¥‘•½	¥ÑÉ…Ñ”€ô™¥¹…±I•ÍÕ±Ð¹Á±…¸¹Ù¥‘•½	¥ÑÉ…Ñ”ì(€€€½¹ÍÐ¥¹Ð…ÑÑ•µÁÑÌ€ô½ÁÑ¥½¹Ì¹É•ÑÉå%™Q½½1…É”€üÍÑèéµ…à Ä°½ÁÑ¥½¹Ì¹µ…áI•ÑÉ¥•Ì€¬€Ä¤€è€Äì(€€€‰½½°ÁÕ…±±‰…­ÑÑ•µÁÑ•€ô™…±Í”ì(€€€™½È€¡¥¹Ð…ÑÑ•µÁÐ€ô€Àì…ÑÑ•µÁÐ€ð…ÑÑ•µÁÑÌì€¬­…ÑÑ•µÁÐ¤(€€€ì(€€€€€€€¥˜€¡…¹•±I•ÅÕ•ÍÑ•¹±½… ¤¤(€€€€€€€ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹…¹•±±•€ôÑÉÕ”ì(€€€€€€€€€€€‰É•…¬ì(€€€€€€€ô(€€€€€€€±•…¹ÕÁA…Ñ ¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ ¤ì(€€€€€€€¥˜€¡…ÑÑ•µÁÐ€ø€À¤(€€€€€€€ì(€€€€€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéI•ÑÉå¥¹œ°€À¸À°0‰I•ÑÉå¥¹œÝ¥Ñ „±½Ý•È‰¥ÑÉ…Ñ”¸¸¸ˆ°0ˆˆ°…ÑÑ•µÁÐ¤ì(€€€€€€€ô((€€€€€€€AÉ½•ÍÍI•ÍÕ±Ð•¹½‘•I•ÍÕ±Ðì(€€€€€€€¥˜€¡½ÁÑ¥½¹Ì¹µ½‘”€ôôY¥‘•½½µÁÉ•ÍÍ¥½¹5½‘”èéÕÉ…Ñ”€˜˜€…™¥¹…±I•ÍÕ±Ð¹Á±…¸¹¡…É‘Ý…É•¹½‘¥¹œ¤(€€€€€€€ì(€€€€€€€€€€€ÍÑèéÙ•Ñ½ÈñÍÑèéÝÍÑÉ¥¹œøÁ…ÍÌÄ€ô	…Í•Y¥‘•½ÉÕµ•¹ÑÌ¡…¹…±åÍ¥Ì°½ÁÑ¥½¹Ì°™¥¹…±I•ÍÕ±Ð¹Á±…¸°Í•±•Ñ•‘¹½‘•È°Ù¥‘•½	¥ÑÉ…Ñ”¤ì(€€€€€€€€€€€Á…ÍÌÄ¹¥¹Í•ÉÐ¡Á…ÍÌÄ¹•¹ ¤°ì(€€€€€€€€€€€€€€€0ˆµ…¸ˆ°0ˆµÁ…ÍÌˆ°0ˆÄˆ°0ˆµÁ…ÍÍ±½™¥±”ˆ°Á…ÍÍ1½œ¹ÝÍÑÉ¥¹œ ¤°(€€€€€€€€€€€€€€€0ˆµÁÉ½É•ÍÌˆ°0‰Á¥Á”èÄˆ°0ˆµ¹½ÍÑ…ÑÌˆ°0ˆµ˜ˆ°0‰¹Õ±°ˆ°0‰9U0ˆ(€€€€€€€€€€€ô¤ì(€€€€€€€€€€€AÉ½É•ÍÍA…ÉÍ•ÈÁ…ÉÍ•ÈÄ¡…¹…±åÍ¥Ì¹‘ÕÉ…Ñ¥½¹M•½¹‘Ì°€À¸À°€À¸Ô¤ì(€€€€€€€€€€€ÍÑèéÝÍÑÉ¥¹œÍÁ••ì(€€€€€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéA…ÍÌÄ°€À¸À°0‰¹½‘¥¹œÁ…ÍÌ€Ä½˜€È¸¸¸ˆ°0ˆˆ°…ÑÑ•µÁÐ¤ì(€€€€€€€€€€€AÉ½•ÍÍI•ÍÕ±ÐÁ…ÍÌÅI•ÍÕ±Ð€ôÁÉ½•ÍÍIÕ¹¹•É|¹IÕ¸ (€€€€€€€€€€€€€€€Ñ½½±Ì¹™™µÁ•A…Ñ °(€€€€€€€€€€€€€€€Á…ÍÌÄ°(€€€€€€€€€€€€€€€…¹•±I•ÅÕ•ÍÑ•°(€€€€€€€€€€€€€€€l™t¡½¹ÍÐÍÑèéÝÍÑÉ¥¹œ˜¡Õ¹¬¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€‘½Õ‰±”Ù…±Õ”€ô€À¸Àì(€€€€€€€€€€€€€€€€€€€Á…ÉÍ•ÈÄ¹½¹ÍÕµ”¡¡Õ¹¬°Ù…±Õ”°ÍÁ••¤ì(€€€€€€€€€€€€€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéA…ÍÌÄ°Ù…±Õ”°0‰¹½‘¥¹œÁ…ÍÌ€Ä½˜€È¸¸¸ˆ°ÍÁ••°…ÑÑ•µÁÐ¤ì(€€€€€€€€€€€€€€€ô¤ì(€€€€€€€€€€€¥˜€¡Á…ÍÌÅI•ÍÕ±Ð¹…¹•±±•ñðÁ…ÍÌÅI•ÍÕ±Ð¹•á¥Ñ½‘”€„ô€À¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€•¹½‘•I•ÍÕ±Ð€ôÁ…ÍÌÅI•ÍÕ±Ðì(€€€€€€€€€€€ô(€€€€€€€€€€€•±Í”(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€ÍÑèéÙ•Ñ½ÈñÍÑèéÝÍÑÉ¥¹œøÁ…ÍÌÈ€ô	…Í•Y¥‘•½ÉÕµ•¹ÑÌ¡…¹…±åÍ¥Ì°½ÁÑ¥½¹Ì°™¥¹…±I•ÍÕ±Ð¹Á±…¸°Í•±•Ñ•‘¹½‘•È°Ù¥‘•½	¥ÑÉ…Ñ”¤ì(€€€€€€€€€€€€€€€Á…ÍÌÈ¹¥¹Í•ÉÐ¡Á…ÍÌÈ¹•¹ ¤°ì0ˆµÁ…ÍÌˆ°0ˆÈˆ°0ˆµÁ…ÍÍ±½™¥±”ˆ°Á…ÍÍ1½œ¹ÝÍÑÉ¥¹œ ¤ô¤ì(€€€€€€€€€€€€€€€¥˜€¡™¥¹…±I•ÍÕ±Ð¹Á±…¸¹…Õ‘¥½	¥ÑÉ…Ñ”€ø€À¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€Á…ÍÌÈ¹¥¹Í•ÉÐ¡Á…ÍÌÈ¹•¹ ¤°ì0ˆµµ…Àˆ°0ˆÀé„èÀüˆ°0ˆµŒé„ˆ°0‰……Œˆ°0ˆµˆé„ˆ°	¥ÑÉ…Ñ•ÉÕµ•¹Ð¡™¥¹…±I•ÍÕ±Ð¹Á±…¸¹…Õ‘¥½	¥ÑÉ…Ñ”¤ô¤ì(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€•±Í”(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€Á…ÍÌÈ¹ÁÕÍ¡}‰…¬¡0ˆµ…¸ˆ¤ì(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€¥˜€ …½ÁÑ¥½¹Ì¹ÁÉ•Í•ÉÙ•5•Ñ…‘…Ñ„¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€Á…ÍÌÈ¹¥¹Í•ÉÐ¡Á…ÍÌÈ¹•¹ ¤°ì0ˆµµ…Á}µ•Ñ…‘…Ñ„ˆ°0ˆ´Äˆô¤ì(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€Á…ÍÌÈ¹¥¹Í•ÉÐ¡Á…ÍÌÈ¹•¹ ¤°ì0ˆµÍ¸ˆ°0ˆµµ½Ù™±…Ìˆ°0ˆ­™…ÍÑÍÑ…ÉÐˆ°0ˆµÁÉ½É•ÍÌˆ°0‰Á¥Á”èÄˆ°0ˆµ¹½ÍÑ…ÑÌˆ°Ý½É­¥¹=ÕÑÁÕÑA…Ñ ¹ÝÍÑÉ¥¹œ ¤ô¤ì(€€€€€€€€€€€€€€€AÉ½É•ÍÍA…ÉÍ•ÈÁ…ÉÍ•ÈÈ¡…¹…±åÍ¥Ì¹‘ÕÉ…Ñ¥½¹M•½¹‘Ì°€À¸Ô°€À¸Ô¤ì(€€€€€€€€€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéA…ÍÌÈ°€À¸Ô°0‰¹½‘¥¹œÁ…ÍÌ€È½˜€È¸¸¸ˆ°0ˆˆ°…ÑÑ•µÁÐ¤ì(€€€€€€€€€€€€€€€•¹½‘•I•ÍÕ±Ð€ôÁÉ½•ÍÍIÕ¹¹•É|¹IÕ¸ (€€€€€€€€€€€€€€€€€€€Ñ½½±Ì¹™™µÁ•A…Ñ °(€€€€€€€€€€€€€€€€€€€Á…ÍÌÈ°(€€€€€€€€€€€€€€€€€€€…¹•±I•ÅÕ•ÍÑ•°(€€€€€€€€€€€€€€€€€€€l™t¡½¹ÍÐÍÑèéÝÍÑÉ¥¹œ˜¡Õ¹¬¤(€€€€€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€€€€€‘½Õ‰±”Ù…±Õ”€ô€À¸Ôì(€€€€€€€€€€€€€€€€€€€€€€€Á…ÉÍ•ÈÈ¹½¹ÍÕµ”¡¡Õ¹¬°Ù…±Õ”°ÍÁ••¤ì(€€€€€€€€€€€€€€€€€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéA…ÍÌÈ°Ù…±Õ”°0‰¹½‘¥¹œÁ…ÍÌ€È½˜€È¸¸¸ˆ°ÍÁ••°…ÑÑ•µÁÐ¤ì(€€€€€€€€€€€€€€€€€€€ô¤ì(€€€€€€€€€€€ô(€€€€€€€ô(€€€€€€€•±Í”(€€€€€€€ì(€€€€€€€€€€€ÍÑèéÙ•Ñ½ÈñÍÑèéÝÍÑÉ¥¹œø…ÉÕµ•¹ÑÌ€ô	…Í•Y¥‘•½ÉÕµ•¹ÑÌ¡…¹…±åÍ¥Ì°½ÁÑ¥½¹Ì°™¥¹…±I•ÍÕ±Ð¹Á±…¸°Í•±•Ñ•‘¹½‘•È°Ù¥‘•½	¥ÑÉ…Ñ”¤ì(€€€€€€€€€€€…ÉÕµ•¹ÑÌ¹¥¹Í•ÉÐ¡…ÉÕµ•¹ÑÌ¹•¹ ¤°ì(€€€€€€€€€€€€€€€0ˆµµ…áÉ…Ñ”ˆ°	¥ÑÉ…Ñ•ÉÕµ•¹Ð¡Ù¥‘•½	¥ÑÉ…Ñ”¤°(€€€€€€€€€€€€€€€0ˆµ‰Õ™Í¥é”ˆ°	¥ÑÉ…Ñ•ÉÕµ•¹Ð¡Ù¥‘•½	¥ÑÉ…Ñ”€¨€È¤(€€€€€€€€€€€ô¤ì(€€€€€€€€€€€¥˜€¡™¥¹…±I•ÍÕ±Ð¹Á±…¸¹…Õ‘¥½	¥ÑÉ…Ñ”€ø€À¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€…ÉÕµ•¹ÑÌ¹¥¹Í•ÉÐ¡…ÉÕµ•¹ÑÌ¹•¹ ¤°ì0ˆµµ…Àˆ°0ˆÀé„èÀüˆ°0ˆµŒé„ˆ°0‰……Œˆ°0ˆµˆé„ˆ°	¥ÑÉ…Ñ•ÉÕµ•¹Ð¡™¥¹…±I•ÍÕ±Ð¹Á±…¸¹…Õ‘¥½	¥ÑÉ…Ñ”¤ô¤ì(€€€€€€€€€€€ô(€€€€€€€€€€€•±Í”(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€…ÉÕµ•¹ÑÌ¹ÁÕÍ¡}‰…¬¡0ˆµ…¸ˆ¤ì(€€€€€€€€€€€ô(€€€€€€€€€€€¥˜€ …½ÁÑ¥½¹Ì¹ÁÉ•Í•ÉÙ•5•Ñ…‘…Ñ„¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€…ÉÕµ•¹ÑÌ¹¥¹Í•ÉÐ¡…ÉÕµ•¹ÑÌ¹•¹ ¤°ì0ˆµµ…Á}µ•Ñ…‘…Ñ„ˆ°0ˆ´Äˆô¤ì(€€€€€€€€€€€ô(€€€€€€€€€€€…ÉÕµ•¹ÑÌ¹¥¹Í•ÉÐ¡…ÉÕµ•¹ÑÌ¹•¹ ¤°ì0ˆµÍ¸ˆ°0ˆµµ½Ù™±…Ìˆ°0ˆ­™…ÍÑÍÑ…ÉÐˆ°0ˆµÁÉ½É•ÍÌˆ°0‰Á¥Á”èÄˆ°0ˆµ¹½ÍÑ…ÑÌˆ°Ý½É­¥¹=ÕÑÁÕÑA…Ñ ¹ÝÍÑÉ¥¹œ ¤ô¤ì(€€€€€€€€€€€AÉ½É•ÍÍA…ÉÍ•ÈÁ…ÉÍ•È¡…¹…±åÍ¥Ì¹‘ÕÉ…Ñ¥½¹M•½¹‘Ì°€À¸À°€Ä¸À¤ì(€€€€€€€€€€€ÍÑèéÝÍÑÉ¥¹œÍÁ••ì(€€€€€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé¹½‘¥¹œ°€À¸À°0‰¹½‘¥¹œÙ¥‘•¼¸¸¸ˆ°0ˆˆ°…ÑÑ•µÁÐ¤ì(€€€€€€€€€€€•¹½‘•I•ÍÕ±Ð€ôÁÉ½•ÍÍIÕ¹¹•É|¹IÕ¸ (€€€€€€€€€€€€€€€Ñ½½±Ì¹™™µÁ•A…Ñ °(€€€€€€€€€€€€€€€…ÉÕµ•¹ÑÌ°(€€€€€€€€€€€€€€€…¹•±I•ÅÕ•ÍÑ•°(€€€€€€€€€€€€€€€l™t¡½¹ÍÐÍÑèéÝÍÑÉ¥¹œ˜¡Õ¹¬¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€‘½Õ‰±”Ù…±Õ”€ô€À¸Àì(€€€€€€€€€€€€€€€€€€€Á…ÉÍ•È¹½¹ÍÕµ”¡¡Õ¹¬°Ù…±Õ”°ÍÁ••¤ì(€€€€€€€€€€€€€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé¹½‘¥¹œ°Ù…±Õ”°0‰¹½‘¥¹œÙ¥‘•¼¸¸¸ˆ°ÍÁ••°…ÑÑ•µÁÐ¤ì(€€€€€€€€€€€€€€€ô¤ì(€€€€€€€ô((€€€€€€€¥˜€¡•¹½‘•I•ÍÕ±Ð¹…¹•±±•ñð…¹•±I•ÅÕ•ÍÑ•¹±½… ¤¤(€€€€€€€ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹…¹•±±•€ôÑÉÕ”ì(€€€€€€€€€€€‰É•…¬ì(€€€€€€€ô(€€€€€€€ÍÑèé•ÉÉ½É}½‘”½ÕÑÁÕÑá¥ÍÑÍÉÉ½Èì(€€€€€€€½¹ÍÐ‰½½°½ÕÑÁÕÑá¥ÍÑÌ€ôÍÑèé™¥±•ÍåÍÑ•´èé•á¥ÍÑÌ¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ °½ÕÑÁÕÑá¥ÍÑÍÉÉ½È¤ì(€€€€€€€¥˜€¡•¹½‘•I•ÍÕ±Ð¹•á¥Ñ½‘”€„ô€Àñð½ÕÑÁÕÑá¥ÍÑÍÉÉ½Èñð€…½ÕÑÁÕÑá¥ÍÑÌ¤(€€€€€€€ì(€€€€€€€€€€€¥˜€¡™¥¹…±I•ÍÕ±Ð¹Á±…¸¹¡…É‘Ý…É•¹½‘¥¹œ€˜˜€…ÁÕ…±±‰…­ÑÑ•µÁÑ•¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€ÁÕ…±±‰…­ÑÑ•µÁÑ•€ôÑÉÕ”ì(€€€€€€€€€€€€€€€Í•±•Ñ•‘¹½‘•È€ô0‰±¥‰àÈØÐˆì(€€€€€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹Á±…¸¹•¹½‘•É9…µ”€ôÍ•±•Ñ•‘¹½‘•Èì(€€€€€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹Á±…¸¹¡…É‘Ý…É•¹½‘¥¹œ€ô™…±Í”ì(€€€€€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹Á±…¸¹Ù¥‘•½½‘•Œ€ô0‰ ¸ÈØÐ€¡AT¤ˆì(€€€€€€€€€€€€€€€½¹ÍÐÍÑèéÝÍÑÉ¥¹œÁÕEÕ…±¥Ñå]…É¹¥¹œ€ô0‰AT•¹½‘¥¹œ¥Ì™…ÍÑ•È°‰ÕÐAT•¹½‘¥¹œÕÍÕ…±±äÁÉ½Ù¥‘•Ì‰•ÑÑ•È½µÁÉ•ÍÍ¥½¸…ÐÑ¡”Í…µ”Í¥é”¸ˆì(€€€€€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹Á±…¸¹Ý…É¹¥¹Ì¹•É…Í” (€€€€€€€€€€€€€€€€€€€ÍÑèéÉ•µ½Ù”¡™¥¹…±I•ÍÕ±Ð¹Á±…¸¹Ý…É¹¥¹Ì¹‰•¥¸ ¤°™¥¹…±I•ÍÕ±Ð¹Á±…¸¹Ý…É¹¥¹Ì¹•¹ ¤°ÁÕEÕ…±¥Ñå]…É¹¥¹œ¤°(€€€€€€€€€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹Á±…¸¹Ý…É¹¥¹Ì¹•¹ ¤¤ì(€€€€€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹Á±…¸¹Ý…É¹¥¹Ì¹ÁÕÍ¡}‰…¬¡0‰AT•¹½‘¥¹œ™…¥±•™½ÈÑ¡¥ÌÙ¥‘•¼°Í¼Ñ¡”©½ˆ…ÕÑ½µ…Ñ¥…±±äÕÍ•Ñ¡”AT¥¹ÍÑ•…¸ˆ¤ì(€€€€€€€€€€€€€€€±•…¹ÕÁA…Ñ ¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ ¤ì(€€€€€€€€€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéI•ÑÉå¥¹œ°€À¸À°0‰AT•¹½‘¥¹œ™…¥±•¸I•ÑÉå¥¹œÝ¥Ñ Ñ¡”AT¸¸¸ˆ°0ˆˆ°…ÑÑ•µÁÐ¤ì(€€€€€€€€€€€€€€€Ù¥‘•½	¥ÑÉ…Ñ”€ô™¥¹…±I•ÍÕ±Ð¹Á±…¸¹Ù¥‘•½	¥ÑÉ…Ñ”ì(€€€€€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹É•ÑÉ¥•ÍUÍ•€ô€Àì(€€€€€€€€€€€€€€€…ÑÑ•µÁÐ€ô€´Äì(€€€€€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€€€€€ô(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”€ô0‰µÁ•œ½Õ±¹½Ð½µÁÉ•ÍÌÑ¡¥ÌÙ¥‘•¼Ý¥Ñ Ñ¡”Í•±•Ñ•Í•ÑÑ¥¹Ì¸ˆì(€€€€€€€€€€€‰É•…¬ì(€€€€€€€ô((€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéY•É¥™å¥¹œ°€Ä¸À°0‰Y•É¥™å¥¹œ™¥¹…°Í¥é”¸¸¸ˆ°0ˆˆ°…ÑÑ•µÁÐ¤ì(€€€€€€€ÍÑèé•ÉÉ½É}½‘”™¥±•M¥é•ÉÉ½Èì(€€€€€€€™¥¹…±I•ÍÕ±Ð¹™¥¹…±M¥é•	åÑ•Ì€ôÍÑèé™¥±•ÍåÍÑ•´èé™¥±•}Í¥é”¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ °™¥±•M¥é•ÉÉ½È¤ì(€€€€€€€¥˜€¡™¥±•M¥é•ÉÉ½Èñð™¥¹…±I•ÍÕ±Ð¹™¥¹…±M¥é•	åÑ•Ì€ôô€À¤(€€€€€€€ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”€ô0‰Q¡”½µÁÉ•ÍÍ•½ÕÑÁÕÐ™¥±”Ý…Ì¹½ÐÉ•…Ñ•½ÉÉ•Ñ±ä¸ˆì(€€€€€€€€€€€‰É•…¬ì(€€€€€€€ô(€€€€€€€¥˜€ …½ÁÑ¥½¹Ì¹Ù•É¥™å¥¹…±M¥é”ñð™¥¹…±I•ÍÕ±Ð¹™¥¹…±M¥é•	åÑ•Ì€ðô½ÁÑ¥½¹Ì¹Ñ…É•ÑM¥é•	åÑ•Ì¤(€€€€€€€ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹ÍÕ•ÍÌ€ôÑÉÕ”ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹É•ÑÉ¥•ÍUÍ•€ô…ÑÑ•µÁÐì(€€€€€€€€€€€‰É•…¬ì(€€€€€€€ô(€€€€€€€¥˜€¡…ÑÑ•µÁÐ€¬€Ä€ð…ÑÑ•µÁÑÌ¤(€€€€€€€ì(€€€€€€€€€€€½¹ÍÐ‘½Õ‰±”µ•…ÍÕÉ•‘I…Ñ¥¼€ôÍÑ…Ñ¥}…ÍÐñ‘½Õ‰±”ø¡½ÁÑ¥½¹Ì¹Ñ…É•ÑM¥é•	åÑ•Ì¤€¼™¥¹…±I•ÍÕ±Ð¹™¥¹…±M¥é•	åÑ•Ìì(€€€€€€€€€€€Ù¥‘•½	¥ÑÉ…Ñ”€ôÍÑèéµ…àñ±½¹œ±½¹œø¡­5¥¹¥µÕµY¥‘•½	¥ÑÉ…Ñ”°ÍÑ…Ñ¥}…ÍÐñ±½¹œ±½¹œø¡Ù¥‘•½	¥ÑÉ…Ñ”€¨µ•…ÍÕÉ•‘I…Ñ¥¼€¨€À¸äØ¤¤ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹É•ÑÉ¥•ÍUÍ•€ô…ÑÑ•µÁÐ€¬€Äì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô(€€€€€€€™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”€ô0‰Q¡”½ÕÑÁÕÐ½Õ±¹½Ð‰”­•ÁÐÕ¹‘•ÈÑ¡”Ñ…É•ÐÍ¥é”Ý¥Ñ Ñ¡”Í•±•Ñ•Í•ÑÑ¥¹Ì¸QÉä„±½Ý•ÈÉ•Í½±ÕÑ¥½¸°±½Ý•ÈAL°±½Ý•È…Õ‘¥¼‰¥ÑÉ…Ñ”°½È„±…É•ÈÑ…É•Ð¸ˆì(€€€ô((€€€¥˜€¡™¥¹…±I•ÍÕ±Ð¹ÍÕ•ÍÌ¤(€€€ì(€€€€€€€¥˜€¡½ÁÑ¥½¹Ì¹½¹™±¥Ñ	•¡…Ù¥½È€ôôY¥‘•½½¹™±¥Ñ	•¡…Ù¥½ÈèéÕÑ½I•¹…µ”¤(€€€€€€€ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹½ÕÑÁÕÑA…Ñ €ôI•Í½±Ù•=ÕÑÁÕÑ½¹™±¥Ð¡™¥¹…±I•ÍÕ±Ð¹½ÕÑÁÕÑA…Ñ °½ÁÑ¥½¹Ì¹½¹™±¥Ñ	•¡…Ù¥½È¤ì(€€€€€€€ô(€€€€€€€]=Iµ½Ù•±…Ì€ô5=Y%1}]I%Q}Q!I=U ì(€€€€€€€¥˜€¡½ÁÑ¥½¹Ì¹½¹™±¥Ñ	•¡…Ù¥½È€ôôY¥‘•½½¹™±¥Ñ	•¡…Ù¥½Èèé=Ù•ÉÝÉ¥Ñ”¤(€€€€€€€ì(€€€€€€€€€€€µ½Ù•±…Ìðô5=Y%1}IA1}a%MQ%9ì(€€€€€€€ô(€€€€€€€¥˜€ …5½Ù•¥±•á\¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ ¹}ÍÑÈ ¤°™¥¹…±I•ÍÕ±Ð¹½ÕÑÁÕÑA…Ñ ¹}ÍÑÈ ¤°µ½Ù•±…Ì¤¤(€€€€€€€ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹ÍÕ•ÍÌ€ô™…±Í”ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”€ô0‰Q¡”½µÁÉ•ÍÍ•Ù¥‘•¼Ý…ÌÉ•…Ñ•°‰ÕÐ¥Ð½Õ±¹½ÐÉ•Á±…”½ÈÍ…Ù”Ñ¡”‘•ÍÑ¥¹…Ñ¥½¸™¥±”¸±½Í”…¹ä…ÁÀÕÍ¥¹œÑ¡…Ð™¥±”…¹ÑÉä……¥¸¸ˆì(€€€€€€€ô(€€€ô((€€€±•…¹ÕÁA…Ñ ¡Ñ•µÁ¥É•Ñ½Éä°ÑÉÕ”¤ì(€€€¥˜€¡™¥¹…±I•ÍÕ±Ð¹…¹•±±•¤(€€€ì(€€€€€€€±•…¹ÕÁA…Ñ ¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ ¤ì(€€€€€€€™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”€ô0‰½µÁÉ•ÍÍ¥½¸…¹•±±•¸ˆì(€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé…¹•±±•°€À¸À°™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”°0ˆˆ°™¥¹…±I•ÍÕ±Ð¹É•ÑÉ¥•ÍUÍ•¤ì(€€€ô(€€€•±Í”¥˜€ …™¥¹…±I•ÍÕ±Ð¹ÍÕ•ÍÌ¤(€€€ì(€€€€€€€±•…¹ÕÁA…Ñ ¡Ý½É­¥¹=ÕÑÁÕÑA…Ñ ¤ì(€€€€€€€¥˜€¡™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”¹•µÁÑä ¤¤(€€€€€€€ì(€€€€€€€€€€€™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”€ô0‰½µÁÉ•ÍÍ¥½¸™…¥±•‰•™½É”…¸½ÕÑÁÕÐ™¥±”½Õ±‰”É•…Ñ•¸ˆì(€€€€€€€ô(€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé…¥±•°€À¸À°™¥¹…±I•ÍÕ±Ð¹•ÉÉ½É5•ÍÍ…”°0ˆˆ°™¥¹…±I•ÍÕ±Ð¹É•ÑÉ¥•ÍUÍ•¤ì(€€€ô(€€€•±Í”(€€€ì(€€€€€€€É•Á½ÉÐ¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé½µÁ±•Ñ”°€Ä¸À°0‰½µÁÉ•ÍÍ¥½¸½µÁ±•Ñ”¸ˆ°0ˆˆ°™¥¹…±I•ÍÕ±Ð¹É•ÑÉ¥•ÍUÍ•¤ì(€€€ô(€€€É•ÑÕÉ¸™¥¹…±I•ÍÕ±Ðì)ô()‰½½°Y¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èé%ÍMÕÁÁ½ÉÑ•‘%¹ÁÕÐ¡½¹ÍÐÍÑèé™¥±•ÍåÍÑ•´èéÁ…Ñ ˜Á…Ñ ¤)ì(€€€½¹ÍÐÍÑèéÝÍÑÉ¥¹œ•áÑ•¹Í¥½¸€ô1½Ý•È¡Á…Ñ ¹•áÑ•¹Í¥½¸ ¤¹ÝÍÑÉ¥¹œ ¤¤ì(€€€É•ÑÕÉ¸•áÑ•¹Í¥½¸€ôô0ˆ¹µÀÐˆñð•áÑ•¹Í¥½¸€ôô0ˆ¹µ½Øˆñð•áÑ•¹Í¥½¸€ôô0ˆ¹µ­Øˆñð(€€€€€€€•áÑ•¹Í¥½¸€ôô0ˆ¹Ý•‰´ˆñð•áÑ•¹Í¥½¸€ôô0ˆ¹…Ù¤ˆñð•áÑ•¹Í¥½¸€ôô0ˆ¹´ÑØˆì)ô()ÍÑèé™¥±•ÍåÍÑ•´èéÁ…Ñ Y¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èé•™…Õ±Ñ=ÕÑÁÕÑA…Ñ  (€€€½¹ÍÐY¥‘•½¹…±åÍ¥Ì˜…¹…±åÍ¥Ì°(€€€½¹ÍÐY¥‘•½½µÁÉ•ÍÍ¥½¹=ÁÑ¥½¹Ì˜½ÁÑ¥½¹Ì¤)ì(€€€½¹ÍÐÕ¹Í¥¹•±½¹œ±½¹œÑ…É•Ñ5ˆ€ôÍÑèéµ…àñÕ¹Í¥¹•±½¹œ±½¹œø Ä°½ÁÑ¥½¹Ì¹Ñ…É•ÑM¥é•	åÑ•Ì€¼€ ÄÀÈÑU10€¨€ÄÀÈÑU10¤¤ì(€€€½¹ÍÐÍÑèéÝÍÑÉ¥¹œÍÑ•´€ôM…¹¥Ñ¥é•MÑ•´¡…¹…±åÍ¥Ì¹™¥±•A…Ñ ¹ÍÑ•´ ¤¹ÝÍÑÉ¥¹œ ¤¤ì(€€€É•ÑÕÉ¸½ÁÑ¥½¹Ì¹½ÕÑÁÕÑ½±‘•È€¼€¡ÍÑ•´€¬0‰}½µÁÉ•ÍÍ•‘|ˆ€¬ÍÑèéÑ½}ÝÍÑÉ¥¹œ¡Ñ…É•Ñ5ˆ¤€¬0‰µˆ¹µÀÐˆ¤ì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èé½Éµ…Ñ	åÑ•Ì¡Õ¹Í¥¹•±½¹œ±½¹œ‰åÑ•Ì¤)ì(€€€ÍÑ…Ñ¥Œ½¹ÍÑ•áÁÈ½¹ÍÐÝ¡…É}Ð¨Õ¹¥ÑÍmtì0‰ˆ°0‰-ˆ°0‰5ˆ°0‰ˆ°0‰Qˆôì(€€€‘½Õ‰±”Ù…±Õ”€ôÍÑ…Ñ¥}…ÍÐñ‘½Õ‰±”ø¡‰åÑ•Ì¤ì(€€€Í¥é•}ÐÕ¹¥Ð€ô€Àì(€€€Ý¡¥±”€¡Ù…±Õ”€øô€ÄÀÈÐ¸À€˜˜Õ¹¥Ð€¬€Ä€ðÍÑèéÍ¥é”¡Õ¹¥ÑÌ¤¤(€€€ì(€€€€€€€Ù…±Õ”€¼ô€ÄÀÈÐ¸Àì(€€€€€€€€¬­Õ¹¥Ðì(€€€ô(€€€ÍÑèéÝ½ÍÑÉ¥¹ÍÑÉ•…´½ÕÑÁÕÐì(€€€½ÕÑÁÕÐ€ððÍÑèé™¥á•€ððÍÑèéÍ•ÑÁÉ•¥Í¥½¸¡Õ¹¥Ð€ôô€À€ü€À€è€Ä¤€ððÙ…±Õ”€ðð0ˆ€ˆ€ððÕ¹¥ÑÍmÕ¹¥Ñtì(€€€É•ÑÕÉ¸½ÕÑÁÕÐ¹ÍÑÈ ¤ì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èé½Éµ…ÑÕÉ…Ñ¥½¸¡‘½Õ‰±”Í•½¹‘Ì¤)ì(€€€½¹ÍÐ¥¹ÐÑ½Ñ…°€ôÍÑèéµ…à À°ÍÑ…Ñ¥}…ÍÐñ¥¹Ðø¡ÍÑèéÉ½Õ¹¡Í•½¹‘Ì¤¤¤ì(€€€½¹ÍÐ¥¹Ð¡½ÕÉÌ€ôÑ½Ñ…°€¼€ÌØÀÀì(€€€½¹ÍÐ¥¹Ðµ¥¹ÕÑ•Ì€ô€¡Ñ½Ñ…°€”€ÌØÀÀ¤€¼€ØÀì(€€€½¹ÍÐ¥¹ÐÉ•µ…¥¹¥¹œ€ôÑ½Ñ…°€”€ØÀì(€€€Ý¡…É}Ð‰Õ™™•ÉlÌÉtíôì(€€€¥˜€¡¡½ÕÉÌ€ø€À¤ÍÝÁÉ¥¹Ñ™}Ì¡‰Õ™™•È°0ˆ•è”ÀÉè”ÀÉˆ°¡½ÕÉÌ°µ¥¹ÕÑ•Ì°É•µ…¥¹¥¹œ¤ì(€€€•±Í”ÍÝÁÉ¥¹Ñ™}Ì¡‰Õ™™•È°0ˆ•è”ÀÉˆ°µ¥¹ÕÑ•Ì°É•µ…¥¹¥¹œ¤ì(€€€É•ÑÕÉ¸‰Õ™™•Èì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èé½Éµ…Ñ	¥ÑÉ…Ñ”¡±½¹œ±½¹œ‰¥ÑÍA•ÉM•½¹¤)ì(€€€¥˜€¡‰¥ÑÍA•ÉM•½¹€øô€ÄÀÀÀÀÀÀ¤(€€€ì(€€€€€€€ÍÑèéÝ½ÍÑÉ¥¹ÍÑÉ•…´½ÕÑÁÕÐì(€€€€€€€½ÕÑÁÕÐ€ððÍÑèé™¥á•€ððÍÑèéÍ•ÑÁÉ•¥Í¥½¸ È¤€ððÍÑ…Ñ¥}…ÍÐñ‘½Õ‰±”ø¡‰¥ÑÍA•ÉM•½¹¤€¼€ÄÀÀÀÀÀÀ¸À€ðð0ˆ5‰ÁÌˆì(€€€€€€€É•ÑÕÉ¸½ÕÑÁÕÐ¹ÍÑÈ ¤ì(€€€ô(€€€É•ÑÕÉ¸ÍÑèéÑ½}ÝÍÑÉ¥¹œ¡ÍÑèéµ…àñ±½¹œ±½¹œø À°‰¥ÑÍA•ÉM•½¹€¼€ÄÀÀÀ¤¤€¬0ˆ­‰ÁÌˆì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èéA¡…Í•1…‰•°¡Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”Á¡…Í”¤)ì(€€€ÍÝ¥Ñ €¡Á¡…Í”¤(€€€ì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé%‘±”èÉ•ÑÕÉ¸0‰I•…‘äˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé¹…±åé¥¹œèÉ•ÑÕÉ¸0‰¹…±åé¥¹œˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé…±Õ±…Ñ¥¹œèÉ•ÑÕÉ¸0‰…±Õ±…Ñ¥¹œÍ•ÑÑ¥¹Ìˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéA…ÍÌÄèÉ•ÑÕÉ¸0‰¹½‘¥¹œÁ…ÍÌ€Äˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéA…ÍÌÈèÉ•ÑÕÉ¸0‰¹½‘¥¹œÁ…ÍÌ€Èˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé¹½‘¥¹œèÉ•ÑÕÉ¸0‰¹½‘¥¹œˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéY•É¥™å¥¹œèÉ•ÑÕÉ¸0‰Y•É¥™å¥¹œ½ÕÑÁÕÐÍ¥é”ˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èéI•ÑÉå¥¹œèÉ•ÑÕÉ¸0‰I•ÑÉå¥¹œÝ¥Ñ ±½Ý•È‰¥ÑÉ…Ñ”ˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé½µÁ±•Ñ”èÉ•ÑÕÉ¸0‰½µÁ±•Ñ”ˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé…¥±•èÉ•ÑÕÉ¸0‰…¥±•ˆì(€€€…Í”Y¥‘•½½µÁÉ•ÍÍ¥½¹A¡…Í”èé…¹•±±•èÉ•ÑÕÉ¸0‰…¹•±±•ˆì(€€€ô(€€€É•ÑÕÉ¸0‰I•…‘äˆì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èé5½‘•1…‰•°¡Y¥‘•½½µÁÉ•ÍÍ¥½¹5½‘”µ½‘”¤)ì(€€€É•ÑÕÉ¸µ½‘”€ôôY¥‘•½½µÁÉ•ÍÍ¥½¹5½‘”èéÕÉ…Ñ”€ü0‰	•ÍÐEÕ…±¥Ñä€¼ÕÉ…Ñ”M¥é”ˆ€è0‰…ÍÐˆì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èéI•Í½±ÕÑ¥½¹1…‰•°¡Y¥‘•½I•Í½±ÕÑ¥½¹5½‘”µ½‘”¤)ì(€€€ÍÝ¥Ñ €¡µ½‘”¤(€€€ì(€€€…Í”Y¥‘•½I•Í½±ÕÑ¥½¹5½‘”èéÕÑ¼èÉ•ÑÕÉ¸0‰ÕÑ¼ˆì(€€€…Í”Y¥‘•½I•Í½±ÕÑ¥½¹5½‘”èé=É¥¥¹…°èÉ•ÑÕÉ¸0‰=É¥¥¹…°ˆì(€€€…Í”Y¥‘•½I•Í½±ÕÑ¥½¹5½‘”èé5…àÄÀàÀèÉ•ÑÕÉ¸0ˆÄÀàÁÀµ…àˆì(€€€…Í”Y¥‘•½I•Í½±ÕÑ¥½¹5½‘”èé5…àÜÈÀèÉ•ÑÕÉ¸0ˆÜÈÁÀµ…àˆì(€€€…Í”Y¥‘•½I•Í½±ÕÑ¥½¹5½‘”èé5…àÐàÀèÉ•ÑÕÉ¸0ˆÐàÁÀµ…àˆì(€€€ô(€€€É•ÑÕÉ¸0‰ÕÑ¼ˆì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èéÁÍ1…‰•°¡Y¥‘•½ÁÍ5½‘”µ½‘”¤)ì(€€€ÍÝ¥Ñ €¡µ½‘”¤(€€€ì(€€€…Í”Y¥‘•½ÁÍ5½‘”èéÕÑ¼èÉ•ÑÕÉ¸0‰ÕÑ¼ˆì(€€€…Í”Y¥‘•½ÁÍ5½‘”èé=É¥¥¹…°èÉ•ÑÕÉ¸0‰=É¥¥¹…°ˆì(€€€…Í”Y¥‘•½ÁÍ5½‘”èéÁÌØÀèÉ•ÑÕÉ¸0ˆØÀALµ…àˆì(€€€…Í”Y¥‘•½ÁÍ5½‘”èéÁÌÌÀèÉ•ÑÕÉ¸0ˆÌÀALµ…àˆì(€€€…Í”Y¥‘•½ÁÍ5½‘”èéÁÌÈÐèÉ•ÑÕÉ¸0ˆÈÐALµ…àˆì(€€€ô(€€€É•ÑÕÉ¸0‰ÕÑ¼ˆì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èéÕ‘¥½1…‰•°¡Y¥‘•½Õ‘¥½5½‘”µ½‘”¤)ì(€€€ÍÝ¥Ñ €¡µ½‘”¤(€€€ì(€€€…Í”Y¥‘•½Õ‘¥½5½‘”èéÕÑ¼èÉ•ÑÕÉ¸0‰ÕÑ¼ˆì(€€€…Í”Y¥‘•½Õ‘¥½5½‘”èé,ÄäÈèÉ•ÑÕÉ¸0‰€ÄäÈ­‰ÁÌˆì(€€€…Í”Y¥‘•½Õ‘¥½5½‘”èé,ÄØÀèÉ•ÑÕÉ¸0‰€ÄØÀ­‰ÁÌˆì(€€€…Í”Y¥‘•½Õ‘¥½5½‘”èé,ÄÈàèÉ•ÑÕÉ¸0‰€ÄÈà­‰ÁÌˆì(€€€…Í”Y¥‘•½Õ‘¥½5½‘”èé,äØèÉ•ÑÕÉ¸0‰€äØ­‰ÁÌˆì(€€€…Í”Y¥‘•½Õ‘¥½5½‘”èé,ØÐèÉ•ÑÕÉ¸0‰€ØÐ­‰ÁÌˆì(€€€…Í”Y¥‘•½Õ‘¥½5½‘”èé5ÕÑ”èÉ•ÑÕÉ¸0‰5ÕÑ”…Õ‘¥¼ˆì(€€€ô(€€€É•ÑÕÉ¸0‰ÕÑ¼ˆì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èéAÉ•Í•Ñ1…‰•°¡Y¥‘•½¹½‘¥¹AÉ•Í•ÐÁÉ•Í•Ð¤)ì(€€€ÍÝ¥Ñ €¡ÁÉ•Í•Ð¤(€€€ì(€€€…Í”Y¥‘•½¹½‘¥¹AÉ•Í•ÐèéM±½ÜèÉ•ÑÕÉ¸0‰M±½Ü€¼‰•ÑÑ•È½µÁÉ•ÍÍ¥½¸ˆì(€€€…Í”Y¥‘•½¹½‘¥¹AÉ•Í•Ðèé5•‘¥Õ´èÉ•ÑÕÉ¸0‰5•‘¥Õ´ˆì(€€€…Í”Y¥‘•½¹½‘¥¹AÉ•Í•Ðèé…ÍÐèÉ•ÑÕÉ¸0‰…ÍÐˆì(€€€ô(€€€É•ÑÕÉ¸0‰M±½Ü€¼‰•ÑÑ•È½µÁÉ•ÍÍ¥½¸ˆì)ô()ÍÑèéÝÍÑÉ¥¹œY¥‘•½½µÁÉ•ÍÍ¥½¹M•ÉÙ¥”èé¹½‘•É1…‰•°¡Y¥‘•½¹½‘•É5½‘”µ½‘”¤)ì(€€€ÍÝ¥Ñ €¡µ½‘”¤(€€€ì(€€€…Í”Y¥‘•½¹½‘•É5½‘”èéÁÔèÉ•ÑÕÉ¸0‰AT€¼‰•ÍÐ½µÁÉ•ÍÍ¥½¸ˆì(€€€…Í”Y¥‘•½¹½‘•É5½‘”èéÕÑ½µ…Ñ¥ÁÔèÉ•ÑÕÉ¸0‰ÕÑ½µ…Ñ¥ŒAT€¼AT™…±±‰…¬ˆì(€€€ô(€€€É•ÑÕÉ¸0‰AT€¼‰•ÍÐ½µÁÉ•ÍÍ¥½¸ˆì)ô(
+        plan.warnings.push_back(L"This target requires aggressive compression. A larger target may noticeably improve quality.");
+    }
+    if (analysis.audioStreamCount > 1)
+    {
+        plan.warnings.push_back(L"Multiple audio streams detected. Version 1 uses the first audio stream.");
+    }
+    if (analysis.subtitleStreamCount > 0)
+    {
+        plan.warnings.push_back(L"Subtitles were detected but are not preserved in this version.");
+    }
+    if (plan.hardwareEncoding)
+    {
+        plan.warnings.push_back(L"GPU encoding is faster, but CPU encoding usually provides better compression at the same size.");
+    }
+    plan.valid = true;
+    return plan;
+}
+
+ExternalToolStatus VideoCompressionService::CheckExternalTools() const
+{
+    return externalToolService_.CheckTools();
+}
+
+std::wstring VideoCompressionService::SelectAvailableEncoder(
+    VideoEncoderMode mode,
+    const std::atomic_bool& cancelRequested) const
+{
+    if (mode == VideoEncoderMode::Cpu)
+    {
+        return L"libx264";
+    }
+    {
+        std::lock_guard<std::mutex> lock(encoderCacheMutex_);
+        if (automaticEncoderCached_)
+        {
+            return automaticEncoder_;
+        }
+    }
+
+    const ExternalToolStatus tools = CheckExternalTools();
+    if (!tools.ffmpegFound || cancelRequested.load())
+    {
+        return L"libx264";
+    }
+
+    std::wstring selected = L"libx264";
+    for (const std::wstring& candidate : { L"h264_nvenc", L"h264_qsv", L"h264_amf" })
+    {
+        const std::vector<std::wstring> testArguments {
+            L"-hide_banner", L"-loglevel", L"error",
+            L"-f", L"lavfi", L"-i", L"color=c=black:s=256x256:d=0.1",
+            L"-frames:v", L"1", L"-an", L"-c:v", candidate,
+            L"-f", L"null", L"NUL"
+        };
+        const ProcessResult test = processRunner_.Run(
+            tools.ffmpegPath,
+            testArguments,
+            cancelRequested,
+            {});
+        if (test.cancelled || cancelRequested.load())
+        {
+            return L"libx264";
+        }
+        if (test.exitCode == 0)
+        {
+            selected = candidate;
+            break;
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(encoderCacheMutex_);
+        automaticEncoder_ = selected;
+        automaticEncoderCached_ = true;
+    }
+    return selected;
+}
+
+VideoAnalysis VideoCompressionService::Analyze(
+    const std::filesystem::path& inputPath,
+    const std::atomic_bool& cancelRequested,
+    std::wstring& errorMessage) const
+{
+    VideoAnalysis analysis;
+    if (!IsSupportedInput(inputPath))
+    {
+        errorMessage = L"Choose a supported video file.";
+        return analysis;
+    }
+    std::error_code inputError;
+    const bool inputExists = std::filesystem::exists(inputPath, inputError);
+    const bool regularFile = inputExists && std::filesystem::is_regular_file(inputPath, inputError);
+    if (inputError || !regularFile)
+    {
+        errorMessage = L"The selected video could not be found.";
+        return analysis;
+    }
+
+    const ExternalToolStatus tools = CheckExternalTools();
+    if (!tools.ffprobeFound)
+    {
+        errorMessage = L"FFprobe is missing. Restore the bundled tools folder or add FFprobe to PATH.";
+        return analysis;
+    }
+
+    const std::vector<std::wstring> arguments {
+        L"-v", L"error",
+        L"-show_entries", L"stream=index,codec_type,codec_name,pix_fmt,width,height,avg_frame_rate,bit_rate:stream_disposition=attached_pic:format=duration,size,bit_rate",
+        L"-of", L"flat",
+        inputPath.wstring()
+    };
+    const ProcessResult result = processRunner_.Run(tools.ffprobePath, arguments, cancelRequested, {});
+    if (result.cancelled)
+    {
+        errorMessage = L"Analysis cancelled.";
+        return analysis;
+    }
+    if (result.exitCode != 0)
+    {
+        errorMessage = L"This video could not be analyzed. It may be corrupt or unsupported.";
+        return analysis;
+    }
+
+    struct StreamInfo
+    {
+        int index = -1;
+        std::wstring type;
+        std::wstring codec;
+        std::wstring pixelFormat;
+        int width = 0;
+        int height = 0;
+        double fps = 0.0;
+        long long bitrate = 0;
+        bool attachedPicture = false;
+    };
+    std::map<int, StreamInfo> streams;
+    std::wistringstream lines(result.output);
+    std::wstring line;
+    double formatDuration = 0.0;
+    long long formatBitrate = 0;
+    while (std::getline(lines, line))
+    {
+        line = Trim(line);
+        const size_t equals = line.find(L'=');
+        if (equals == std::wstring::npos) continue;
+        const std::wstring key = line.substr(0, equals);
+        const std::wstring value = Trim(line.substr(equals + 1));
+        if (key == L"format.duration") formatDuration = ParseDouble(value);
+        else if (key == L"format.bit_rate") formatBitrate = ParseInteger(value);
+        else if (key.rfind(L"streams.stream.", 0) == 0)
+        {
+            const size_t indexStart = 15;
+            const size_t propertyDot = key.find(L'.', indexStart);
+            if (propertyDot == std::wstring::npos) continue;
+            const int index = static_cast<int>(ParseInteger(key.substr(indexStart, propertyDot - indexStart)));
+            const std::wstring property = key.substr(propertyDot + 1);
+            StreamInfo& stream = streams[index];
+            if (property == L"index") stream.index = static_cast<int>(ParseInteger(value));
+            else if (property == L"codec_type") stream.type = value;
+            else if (property == L"codec_name") stream.codec = value;
+            else if (property == L"pix_fmt") stream.pixelFormat = value;
+            else if (property == L"width") stream.width = static_cast<int>(ParseInteger(value));
+            else if (property == L"height") stream.height = static_cast<int>(ParseInteger(value));
+            else if (property == L"avg_frame_rate") stream.fps = ParseRate(value);
+            else if (property == L"bit_rate") stream.bitrate = ParseInteger(value);
+            else if (property == L"disposition.attached_pic") stream.attachedPicture = ParseInteger(value) != 0;
+        }
+    }
+
+    for (const auto& pair : streams)
+    {
+        const StreamInfo& stream = pair.second;
+        if (stream.type == L"video" && !stream.attachedPicture && analysis.videoCodec.empty())
+        {
+            analysis.videoCodec = stream.codec;
+            analysis.pixelFormat = stream.pixelFormat;
+            analysis.width = stream.width;
+            analysis.height = stream.height;
+            analysis.fps = stream.fps;
+            analysis.videoStreamIndex = stream.index >= 0 ? stream.index : pair.first;
+        }
+        else if (stream.type == L"audio")
+        {
+            ++analysis.audioStreamCount;
+            if (!analysis.hasAudio)
+            {
+                analysis.hasAudio = true;
+                analysis.audioCodec = stream.codec;
+                analysis.audioBitrate = stream.bitrate;
+            }
+        }
+        else if (stream.type == L"subtitle")
+        {
+            ++analysis.subtitleStreamCount;
+        }
+    }
+    if (analysis.videoCodec.empty() || analysis.width <= 0 || analysis.height <= 0)
+    {
+        errorMessage = L"The selected file does not contain a usable video stream.";
+        return {};
+    }
+    if (!std::isfinite(formatDuration) || formatDuration <= 0.0)
+    {
+        errorMessage = L"The video duration is missing or zero.";
+        return {};
+    }
+
+    std::error_code sizeError;
+    analysis.filePath = inputPath;
+    analysis.fileName = inputPath.filename().wstring();
+    analysis.fileSizeBytes = std::filesystem::file_size(inputPath, sizeError);
+    if (sizeError || analysis.fileSizeBytes == 0)
+    {
+        errorMessage = L"The selected video's file size could not be read.";
+        return {};
+    }
+    analysis.durationSeconds = formatDuration;
+    if (formatBitrate > 0)
+    {
+        analysis.totalBitrate = formatBitrate;
+    }
+    else
+    {
+        const long double derivedBitrate = static_cast<long double>(analysis.fileSizeBytes) * 8.0L / analysis.durationSeconds;
+        if (!std::isfinite(derivedBitrate) || derivedBitrate > static_cast<long double>(std::numeric_limits<long long>::max()))
+        {
+            errorMessage = L"The video's bitrate could not be determined safely.";
+            return {};
+        }
+        analysis.totalBitrate = static_cast<long long>(derivedBitrate);
+    }
+    if (!std::isfinite(analysis.fps) || analysis.fps <= 0.0) analysis.fps = 30.0;
+    return analysis;
+}
+
+std::shared_ptr<const std::vector<double>> VideoCompressionService::BuildFrameTimestampIndex(
+    const VideoAnalysis& analysis,
+    const std::atomic_bool& cancelRequested) const
+{
+    constexpr size_t kMaximumIndexedFrames = 1000000;
+    if (analysis.filePath.empty() || analysis.videoStreamIndex < 0 ||
+        !std::isfinite(analysis.durationSeconds) || analysis.durationSeconds <= 0.0)
+    {
+        return {};
+    }
+
+    const double estimatedFrames = analysis.durationSeconds * std::max(1.0, analysis.fps);
+    if (!std::isfinite(estimatedFrames) || estimatedFrames > kMaximumIndexedFrames)
+    {
+        return {};
+    }
+
+    const ExternalToolStatus tools = CheckExternalTools();
+    if (!tools.ffprobeFound)
+    {
+        return {};
+    }
+
+    const std::vector<std::wstring> arguments {
+        L"-v", L"error",
+        L"-select_streams", std::to_wstring(analysis.videoStreamIndex),
+        L"-read_intervals", L"0%+#1000001",
+        L"-show_packets",
+        L"-show_entries", L"packet=pts_time",
+        L"-of", L"csv=p=0",
+        analysis.filePath.wstring()
+    };
+    const ProcessResult result = processRunner_.Run(
+        tools.ffprobePath,
+        arguments,
+        cancelRequested,
+        {});
+    if (result.cancelled || result.exitCode != 0)
+    {
+        return {};
+    }
+
+    std::vector<double> timestamps;
+    timestamps.reserve(static_cast<size_t>(std::min(estimatedFrames + 16.0, 65536.0)));
+    std::wistringstream lines(result.output);
+    std::wstring line;
+    while (std::getline(lines, line))
+    {
+        std::wistringstream value(line);
+        double timestamp = 0.0;
+        if (value >> timestamp && std::isfinite(timestamp))
+        {
+            timestamps.push_back(timestamp);
+            if (timestamps.size() > kMaximumIndexedFrames) return {};
+        }
+    }
+    if (timestamps.size() < 2)
+    {
+        return {};
+    }
+
+    std::sort(timestamps.begin(), timestamps.end());
+    timestamps.erase(
+        std::unique(
+            timestamps.begin(),
+            timestamps.end(),
+            [](double left, double right) { return std::abs(left - right) <= 0.0000001; }),
+        timestamps.end());
+    const double origin = timestamps.front();
+    for (double& timestamp : timestamps) timestamp = std::max(0.0, timestamp - origin);
+    return std::make_shared<const std::vector<double>>(std::move(timestamps));
+}
+
+VideoCompressionPlan VideoCompressionService::Plan(const VideoAnalysis& analysis, const VideoCompressionOptions& options) const
+{
+    return planner_.CreatePlan(analysis, options);
+}
+
+VideoCompressionResult VideoCompressionService::Compress(
+    const VideoAnalysis& analysis,
+    const VideoCompressionOptions& options,
+    const std::filesystem::path& requestedOutputPath,
+    const std::atomic_bool& cancelRequested,
+    const ProgressCallback& progressCallback) const
+{
+    VideoCompressionResult finalResult;
+    finalResult.originalSizeBytes = analysis.fileSizeBytes;
+    finalResult.plan = Plan(analysis, options);
+    if (!finalResult.plan.valid)
+    {
+        finalResult.errorMessage = finalResult.plan.errorMessage;
+        return finalResult;
+    }
+
+    std::error_code inputError;
+    const bool inputExists = std::filesystem::exists(analysis.filePath, inputError);
+    const bool inputIsFile = inputExists && std::filesystem::is_regular_file(analysis.filePath, inputError);
+    if (inputError || !inputIsFile)
+    {
+        finalResult.errorMessage = L"The selected video is no longer available. Add it again and retry.";
+        return finalResult;
+    }
+    const unsigned long long currentInputSize = std::filesystem::file_size(analysis.filePath, inputError);
+    if (inputError || currentInputSize == 0 ||
+        (analysis.fileSizeBytes > 0 && currentInputSize != analysis.fileSizeBytes))
+    {
+        finalResult.errorMessage = L"The selected video changed after it was analyzed. Add it again before compressing.";
+        return finalResult;
+    }
+
+    const ExternalToolStatus tools = CheckExternalTools();
+    if (!tools.ffmpegFound)
+    {
+        finalResult.errorMessage = L"FFmpeg is missing. Restore the bundled tools folder or add FFmpeg to PATH.";
+        return finalResult;
+    }
+
+    std::wstring selectedEncoder = SelectAvailableEncoder(options.encoderMode, cancelRequested);
+    if (options.encoderMode == VideoEncoderMode::AutomaticGpu && selectedEncoder == L"libx264")
+    {
+        finalResult.plan.warnings.push_back(L"No compatible GPU encoder was available, so this job used the CPU.");
+    }
+    if (cancelRequested.load())
+    {
+        finalResult.cancelled = true;
+        finalResult.errorMessage = L"Compression cancelled.";
+        return finalResult;
+    }
+    finalResult.plan.encoderName = selectedEncoder;
+    finalResult.plan.hardwareEncoding = selectedEncoder != L"libx264";
+    finalResult.plan.videoCodec = finalResult.plan.hardwareEncoding ? L"H.264 (GPU accelerated)" : L"H.264 (CPU)";
+    std::error_code outputFolderError;
+    const bool outputFolderExists = !options.outputFolder.empty() &&
+        std::filesystem::exists(options.outputFolder, outputFolderError);
+    const bool outputFolderIsDirectory = outputFolderExists &&
+        std::filesystem::is_directory(options.outputFolder, outputFolderError);
+    if (outputFolderError || !outputFolderIsDirectory)
+    {
+        finalResult.errorMessage = L"Choose a valid output folder.";
+        return finalResult;
+    }
+
+    CleanupStaleWorkingOutputs(options.outputFolder);
+
+    std::error_code spaceError;
+    const auto availableSpace = std::filesystem::space(options.outputFolder, spaceError).available;
+    constexpr unsigned long long reserveBytes = 64ULL * 1024ULL * 1024ULL;
+    const unsigned long long requiredSpace = options.targetSizeBytes > std::numeric_limits<unsigned long long>::max() - reserveBytes
+        ? std::numeric_limits<unsigned long long>::max()
+        : options.targetSizeBytes + reserveBytes;
+    if (!spaceError && availableSpace < requiredSpace)
+    {
+        finalResult.errorMessage = L"There is not enough free space in the output folder for this compression job.";
+        return finalResult;
+    }
+
+    finalResult.outputPath = ResolveOutputConflict(requestedOutputPath, options.conflictBehavior);
+    const std::filesystem::path tempDirectory = CreateJobTempDirectory();
+    if (tempDirectory.empty())
+    {
+        finalResult.errorMessage = L"Could not create temporary files for the compression job.";
+        return finalResult;
+    }
+    const std::filesystem::path workingOutputPath = CreateWorkingOutputPath(finalResult.outputPath);
+    const std::filesystem::path passLog = tempDirectory / L"pass";
+    const auto started = std::chrono::steady_clock::now();
+
+    auto report = [&](VideoCompressionPhase phase, double progress, const std::wstring& message, const std::wstring& speed, int retry)
+    {
+        if (!progressCallback) return;
+        VideoCompressionProgress update;
+        update.phase = phase;
+        update.progress = std::clamp(progress, 0.0, 1.0);
+        update.message = message;
+        update.speed = speed;
+        update.retryNumber = retry;
+        update.elapsedSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+        if (update.progress > 0.01 && update.progress < 1.0)
+        {
+            update.estimatedRemainingSeconds = update.elapsedSeconds * (1.0 - update.progress) / update.progress;
+        }
+        std::error_code outputSizeError;
+        if (std::filesystem::exists(workingOutputPath, outputSizeError))
+        {
+            update.currentOutputSizeBytes = std::filesystem::file_size(workingOutputPath, outputSizeError);
+        }
+        progressCallback(update);
+    };
+
+    long long videoBitrate = finalResult.plan.videoBitrate;
+    const int attempts = options.retryIfTooLarge ? std::max(1, options.maxRetries + 1) : 1;
+    bool gpuFallbackAttempted = false;
+    for (int attempt = 0; attempt < attempts; ++attempt)
+    {
+        if (cancelRequested.load())
+        {
+            finalResult.cancelled = true;
+            break;
+        }
+        CleanupPath(workingOutputPath);
+        if (attempt > 0)
+        {
+            report(VideoCompressionPhase::Retrying, 0.0, L"Retrying with a lower bitrate...", L"", attempt);
+        }
+
+        ProcessResult encodeResult;
+        if (options.mode == VideoCompressionMode::Accurate && !finalResult.plan.hardwareEncoding)
+        {
+            std::vector<std::wstring> pass1 = BaseVideoArguments(analysis, options, finalResult.plan, selectedEncoder, videoBitrate);
+            pass1.insert(pass1.end(), {
+                L"-an", L"-pass", L"1", L"-passlogfile", passLog.wstring(),
+                L"-progress", L"pipe:1", L"-nostats", L"-f", L"null", L"NUL"
+            });
+            ProgressParser parser1(analysis.durationSeconds, 0.0, 0.5);
+            std::wstring speed;
+            report(VideoCompressionPhase::Pass1, 0.0, L"Encoding pass 1 of 2...", L"", attempt);
+            ProcessResult pass1Result = processRunner_.Run(
+                tools.ffmpegPath,
+                pass1,
+                cancelRequested,
+                [&](const std::wstring& chunk)
+                {
+                    double value = 0.0;
+                    parser1.Consume(chunk, value, speed);
+                    report(VideoCompressionPhase::Pass1, value, L"Encoding pass 1 of 2...", speed, attempt);
+                });
+            if (pass1Result.cancelled || pass1Result.exitCode != 0)
+            {
+                encodeResult = pass1Result;
+            }
+            else
+            {
+                std::vector<std::wstring> pass2 = BaseVideoArguments(analysis, options, finalResult.plan, selectedEncoder, videoBitrate);
+                pass2.insert(pass2.end(), { L"-pass", L"2", L"-passlogfile", passLog.wstring() });
+                if (finalResult.plan.audioBitrate > 0)
+                {
+                    pass2.insert(pass2.end(), { L"-map", L"0:a:0?", L"-c:a", L"aac", L"-b:a", BitrateArgument(finalResult.plan.audioBitrate) });
+                }
+                else
+                {
+                    pass2.push_back(L"-an");
+                }
+                if (!options.preserveMetadata)
+                {
+                    pass2.insert(pass2.end(), { L"-map_metadata", L"-1" });
+                }
+                pass2.insert(pass2.end(), { L"-sn", L"-movflags", L"+faststart", L"-progress", L"pipe:1", L"-nostats", workingOutputPath.wstring() });
+                ProgressParser parser2(analysis.durationSeconds, 0.5, 0.5);
+                report(VideoCompressionPhase::Pass2, 0.5, L"Encoding pass 2 of 2...", L"", attempt);
+                encodeResult = processRunner_.Run(
+                    tools.ffmpegPath,
+                    pass2,
+                    cancelRequested,
+                    [&](const std::wstring& chunk)
+                    {
+                        double value = 0.5;
+                        parser2.Consume(chunk, value, speed);
+                        report(VideoCompressionPhase::Pass2, value, L"Encoding pass 2 of 2...", speed, attempt);
+                    });
+            }
+        }
+        else
+        {
+            std::vector<std::wstring> arguments = BaseVideoArguments(analysis, options, finalResult.plan, selectedEncoder, videoBitrate);
+            arguments.insert(arguments.end(), {
+                L"-maxrate", BitrateArgument(videoBitrate),
+                L"-bufsize", BitrateArgument(videoBitrate * 2)
+            });
+            if (finalResult.plan.audioBitrate > 0)
+            {
+                arguments.insert(arguments.end(), { L"-map", L"0:a:0?", L"-c:a", L"aac", L"-b:a", BitrateArgument(finalResult.plan.audioBitrate) });
+            }
+            else
+            {
+                arguments.push_back(L"-an");
+            }
+            if (!options.preserveMetadata)
+            {
+                arguments.insert(arguments.end(), { L"-map_metadata", L"-1" });
+            }
+            arguments.insert(arguments.end(), { L"-sn", L"-movflags", L"+faststart", L"-progress", L"pipe:1", L"-nostats", workingOutputPath.wstring() });
+            ProgressParser parser(analysis.durationSeconds, 0.0, 1.0);
+            std::wstring speed;
+            report(VideoCompressionPhase::Encoding, 0.0, L"Encoding video...", L"", attempt);
+            encodeResult = processRunner_.Run(
+                tools.ffmpegPath,
+                arguments,
+                cancelRequested,
+                [&](const std::wstring& chunk)
+                {
+                    double value = 0.0;
+                    parser.Consume(chunk, value, speed);
+                    report(VideoCompressionPhase::Encoding, value, L"Encoding video...", speed, attempt);
+                });
+        }
+
+        if (encodeResult.cancelled || cancelRequested.load())
+        {
+            finalResult.cancelled = true;
+            break;
+        }
+        std::error_code outputExistsError;
+        const bool outputExists = std::filesystem::exists(workingOutputPath, outputExistsError);
+        if (encodeResult.exitCode != 0 || outputExistsError || !outputExists)
+        {
+            if (finalResult.plan.hardwareEncoding && !gpuFallbackAttempted)
+            {
+                gpuFallbackAttempted = true;
+                selectedEncoder = L"libx264";
+                finalResult.plan.encoderName = selectedEncoder;
+                finalResult.plan.hardwareEncoding = false;
+                finalResult.plan.videoCodec = L"H.264 (CPU)";
+                const std::wstring gpuQualityWarning = L"GPU encoding is faster, but CPU encoding usually provides better compression at the same size.";
+                finalResult.plan.warnings.erase(
+                    std::remove(finalResult.plan.warnings.begin(), finalResult.plan.warnings.end(), gpuQualityWarning),
+                    finalResult.plan.warnings.end());
+                finalResult.plan.warnings.push_back(L"GPU encoding failed for this video, so the job automatically used the CPU instead.");
+                CleanupPath(workingOutputPath);
+                report(VideoCompressionPhase::Retrying, 0.0, L"GPU encoding failed. Retrying with the CPU...", L"", attempt);
+                videoBitrate = finalResult.plan.videoBitrate;
+                finalResult.retriesUsed = 0;
+                attempt = -1;
+                continue;
+            }
+            finalResult.errorMessage = L"FFmpeg could not compress this video with the selected settings.";
+            break;
+        }
+
+        report(VideoCompressionPhase::Verifying, 1.0, L"Verifying final size...", L"", attempt);
+        std::error_code fileSizeError;
+        finalResult.finalSizeBytes = std::filesystem::file_size(workingOutputPath, fileSizeError);
+        if (fileSizeError || finalResult.finalSizeBytes == 0)
+        {
+            finalResult.errorMessage = L"The compressed output file was not created correctly.";
+            break;
+        }
+        if (!options.verifyFinalSize || finalResult.finalSizeBytes <= options.targetSizeBytes)
+        {
+            finalResult.success = true;
+            finalResult.retriesUsed = attempt;
+            break;
+        }
+        if (attempt + 1 < attempts)
+        {
+            const double measuredRatio = static_cast<double>(options.targetSizeBytes) / finalResult.finalSizeBytes;
+            videoBitrate = std::max<long long>(kMinimumVideoBitrate, static_cast<long long>(videoBitrate * measuredRatio * 0.96));
+            finalResult.retriesUsed = attempt + 1;
+            continue;
+        }
+        finalResult.errorMessage = L"The output could not be kept under the target size with the selected settings. Try a lower resolution, lower FPS, lower audio bitrate, or a larger target.";
+    }
+
+    if (finalResult.success)
+    {
+        if (options.conflictBehavior == VideoConflictBehavior::AutoRename)
+        {
+            finalResult.outputPath = ResolveOutputConflict(finalResult.outputPath, options.conflictBehavior);
+        }
+        DWORD moveFlags = MOVEFILE_WRITE_THROUGH;
+        if (options.conflictBehavior == VideoConflictBehavior::Overwrite)
+        {
+            moveFlags |= MOVEFILE_REPLACE_EXISTING;
+        }
+        if (!MoveFileExW(workingOutputPath.c_str(), finalResult.outputPath.c_str(), moveFlags))
+        {
+            finalResult.success = false;
+            finalResult.errorMessage = L"The compressed video was created, but it could not replace or save the destination file. Close any app using that file and try again.";
+        }
+    }
+
+    CleanupPath(tempDirectory, true);
+    if (finalResult.cancelled)
+    {
+        CleanupPath(workingOutputPath);
+        finalResult.errorMessage = L"Compression cancelled.";
+        report(VideoCompressionPhase::Cancelled, 0.0, finalResult.errorMessage, L"", finalResult.retriesUsed);
+    }
+    else if (!finalResult.success)
+    {
+        CleanupPath(workingOutputPath);
+        if (finalResult.errorMessage.empty())
+        {
+            finalResult.errorMessage = L"Compression failed before an output file could be created.";
+        }
+        report(VideoCompressionPhase::Failed, 0.0, finalResult.errorMessage, L"", finalResult.retriesUsed);
+    }
+    else
+    {
+        report(VideoCompressionPhase::Complete, 1.0, L"Compression complete.", L"", finalResult.retriesUsed);
+    }
+    return finalResult;
+}
+
+bool VideoCompressionService::IsSupportedInput(const std::filesystem::path& path)
+{
+    const std::wstring extension = Lower(path.extension().wstring());
+    return extension == L".mp4" || extension == L".mov" || extension == L".mkv" ||
+        extension == L".webm" || extension == L".avi" || extension == L".m4v" ||
+        extension == L".wmv" || extension == L".flv" || extension == L".mpeg" ||
+        extension == L".mpg" || extension == L".ts" || extension == L".m2ts" ||
+        extension == L".mts" || extension == L".3gp" || extension == L".3g2" ||
+        extension == L".ogv" || extension == L".vob" || extension == L".mxf" ||
+        extension == L".asf" || extension == L".f4v";
+}
+
+std::filesystem::path VideoCompressionService::DefaultOutputPath(
+    const VideoAnalysis& analysis,
+    const VideoCompressionOptions& options)
+{
+    const unsigned long long targetMb = std::max<unsigned long long>(1, options.targetSizeBytes / (1024ULL * 1024ULL));
+    const std::wstring stem = SanitizeStem(analysis.filePath.stem().wstring());
+    return options.outputFolder / (stem + L"_compressed_" + std::to_wstring(targetMb) + L"mb.mp4");
+}
+
+std::wstring VideoCompressionService::FormatBytes(unsigned long long bytes)
+{
+    static constexpr const wchar_t* units[] { L"B", L"KB", L"MB", L"GB", L"TB" };
+    double value = static_cast<double>(bytes);
+    size_t unit = 0;
+    while (value >= 1024.0 && unit + 1 < std::size(units))
+    {
+        value /= 1024.0;
+        ++unit;
+    }
+    std::wostringstream output;
+    output << std::fixed << std::setprecision(unit == 0 ? 0 : 1) << value << L" " << units[unit];
+    return output.str();
+}
+
+std::wstring VideoCompressionService::FormatDuration(double seconds)
+{
+    const int total = std::max(0, static_cast<int>(std::round(seconds)));
+    const int hours = total / 3600;
+    const int minutes = (total % 3600) / 60;
+    const int remaining = total % 60;
+    wchar_t buffer[32] {};
+    if (hours > 0) swprintf_s(buffer, L"%d:%02d:%02d", hours, minutes, remaining);
+    else swprintf_s(buffer, L"%d:%02d", minutes, remaining);
+    return buffer;
+}
+
+std::wstring VideoCompressionService::FormatBitrate(long long bitsPerSecond)
+{
+    if (bitsPerSecond >= 1000000)
+    {
+        std::wostringstream output;
+        output << std::fixed << std::setprecision(2) << static_cast<double>(bitsPerSecond) / 1000000.0 << L" Mbps";
+        return output.str();
+    }
+    return std::to_wstring(std::max<long long>(0, bitsPerSecond / 1000)) + L" kbps";
+}
+
+std::wstring VideoCompressionService::PhaseLabel(VideoCompressionPhase phase)
+{
+    switch (phase)
+    {
+    case VideoCompressionPhase::Idle: return L"Ready";
+    case VideoCompressionPhase::Analyzing: return L"Analyzing";
+    case VideoCompressionPhase::Calculating: return L"Calculating settings";
+    case VideoCompressionPhase::Pass1: return L"Encoding pass 1";
+    case VideoCompressionPhase::Pass2: return L"Encoding pass 2";
+    case VideoCompressionPhase::Encoding: return L"Encoding";
+    case VideoCompressionPhase::Verifying: return L"Verifying output size";
+    case VideoCompressionPhase::Retrying: return L"Retrying with lower bitrate";
+    case VideoCompressionPhase::Complete: return L"Complete";
+    case VideoCompressionPhase::Failed: return L"Failed";
+    case VideoCompressionPhase::Cancelled: return L"Cancelled";
+    }
+    return L"Ready";
+}
+
+std::wstring VideoCompressionService::ModeLabel(VideoCompressionMode mode)
+{
+    return mode == VideoCompressionMode::Accurate ? L"Best Quality / Accurate Size" : L"Fast";
+}
+
+std::wstring VideoCompressionService::ResolutionLabel(VideoResolutionMode mode)
+{
+    switch (mode)
+    {
+    case VideoResolutionMode::Auto: return L"Auto";
+    case VideoResolutionMode::Original: return L"Original";
+    case VideoResolutionMode::Max1080: return L"1080p max";
+    case VideoResolutionMode::Max720: return L"720p max";
+    case VideoResolutionMode::Max480: return L"480p max";
+    }
+    return L"Auto";
+}
+
+std::wstring VideoCompressionService::FpsLabel(VideoFpsMode mode)
+{
+    switch (mode)
+    {
+    case VideoFpsMode::Auto: return L"Auto";
+    case VideoFpsMode::Original: return L"Original";
+    case VideoFpsMode::Fps60: return L"60 FPS max";
+    case VideoFpsMode::Fps30: return L"30 FPS max";
+    case VideoFpsMode::Fps24: return L"24 FPS max";
+    }
+    return L"Auto";
+}
+
+std::wstring VideoCompressionService::AudioLabel(VideoAudioMode mode)
+{
+    switch (mode)
+    {
+    case VideoAudioMode::Auto: return L"Auto";
+    case VideoAudioMode::K192: return L"AAC 192 kbps";
+    case VideoAudioMode::K160: return L"AAC 160 kbps";
+    case VideoAudioMode::K128: return L"AAC 128 kbps";
+    case VideoAudioMode::K96: return L"AAC 96 kbps";
+    case VideoAudioMode::K64: return L"AAC 64 kbps";
+    case VideoAudioMode::Mute: return L"Mute audio";
+    }
+    return L"Auto";
+}
+
+std::wstring VideoCompressionService::PresetLabel(VideoEncodingPreset preset)
+{
+    switch (preset)
+    {
+    case VideoEncodingPreset::Slow: return L"Slow / better compression";
+    case VideoEncodingPreset::Medium: return L"Medium";
+    case VideoEncodingPreset::Fast: return L"Fast";
+    }
+    return L"Slow / better compression";
+}
+
+std::wstring VideoCompressionService::EncoderLabel(VideoEncoderMode mode)
+{
+    switch (mode)
+    {
+    case VideoEncoderMode::Cpu: return L"CPU / best compression";
+    case VideoEncoderMode::AutomaticGpu: return L"Automatic GPU / CPU fallback";
+    }
+    return L"CPU / best compression";
+}

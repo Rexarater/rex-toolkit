@@ -1,10 +1,11 @@
 {
-  "latestVersion": "0.7.0",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.7.0/RexsToolkit_v0.7.0.zip",
+  "latestVersion": "0.8.0",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.8.0/RexsToolkit_v0.8.0.zip",
   "releaseNotes": [
-    "Added Video Compressor with target-size controls, CPU and automatic GPU processing, output verification, and automatic retries.",
-    "Added one-click reminder creation for upcoming anime episodes and releases.",
-    "Improved Video Compressor safety, warning accuracy, GPU fallback, stream selection, and output handling.",
-    "The YouTube and SoundCloud downloader now remembers the selected MP4, MP3, or WAV format between links and app launches."
+    "Added the Video & Image Editor with video trimming, clip arranging, GPU-assisted export, image cropping, drawing, clipboard copy, and save workflows.",
+    "Redesigned the Video Compressor, Reminders, and File Converter around simpler, clearer workflows.",
+    "Expanded Appearance settings with custom backgrounds and refined surface styling, plus smoother and faster scrolling throughout the app.",
+    "Improved video playback, frame stepping, timeline editing, export accuracy, and image editing behavior.",
+    "Enabled Edit in Rex's Toolkit in Windows file menus by default for new installs."
   ]
 }

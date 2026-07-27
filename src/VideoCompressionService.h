@@ -5,6 +5,8 @@
 #include <atomic>
 #include <filesystem>
 #include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -88,12 +90,14 @@ struct VideoAnalysis
     int videoStreamIndex = -1;
     double fps = 0.0;
     std::wstring videoCodec;
+    std::wstring pixelFormat;
     std::wstring audioCodec;
     long long audioBitrate = 0;
     long long totalBitrate = 0;
     bool hasAudio = false;
     int audioStreamCount = 0;
     int subtitleStreamCount = 0;
+    std::shared_ptr<const std::vector<double>> frameTimestamps;
 };
 
 struct VideoCompressionOptions
@@ -169,10 +173,16 @@ public:
     using ProgressCallback = std::function<void(const VideoCompressionProgress&)>;
 
     ExternalToolStatus CheckExternalTools() const;
+    std::wstring SelectAvailableEncoder(
+        VideoEncoderMode mode,
+        const std::atomic_bool& cancelRequested) const;
     VideoAnalysis Analyze(
         const std::filesystem::path& inputPath,
         const std::atomic_bool& cancelRequested,
         std::wstring& errorMessage) const;
+    std::shared_ptr<const std::vector<double>> BuildFrameTimestampIndex(
+        const VideoAnalysis& analysis,
+        const std::atomic_bool& cancelRequested) const;
     VideoCompressionPlan Plan(const VideoAnalysis& analysis, const VideoCompressionOptions& options) const;
     VideoCompressionResult Compress(
         const VideoAnalysis& analysis,
@@ -200,4 +210,7 @@ private:
     ExternalToolService externalToolService_;
     ProcessRunner processRunner_;
     VideoCompressionPlanner planner_;
+    mutable std::mutex encoderCacheMutex_;
+    mutable bool automaticEncoderCached_ = false;
+    mutable std::wstring automaticEncoder_ = L"libx264";
 };

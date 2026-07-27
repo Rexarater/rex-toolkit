@@ -1,7 +1,10 @@
 .vs/
+.ui-test-appdata/
 build/
 build-*/
+dist/
 out/
+third_party/
 work/
 *.user
 *.suo

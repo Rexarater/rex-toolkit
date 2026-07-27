@@ -564,4 +564,1289 @@ Reminder ReminderFromObject(const std::string& object)
     reminder.allDay = ExtractBool(object, "allDay");
     reminder.priority = ReminderService::PriorityFromString(ExtractString(object, "priority"));
     reminder.category = ExtractString(object, "category");
-    if (reïß7¶‰Ëkºwµç@€É•ÑÕÉ¸™…±Í”ì(€€€€€€€€€€€ô((€€€€€€€€€€€½¹ÍĞ¥¹ĞÕ¹¥Ñ5¥¹ÕÑ•Ì€ôÕ¹¥ÑQ½5¥¹ÕÑ•Ì¡Ù…±Õ”¹ÍÕ‰ÍÑÈ¡Õ¹¥ÑMÑ…ÉĞ°Á½Í¥Ñ¥½¸€´Õ¹¥ÑMÑ…ÉĞ¤¤ì(€€€€€€€€€€€¥˜€ ……‘‘5¥¹ÕÑ•Ì¡Ñ½Ñ…±5¥¹ÕÑ•Ì°…µ½Õ¹Ğ°Õ¹¥Ñ5¥¹ÕÑ•Ì¤¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€É•ÑÕÉ¸™…±Í”ì(€€€€€€€€€€€ô(€€€€€€€€€€€Á…ÉÍ•‘¹ä€ôÑÉÕ”ì(€€€€€€€ô((€€€€€€€¥˜€ …Á…ÉÍ•‘¹äñğÑ½Ñ…±5¥¹ÕÑ•Ì€ğô€ÀñğÑ½Ñ…±5¥¹ÕÑ•Ì€ø­5…á9…ÑÕÉ…±I•µ¥¹‘•É5¥¹ÕÑ•Ì¤(€€€€€€€ì(€€€€€€€€€€€É•ÑÕÉ¸™…±Í”ì(€€€€€€€ô(€€€€€€€µ¥¹ÕÑ•Ì€ôÍÑ…Ñ¥}…ÍĞñ¥¹Ğø¡Ñ½Ñ…±5¥¹ÕÑ•Ì¤ì(€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€ôì((€€€…ÕÑ¼Á…ÉÍ•I•±…Ñ¥Ù•ÕÉ…Ñ¥½¸€ôl™t¡Í¥é•}ĞÍÑ…ÉÑ%¹‘•à°¥¹Ğ˜Ñ½Ñ…±5¥¹ÕÑ•Ì¤(€€€ì(€€€€€€€‰½½°Á…ÉÍ•‘¹ä€ô™…±Í”ì(€€€€€€€±½¹œ±½¹œ…ÕµÕ±…Ñ•‘5¥¹ÕÑ•Ì€ô€Àì((€€€€€€€™½È€¡Í¥é•}Ğ¥¹‘•à€ôÍÑ…ÉÑ%¹‘•àì¥¹‘•à€ğÑ½­•¹Ì¹Í¥é” ¤ì¤(€€€€€€€ì(€€€€€€€€€€€¥˜€¡Ñ½­•¹Ím¥¹‘•át€ôô0‰…¹ˆ¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€¥˜€ …Á…ÉÍ•‘¹ä¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€É•ÑÕÉ¸™…±Í”ì(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€¬­¥¹‘•àì(€€€€€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€€€€€ô((€€€€€€€€€€€¥˜€¡Ñ½­•¹Ím¥¹‘•át€ôô0‰¡…±˜ˆ¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€Í¥é•}ĞÕ¹¥Ñ%¹‘•à€ô¥¹‘•à€¬€Äì(€€€€€€€€€€€€€€€¥˜€¡Õ¹¥Ñ%¹‘•à€ğÑ½­•¹Ì¹Í¥é” ¤€˜˜€¡Ñ½­•¹ÍmÕ¹¥Ñ%¹‘•át€ôô0‰„ˆñğÑ½­•¹ÍmÕ¹¥Ñ%¹‘•át€ôô0‰…¸ˆ¤¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€€¬­Õ¹¥Ñ%¹‘•àì(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€¥˜€¡Õ¹¥Ñ%¹‘•à€ğÑ½­•¹Ì¹Í¥é” ¤¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€½¹ÍĞ¥¹ĞÕ¹¥Ñ5¥¹ÕÑ•Ì€ôÕ¹¥ÑQ½5¥¹ÕÑ•Ì¡Ñ½­•¹ÍmÕ¹¥Ñ%¹‘•át¤ì(€€€€€€€€€€€€€€€€€€€¥˜€¡Õ¹¥Ñ5¥¹ÕÑ•Ì€ø€À¤(€€€€€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€€€€€¥˜€ ……‘‘5¥¹ÕÑ•Ì¡…ÕµÕ±…Ñ•‘5¥¹ÕÑ•Ì°ÍÑèéµ…à Ä°Õ¹¥Ñ5¥¹ÕÑ•Ì€¼€È¤°€Ä¤¤(€€€€€€€€€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€€€€€€€€€É•ÑÕÉ¸™…±Í”ì(€€€€€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€€€€€Á…ÉÍ•‘¹ä€ôÑÉÕ”ì(€€€€€€€€€€€€€€€€€€€€€€€¥¹‘•à€ôÕ¹¥Ñ%¹‘•à€¬€Äì(€€€€€€€€€€€€€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€ô((€€€€€€€€€€€¥¹Ğ…µ½Õ¹Ğ€ô€Àì(€€€€€€€€€€€Í¥é•}Ğ…µ½Õ¹ÑQ½­•¹Ì€ô€Àì(€€€€€€€€€€€¥˜€¡Á…ÉÍ•µ½Õ¹ÑĞ¡¥¹‘•à°…µ½Õ¹Ğ°…µ½Õ¹ÑQ½­•¹Ì¤€˜˜(€€€€€€€€€€€€€€€¥¹‘•à€¬…µ½Õ¹ÑQ½­•¹Ì€ğÑ½­•¹Ì¹Í¥é” ¤¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€½¹ÍĞ¥¹ĞÕ¹¥Ñ5¥¹ÕÑ•Ì€ôÕ¹¥ÑQ½5¥¹ÕÑ•Ì¡Ñ½­•¹Ím¥¹‘•à€¬…µ½Õ¹ÑQ½­•¹Ít¤ì(€€€€€€€€€€€€€€€¥˜€¡Õ¹¥Ñ5¥¹ÕÑ•Ì€ø€À¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€¥˜€ ……‘‘5¥¹ÕÑ•Ì¡…ÕµÕ±…Ñ•‘5¥¹ÕÑ•Ì°…µ½Õ¹Ğ°Õ¹¥Ñ5¥¹ÕÑ•Ì¤¤(€€€€€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€€€€€É•ÑÕÉ¸™…±Í”ì(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€Á…ÉÍ•‘¹ä€ôÑÉÕ”ì(€€€€€€€€€€€€€€€€€€€¥¹‘•à€¬ô…µ½Õ¹ÑQ½­•¹Ì€¬€Äì(€€€€€€€€€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€ô((€€€€€€€€€€€¥¹Ğ½µÁ…Ñ5¥¹ÕÑ•Ì€ô€Àì(€€€€€€€€€€€¥˜€¡Á…ÉÍ•½µÁ…ÑÕÉ…Ñ¥½¹Q½­•¸¡Ñ½­•¹Ím¥¹‘•át°½µÁ…Ñ5¥¹ÕÑ•Ì¤¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€¥˜€ ……‘‘5¥¹ÕÑ•Ì¡…ÕµÕ±…Ñ•‘5¥¹ÕÑ•Ì°½µÁ…Ñ5¥¹ÕÑ•Ì°€Ä¤¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€É•ÑÕÉ¸™…±Í”ì(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€Á…ÉÍ•‘¹ä€ôÑÉÕ”ì(€€€€€€€€€€€€€€€€¬­¥¹‘•àì(€€€€€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€€€€€ô((€€€€€€€€€€€¥˜€¡Á…ÉÍ•‘¹ä€˜˜(€€€€€€€€€€€€€€€¥¹‘•à€¬€È€ğÑ½­•¹Ì¹Í¥é” ¤€˜˜(€€€€€€€€€€€€€€€€¡Ñ½­•¹Ím¥¹‘•át€ôô0‰„ˆñğÑ½­•¹Ím¥¹‘•át€ôô0‰…¸ˆ¤€˜˜(€€€€€€€€€€€€€€€Ñ½­•¹Ím¥¹‘•à€¬€Åt€ôô0‰¡…±˜ˆ¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€½¹ÍĞ¥¹ĞÕ¹¥Ñ5¥¹ÕÑ•Ì€ôÕ¹¥ÑQ½5¥¹ÕÑ•Ì¡Ñ½­•¹Ím¥¹‘•à€¬€Ét¤ì(€€€€€€€€€€€€€€€¥˜€¡Õ¹¥Ñ5¥¹ÕÑ•Ì€ø€À¤(€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€¥˜€ ……‘‘5¥¹ÕÑ•Ì¡…ÕµÕ±…Ñ•‘5¥¹ÕÑ•Ì°ÍÑèéµ…à Ä°Õ¹¥Ñ5¥¹ÕÑ•Ì€¼€È¤°€Ä¤¤(€€€€€€€€€€€€€€€€€€€ì(€€€€€€€€€€€€€€€€€€€€€€€É•ÑÕÉ¸™…±Í”ì(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€€€¥¹‘•à€¬ô€Ìì(€€€€€€€€€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€€€€€€€€€ô(€€€€€€€€€€€ô((€€€€€€€€€€€‰É•…¬ì(€€€€€€€ô((€€€€€€€¥˜€ …Á…ÉÍ•‘¹äñğ…ÕµÕ±…Ñ•‘5¥¹ÕÑ•Ì€ğô€Àñğ…ÕµÕ±…Ñ•‘5¥¹ÕÑ•Ì€ø­5…á9…ÑÕÉ…±I•µ¥¹‘•É5¥¹ÕÑ•Ì¤(€€€€€€€ì(€€€€€€€€€€€Ñ½Ñ…±5¥¹ÕÑ•Ì€ô€Àì(€€€€€€€€€€€É•ÑÕÉ¸™…±Í”ì(€€€€€€€ô(€€€€€€€Ñ½Ñ…±5¥¹ÕÑ•Ì€ôÍÑ…Ñ¥}…ÍĞñ¥¹Ğø¡…ÕµÕ±…Ñ•‘5¥¹ÕÑ•Ì¤ì(€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€ôì((€€€™½È€¡Í¥é•}Ğ¥¹‘•à€ô€Àì¥¹‘•à€ğÑ½­•¹Ì¹Í¥é” ¤ì€¬­¥¹‘•à¤(€€€ì(€€€€€€€¥¹ĞÑ½Ñ…±5¥¹ÕÑ•Ì€ô€Àì(€€€€€€€¥˜€¡Ñ½­•¹Ím¥¹‘•át€ôô0‰¥¸ˆ€˜˜(€€€€€€€€€€€¥¹‘•à€¬€Ä€ğÑ½­•¹Ì¹Í¥é” ¤€˜˜(€€€€€€€€€€€Á…ÉÍ•I•±…Ñ¥Ù•ÕÉ…Ñ¥½¸¡¥¹‘•à€¬€Ä°Ñ½Ñ…±5¥¹ÕÑ•Ì¤¤(€€€€€€€ì(€€€€€€€€€€€‘Õ•Ğ€ô¹½Ü€¬ÍÑèé¡É½¹¼èéµ¥¹ÕÑ•Ì¡Ñ½Ñ…±5¥¹ÕÑ•Ì¤ì(€€€€€€€€€€€…±±…ä€ô™…±Í”ì(€€€€€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€€€€€ô(€€€€€€€¥˜€¡Á…ÉÍ•I•±…Ñ¥Ù•ÕÉ…Ñ¥½¸¡¥¹‘•à°Ñ½Ñ…±5¥¹ÕÑ•Ì¤¤(€€€€€€€ì(€€€€€€€€€€€‘Õ•Ğ€ô¹½Ü€¬ÍÑèé¡É½¹¼èéµ¥¹ÕÑ•Ì¡Ñ½Ñ…±5¥¹ÕÑ•Ì¤ì(€€€€€€€€€€€…±±…ä€ô™…±Í”ì(€€€€€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€€€€€ô(€€€ô((€€€™½È€¡Í¥é•}Ğ¥¹‘•à€ô€Àì¥¹‘•à€ğÑ½­•¹Ì¹Í¥é” ¤ì€¬­¥¹‘•à¤(€€€ì(€€€€€€€¥˜€¡Ñ½­•¹Ím¥¹‘•át€„ô0‰½¸ˆ¤(€€€€€€€ì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô((€€€€€€€Í¥é•}Ğ‘…å%¹‘•à€ô¥¹‘•à€¬€Äì(€€€€€€€¥˜€¡‘…å%¹‘•à€ğÑ½­•¹Ì¹Í¥é” ¤€˜˜Ñ½­•¹Ím‘…å%¹‘•át€ôô0‰Ñ¡”ˆ¤(€€€€€€€ì(€€€€€€€€€€€€¬­‘…å%¹‘•àì(€€€€€€€ô((€€€€€€€¥¹Ğ‘…ä€ô€Àì(€€€€€€€¥˜€¡‘…å%¹‘•à€øôÑ½­•¹Ì¹Í¥é” ¤ñğ€…Á…ÉÍ•…å=™5½¹Ñ¡Q½­•¸¡Ñ½­•¹Ím‘…å%¹‘•át°‘…ä¤¤(€€€€€€€ì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô((€€€€€€€ÍÑèéÑ´±½…°€ô1½…±Q´¡¹½Ü¤ì(€€€€€€€±½…°¹Ñµ}µ‘…ä€ô‘…äì(€€€€€€€±½…°¹Ñµ}¡½ÕÈ€ô€äì(€€€€€€€±½…°¹Ñµ}µ¥¸€ô€Àì(€€€€€€€±½…°¹Ñµ}Í•Œ€ô€Àì((€€€€€€€‰½½°Á…ÉÍ•‘±±…ä€ôÑÉÕ”ì(€€€€€€€…ÁÁ±åQ¥µ•™Ñ•ÉQ½­•¸¡‘…å%¹‘•à€¬€Ä°±½…°°Á…ÉÍ•‘±±…ä¤ì((€€€€€€€¥¹Ğå•…È€ô±½…°¹Ñµ}å•…È€¬€ÄäÀÀì(€€€€€€€¥¹Ğµ½¹Ñ €ô±½…°¹Ñµ}µ½¸€¬€Äì(€€€€€€€¥˜€¡‘…ä€ø…åÍ%¹5½¹Ñ ¡å•…È°µ½¹Ñ ¤¤(€€€€€€€ì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô((€€€€€€€‘Õ•Ğ€ôÉ½µ1½…±Q´¡±½…°¤ì(€€€€€€€¥˜€¡‘Õ•Ğ€ğô¹½Ü¤(€€€€€€€ì(€€€€€€€€€€€€¬­±½…°¹Ñµ}µ½¸ì(€€€€€€€€€€€å•…È€ô±½…°¹Ñµ}å•…È€¬€ÄäÀÀ€¬€¡±½…°¹Ñµ}µ½¸€¼€ÄÈ¤ì(€€€€€€€€€€€µ½¹Ñ €ô€¡±½…°¹Ñµ}µ½¸€”€ÄÈ¤€¬€Äì(€€€€€€€€€€€¥˜€¡‘…ä€ø…åÍ%¹5½¹Ñ ¡å•…È°µ½¹Ñ ¤¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€€€€€ô(€€€€€€€€€€€‘Õ•Ğ€ôÉ½µ1½…±Q´¡±½…°¤ì(€€€€€€€ô((€€€€€€€…±±…ä€ôÁ…ÉÍ•‘±±…äì(€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€ô((€€€¥˜€¡±½İ•È¹™¥¹¡0‰Ñ½µ½ÉÉ½Üˆ¤€„ôÍÑèéİÍÑÉ¥¹œèé¹Á½Ì¤(€€€ì(€€€€€€€ÍÑèéÑ´±½…°€ô1½…±Q´¡¹½Ü€¬ÍÑèé¡É½¹¼èé¡½ÕÉÌ ÈĞ¤¤ì(€€€€€€€±½…°¹Ñµ}¡½ÕÈ€ô€äì(€€€€€€€±½…°¹Ñµ}µ¥¸€ô€Àì(€€€€€€€±½…°¹Ñµ}Í•Œ€ô€Àì(€€€€€€€½¹ÍĞÍ¥é•}Ğ…ÑA½Í¥Ñ¥½¸€ô±½İ•È¹™¥¹¡0ˆ…Ğ€ˆ¤ì(€€€€€€€¥˜€¡…ÑA½Í¥Ñ¥½¸€„ôÍÑèéİÍÑÉ¥¹œèé¹Á½Ì¤(€€€€€€€ì(€€€€€€€€€€€¥¹Ğ¡½ÕÈ€ô€Àì(€€€€€€€€€€€¥¹Ğµ¥¹ÕÑ”€ô€Àì(€€€€€€€€€€€¥˜€¡A…ÉÍ•!½ÕÉ5¥¹ÕÑ•Q•áĞ¡±½İ•È¹ÍÕ‰ÍÑÈ¡…ÑA½Í¥Ñ¥½¸€¬€Ğ¤°¡½ÕÈ°µ¥¹ÕÑ”¤¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€±½…°¹Ñµ}¡½ÕÈ€ô¡½ÕÈì(€€€€€€€€€€€€€€€±½…°¹Ñµ}µ¥¸€ôµ¥¹ÕÑ”ì(€€€€€€€€€€€€€€€…±±…ä€ô™…±Í”ì(€€€€€€€€€€€ô(€€€€€€€ô(€€€€€€€•±Í”(€€€€€€€ì(€€€€€€€€€€€…±±…ä€ôÑÉÕ”ì(€€€€€€€ô(€€€€€€€‘Õ•Ğ€ôÉ½µ1½…±Q´¡±½…°¤ì(€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€ô((€€€ÍÑ…Ñ¥Œ½¹ÍĞÍÑèéÙ•Ñ½ÈñÍÑèéÁ…¥ÈñÍÑèéİÍÑÉ¥¹œ°¥¹Ğøøİ••­‘…åÌì(€€€€€€€ì0‰ÍÕ¹‘…äˆ°€Àô°ì0‰µ½¹‘…äˆ°€Äô°ì0‰ÑÕ•Í‘…äˆ°€Èô°ì0‰İ•‘¹•Í‘…äˆ°€Ìô°(€€€€€€€ì0‰Ñ¡ÕÉÍ‘…äˆ°€Ğô°ì0‰™É¥‘…äˆ°€Ôô°ì0‰Í…ÑÕÉ‘…äˆ°€Øô(€€€ôì(€€€™½È€¡½¹ÍĞ…ÕÑ¼˜İ••­‘…ä€èİ••­‘…åÌ¤(€€€ì(€€€€€€€½¹ÍĞÍÑèéİÍÑÉ¥¹œÁ…ÑÑ•É¸€ô0‰¹•áĞ€ˆ€¬İ••­‘…ä¹™¥ÉÍĞì(€€€€€€€¥˜€¡±½İ•È¹™¥¹¡Á…ÑÑ•É¸¤€„ôÍÑèéİÍÑÉ¥¹œèé¹Á½Ì¤(€€€€€€€ì(€€€€€€€€€€€ÍÑèéÑ´±½…°€ô1½…±Q´¡¹½Ü¤ì(€€€€€€€€€€€¥¹Ğ‘…åÍ¡•…€ô€¡İ••­‘…ä¹Í•½¹€´±½…°¹Ñµ}İ‘…ä€¬€Ü¤€”€Üì(€€€€€€€€€€€¥˜€¡‘…åÍ¡•…€ôô€À¤(€€€€€€€€€€€ì(€€€€€€€€€€€€€€€‘…åÍ¡•…€ô€Üì(€€€€€€€€€€€ô(€€€€€€€€€€€‘Õ•Ğ€ôMÑ…ÉÑ=™1½…±…ä¡¹½Ü¤€¬ÍÑèé¡É½¹¼èé¡½ÕÉÌ ÈĞ€¨‘…åÍ¡•…€¬€ä¤ì(€€€€€€€€€€€…±±…ä€ôÑÉÕ”ì(€€€€€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€€€€€ô(€€€ô((€€€ÍÑèéİ¥ÍÑÉ¥¹ÍÑÉ•…´µ½¹Ñ¡MÑÉ•…´¡±½İ•È¤ì(€€€ÍÑèéİÍÑÉ¥¹œİ½Éì(€€€İ¡¥±”€¡µ½¹Ñ¡MÑÉ•…´€øøİ½É¤(€€€ì(€€€€€€€½¹ÍĞ…ÕÑ¼µ½¹Ñ €ô5½¹Ñ¡É½µ9…µ”¡İ½É¤ì(€€€€€€€¥˜€ …µ½¹Ñ ¤(€€€€€€€ì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô(€€€€€€€¥¹Ğ‘…ä€ô€Àì(€€€€€€€¥˜€ „¡µ½¹Ñ¡MÑÉ•…´€øø‘…ä¤ñğ‘…ä€ğ€Äñğ‘…ä€ø€ÌÄ¤(€€€€€€€ì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô(€€€€€€€ÍÑèéÑ´±½…°€ô1½…±Q´¡¹½Ü¤ì(€€€€€€€¥¹Ğå•…È€ô±½…°¹Ñµ}å•…È€¬€ÄäÀÀì(€€€€€€€¥˜€¡±½İ•È¹™¥¹¡0‰¹•áĞå•…Èˆ¤€„ôÍÑèéİÍÑÉ¥¹œèé¹Á½Ì¤(€€€€€€€ì(€€€€€€€€€€€€¬­å•…Èì(€€€€€€€ô(€€€€€€€¥˜€¡‘…ä€ø…åÍ%¹5½¹Ñ ¡å•…È°€©µ½¹Ñ ¤¤(€€€€€€€ì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô(€€€€€€€ÍÑèéÑ´Ñ…É•Ğíôì(€€€€€€€Ñ…É•Ğ¹Ñµ}å•…È€ôå•…È€´€ÄäÀÀì(€€€€€€€Ñ…É•Ğ¹Ñµ}µ½¸€ô€©µ½¹Ñ €´€Äì(€€€€€€€Ñ…É•Ğ¹Ñµ}µ‘…ä€ô‘…äì(€€€€€€€Ñ…É•Ğ¹Ñµ}¡½ÕÈ€ô€äì(€€€€€€€‘Õ•Ğ€ôÉ½µ1½…±Q´¡Ñ…É•Ğ¤ì(€€€€€€€¥˜€¡‘Õ•Ğ€ğô¹½Ü¤(€€€€€€€ì(€€€€€€€€€€€Ñ…É•Ğ¹Ñµ}å•…È€¬ô€Äì(€€€€€€€€€€€‘Õ•Ğ€ôÉ½µ1½…±Q´¡Ñ…É•Ğ¤ì(€€€€€€€ô(€€€€€€€…±±…ä€ôÑÉÕ”ì(€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€ô((€€€€¼¼Ñ¥Ñ±”…¸ÍÁ•¥™ä½¹±ä„±½¬Ñ¥µ”°ÍÕ …Ì€‰¼Ñ¼Ñ¡”å´…Ğ€ÄèÌÀˆ¸(€€€€¼¼UÍ”Ñ¡”¹•áĞ½ÕÉÉ•¹”Í¼…¸…±É•…‘äµÁ…ÍÍ•Ñ¥µ”¹…ÑÕÉ…±±ä±…¹‘ÌÑ½µ½ÉÉ½Ü¸(€€€™½È€¡Í¥é•}Ğ¥¹‘•à€ô€Àì¥¹‘•à€¬€Ä€ğÑ½­•¹Ì¹Í¥é” ¤ì€¬­¥¹‘•à¤(€€€ì(€€€€€€€¥˜€¡Ñ½­•¹Ím¥¹‘•át€„ô0‰…Ğˆ¤(€€€€€€€ì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô((€€€€€€€ÍÑèéİÍÑÉ¥¹œÑ¥µ•Q•áĞ€ôÑ½­•¹Ím¥¹‘•à€¬€Åtì(€€€€€€€¥˜€¡¥¹‘•à€¬€È€ğÑ½­•¹Ì¹Í¥é” ¤€˜˜€¡Ñ½­•¹Ím¥¹‘•à€¬€Ét€ôô0‰…´ˆñğÑ½­•¹Ím¥¹‘•à€¬€Ét€ôô0‰Á´ˆ¤¤(€€€€€€€ì(€€€€€€€€€€€Ñ¥µ•Q•áĞ€¬ôÑ½­•¹Ím¥¹‘•à€¬€Étì(€€€€€€€ô((€€€€€€€¥¹Ğ¡½ÕÈ€ô€Àì(€€€€€€€¥¹Ğµ¥¹ÕÑ”€ô€Àì(€€€€€€€¥˜€ …A…ÉÍ•!½ÕÉ5¥¹ÕÑ•Q•áĞ¡Ñ¥µ•Q•áĞ°¡½ÕÈ°µ¥¹ÕÑ”¤¤(€€€€€€€ì(€€€€€€€€€€€½¹Ñ¥¹Õ”ì(€€€€€€€ô((€€€€€€€ÍÑèéÑ´±½…°€ô1½…±Q´¡¹½Ü¤ì(€€€€€€€±½…°¹Ñµ}¡½ÕÈ€ô¡½ÕÈì(€€€€€€€±½…°¹Ñµ}µ¥¸€ôµ¥¹ÕÑ”ì(€€€€€€€±½…°¹Ñµ}Í•Œ€ô€Àì(€€€€€€€‘Õ•Ğ€ôÉ½µ1½…±Q´¡±½…°¤ì(€€€€€€€¥˜€¡‘Õ•Ğ€ğô¹½Ü¤(€€€€€€€ì(€€€€€€€€€€€±½…°¹Ñµ}µ‘…ä€¬ô€Äì(€€€€€€€€€€€‘Õ•Ğ€ôÉ½µ1½…±Q´¡±½…°¤ì(€€€€€€€ô((€€€€€€€…±±…ä€ô™…±Í”ì(€€€€€€€É•ÑÕÉ¸ÑÉÕ”ì(€€€ô((€€€É•ÑÕÉ¸™…±Í”ì)ô()ÍÑèéİÍÑÉ¥¹œI•µ¥¹‘•ÉM•ÉÙ¥”èéAÉ¥½É¥Ñå1…‰•°¡I•µ¥¹‘•ÉAÉ¥½É¥ÑäÁÉ¥½É¥Ñä¤)ì(€€€Íİ¥Ñ €¡ÁÉ¥½É¥Ñä¤(€€€ì(€€€…Í”I•µ¥¹‘•ÉAÉ¥½É¥Ñäèé1½Üè(€€€€€€€É•ÑÕÉ¸0‰1½Üˆì(€€€…Í”I•µ¥¹‘•ÉAÉ¥½É¥Ñäèé9½Éµ…°è(€€€€€€€É•ÑÕÉ¸0‰9½Éµ…°ˆì(€€€…Í”I•µ¥¹‘•ÉAÉ¥½É¥Ñäèé!¥ è(€€€€€€€É•ÑÕÉ¸0‰!¥ ˆì(€€€ô(€€€É•ÑÕÉ¸0‰9½Éµ…°ˆì)ô()ÍÑèéİÍÑÉ¥¹œI•µ¥¹‘•ÉM•ÉÙ¥”èéI•Á•…ÑQåÁ•1…‰•°¡I•µ¥¹‘•ÉI•Á•…ÑQåÁ”É•Á•…Ğ¤)ì(€€€Íİ¥Ñ €¡É•Á•…Ğ¤(€€€ì(€€€…Í”I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé9½¹”è(€€€€€€€É•ÑÕÉ¸0‰9½¹”ˆì(€€€…Í”I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé…¥±äè(€€€€€€€É•ÑÕÉ¸0‰…¥±äˆì(€€€…Í”I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé]••­±äè(€€€€€€€É•ÑÕÉ¸0‰]••­±äˆì(€€€…Í”I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé5½¹Ñ¡±äè(€€€€€€€É•ÑÕÉ¸0‰5½¹Ñ¡±äˆì(€€€…Í”I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èée•…É±äè(€€€€€€€É•ÑÕÉ¸0‰e•…É±äˆì(€€€ô(€€€É•ÑÕÉ¸0‰9½¹”ˆì)ô()ÍÑèéİÍÑÉ¥¹œI•µ¥¹‘•ÉM•ÉÙ¥”èéI•Á•…Ñ1…‰•°¡½¹ÍĞI•µ¥¹‘•È˜É•µ¥¹‘•È¤)ì(€€€¥˜€¡É•µ¥¹‘•È¹É•Á•…Ğ¹ÑåÁ”€ôôI•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé9½¹”¤(€€€ì(€€€€€€€É•ÑÕÉ¸0‰½•Ì¹½ĞÉ•Á•…Ğˆì(€€€ô(€€€¥˜€¡É•µ¥¹‘•È¹É•Á•…Ğ¹ÑåÁ”€ôôI•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé]••­±ä¤(€€€ì(€€€€€€€½¹ÍĞ…ÕÑ¼‘Õ•Ğ€ôA…ÉÍ•1½…±%Í¼¡É•µ¥¹‘•È¹‘Õ•Ğ¤ì(€€€€€€€¥˜€¡‘Õ•Ğ¤(€€€€€€€ì(€€€€€€€€€€€ÍÑ…Ñ¥Œ½¹ÍÑ•áÁÈİ¡…É}Ğİ••­‘…åÍmulÄÁtì(€€€€€€€€€€€€€€€0‰MÕ¹‘…äˆ°0‰5½¹‘…äˆ°0‰QÕ•Í‘…äˆ°0‰]•‘¹•Í‘…äˆ°0‰Q¡ÕÉÍ‘…äˆ°0‰É¥‘…äˆ°0‰M…ÑÕÉ‘…äˆ(€€€€€€€€€€€ôì(€€€€€€€€€€€½¹ÍĞÍÑèéÑ´±½…°€ô1½…±Q´ ©‘Õ•Ğ¤ì(€€€€€€€€€€€É•ÑÕÉ¸0‰I•Á•…ÑÌ•Ù•Éä€ˆ€¬ÍÑèéİÍÑÉ¥¹œ¡İ••­‘…åÍm±½…°¹Ñµ}İ‘…åt¤ì(€€€€€€€ô(€€€ô(€€€¥˜€¡É•µ¥¹‘•È¹É•Á•…Ğ¹ÑåÁ”€ôôI•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé5½¹Ñ¡±ä¤(€€€ì(€€€€€€€½¹ÍĞ…ÕÑ¼‘Õ•Ğ€ôA…ÉÍ•1½…±%Í¼¡É•µ¥¹‘•È¹‘Õ•Ğ¤ì(€€€€€€€¥˜€¡‘Õ•Ğ¤(€€€€€€€ì(€€€€€€€€€€€½¹ÍĞÍÑèéÑ´±½…°€ô1½…±Q´ ©‘Õ•Ğ¤ì(€€€€€€€€€€€É•ÑÕÉ¸0‰I•Á•…ÑÌµ½¹Ñ¡±ä½¸Ñ¡”€ˆ€¬ÍÑèéÑ½}İÍÑÉ¥¹œ¡±½…°¹Ñµ}µ‘…ä¤ì(€€€€€€€ô(€€€ô(€€€É•ÑÕÉ¸0‰I•Á•…ÑÌ€ˆ€¬Q½1½İ•È¡I•Á•…ÑQåÁ•1…‰•°¡É•µ¥¹‘•È¹É•Á•…Ğ¹ÑåÁ”¤¤ì)ô()ÍÑèéİÍÑÉ¥¹œI•µ¥¹‘•ÉM•ÉÙ¥”èéMÑ…ÑÕÍ1…‰•°¡I•µ¥¹‘•ÉMÑ…ÑÕÌÍÑ…ÑÕÌ¤)ì(€€€Íİ¥Ñ €¡ÍÑ…ÑÕÌ¤(€€€ì(€€€…Í”I•µ¥¹‘•ÉMÑ…ÑÕÌèéUÁ½µ¥¹œè(€€€€€€€É•ÑÕÉ¸0‰UÁ½µ¥¹œˆì(€€€…Í”I•µ¥¹‘•ÉMÑ…ÑÕÌèéÕ•M½½¸è(€€€€€€€É•ÑÕÉ¸0‰Õ”M½½¸ˆì(€€€…Í”I•µ¥¹‘•ÉMÑ…ÑÕÌèéÕ•9½Üè(€€€€€€€É•ÑÕÉ¸0‰Õ”9½Üˆì(€€€…Í”I•µ¥¹‘•ÉMÑ…ÑÕÌèé=Ù•É‘Õ”è(€€€€€€€É•ÑÕÉ¸0‰=Ù•É‘Õ”ˆì(€€€…Í”I•µ¥¹‘•ÉMÑ…ÑÕÌèé½µÁ±•Ñ•è(€€€€€€€É•ÑÕÉ¸0‰½µÁ±•Ñ•ˆì(€€€…Í”I•µ¥¹‘•ÉMÑ…ÑÕÌèéM¹½½é•è(€€€€€€€É•ÑÕÉ¸0‰M¹½½é•ˆì(€€€ô(€€€É•ÑÕÉ¸0‰UÁ½µ¥¹œˆì)ô()ÍÑèéİÍÑÉ¥¹œI•µ¥¹‘•ÉM•ÉÙ¥”èéÕ•1…‰•°¡½¹ÍĞI•µ¥¹‘•È˜É•µ¥¹‘•È°ÍÑèé¡É½¹¼èéÍåÍÑ•µ}±½¬èéÑ¥µ•}Á½¥¹Ğ¹½Ü¤)ì(€€€½¹ÍĞ…ÕÑ¼‘Õ•Ğ€ôA…ÉÍ•1½…±%Í¼¡É•µ¥¹‘•È¹‘Õ•Ğ¤ì(€€€¥˜€ …‘Õ•Ğ¤(€€€ì(€€€€€€€É•ÑÕÉ¸0‰%¹Ù…±¥‘…Ñ”ˆì(€€€ô((€€€½¹ÍĞÍÑèéÑ´‘Õ”€ô1½…±Q´ ©‘Õ•Ğ¤ì(€€€½¹ÍĞ‰½½°Ñ½‘…ä€ôM…µ•1½…±…Ñ” ©‘Õ•Ğ°¹½Ü¤ì(€€€½¹ÍĞ‰½½°Ñ½µ½ÉÉ½Ü€ôM…µ•1½…±…Ñ” ©‘Õ•Ğ°¹½Ü€¬ÍÑèé¡É½¹¼èé¡½ÕÉÌ ÈĞ¤¤ì((€€€İ¡…É}ĞÑ¥µ•	Õ™™•ÉlÌÉtíôì(€€€İÍ™Ñ¥µ”¡Ñ¥µ•	Õ™™•È°ÍÑèéÍ¥é”¡Ñ¥µ•	Õ™™•È¤°0ˆ•$è•4€•Àˆ°€™‘Õ”¤ì(€€€ÍÑèéİÍÑÉ¥¹œÑ¥µ•Q•áĞ€ôÑ¥µ•	Õ™™•Èì(€€€¥˜€ …Ñ¥µ•Q•áĞ¹•µÁÑä ¤€˜˜Ñ¥µ•Q•áĞ¹™É½¹Ğ ¤€ôô0œÀœ¤(€€€ì(€€€€€€€Ñ¥µ•Q•áĞ¹•É…Í”¡Ñ¥µ•Q•áĞ¹‰•¥¸ ¤¤ì(€€€ô((€€€¥˜€¡Ñ½‘…ä¤(€€€ì(€€€€€€€É•ÑÕÉ¸É•µ¥¹‘•È¹…±±…ä€ü0‰Q½‘…äˆ€è0‰Q½‘…ä…Ğ€ˆ€¬Ñ¥µ•Q•áĞì(€€€ô(€€€¥˜€¡Ñ½µ½ÉÉ½Ü¤(€€€ì(€€€€€€€É•ÑÕÉ¸É•µ¥¹‘•È¹…±±…ä€ü0‰Q½µ½ÉÉ½Üˆ€è0‰Q½µ½ÉÉ½Ü…Ğ€ˆ€¬Ñ¥µ•Q•áĞì(€€€ô((€€€ÍÑèéİÍÑÉ¥¹œ‘…Ñ•Q•áĞ€ô5½¹Ñ¡9…µ”¡‘Õ”¹Ñµ}µ½¸€¬€Ä¤€¬0ˆ€ˆ€¬ÍÑèéÑ½}İÍÑÉ¥¹œ¡‘Õ”¹Ñµ}µ‘…ä¤€¬0ˆ°€ˆ€¬ÍÑèéÑ½}İÍÑÉ¥¹œ¡‘Õ”¹Ñµ}å•…È€¬€ÄäÀÀ¤ì(€€€É•ÑÕÉ¸É•µ¥¹‘•È¹…±±…ä€ü‘…Ñ•Q•áĞ€è‘…Ñ•Q•áĞ€¬0ˆ…Ğ€ˆ€¬Ñ¥µ•Q•áĞì)ô()ÍÑèéİÍÑÉ¥¹œI•µ¥¹‘•ÉM•ÉÙ¥”èé½Õ¹Ñ‘½İ¹1…‰•°¡½¹ÍĞI•µ¥¹‘•È˜É•µ¥¹‘•È°ÍÑèé¡É½¹¼èéÍåÍÑ•µ}±½¬èéÑ¥µ•}Á½¥¹Ğ¹½Ü¤)ì(€€€½¹ÍĞ…ÕÑ¼‘Õ•Ğ€ôA…ÉÍ•1½…±%Í¼¡É•µ¥¹‘•È¹‘Õ•Ğ¤ì(€€€¥˜€ …‘Õ•Ğ¤(€€€ì(€€€€€€€É•ÑÕÉ¸0‰%¹Ù…±¥‘…Ñ”ˆì(€€€ô((€€€½¹ÍĞ‰½½°½Ù•É‘Õ”€ô¹½Ü€ø€©‘Õ•Ğì(€€€½¹ÍĞ…ÕÑ¼Í•½¹‘Ì€ôÍÑèé¡É½¹¼èé‘ÕÉ…Ñ¥½¹}…ÍĞñÍÑèé¡É½¹¼èéÍ•½¹‘Ìø¡½Ù•É‘Õ”€ü¹½Ü€´€©‘Õ•Ğ€è€©‘Õ•Ğ€´¹½Ü¤¹½Õ¹Ğ ¤ì(€€€½¹ÍĞ±½¹œ±½¹œ‘…åÌ€ôÍ•½¹‘Ì€¼€àØĞÀÀì(€€€½¹ÍĞ±½¹œ±½¹œ¡½ÕÉÌ€ô€¡Í•½¹‘Ì€”€àØĞÀÀ¤€¼€ÌØÀÀì(€€€½¹ÍĞ±½¹œ±½¹œµ¥¹ÕÑ•Ì€ô€¡Í•½¹‘Ì€”€ÌØÀÀ¤€¼€ØÀì((€€€…ÕÑ¼Õ¹¥Ñ1…‰•°€ômt¡±½¹œ±½¹œÙ…±Õ”°½¹ÍĞİ¡…É}Ğ¨Í¥¹Õ±…È°½¹ÍĞİ¡…É}Ğ¨Á±ÕÉ…°¤(€€€ì(€€€€€€€É•ÑÕÉ¸ÍÑèéÑ½}İÍÑÉ¥¹œ¡Ù…±Õ”¤€¬0ˆ€ˆ€¬€¡Ù…±Õ”€ôô€Ä€üÍ¥¹Õ±…È€èÁ±ÕÉ…°¤ì(€€€ôì((€€€ÍÑèéİÍÑÉ¥¹œ±…‰•°ì(€€€¥˜€¡‘…åÌ€ø€À¤(€€€ì(€€€€€€€±…‰•°€ôÕ¹¥Ñ1…‰•°¡‘…åÌ°0‰‘…äˆ°0‰‘…åÌˆ¤ì(€€€€€€€¥˜€¡¡½ÕÉÌ€ø€À¤(€€€€€€€ì(€€€€€€€€€€€±…‰•°€¬ô0ˆ€ˆ€¬Õ¹¥Ñ1…‰•°¡¡½ÕÉÌ°0‰¡½ÕÈˆ°0‰¡½ÕÉÌˆ¤ì(€€€€€€€ô(€€€ô(€€€•±Í”¥˜€¡¡½ÕÉÌ€ø€À¤(€€€ì(€€€€€€€±…‰•°€ôÕ¹¥Ñ1…‰•°¡¡½ÕÉÌ°0‰¡½ÕÈˆ°0‰¡½ÕÉÌˆ¤ì(€€€€€€€¥˜€¡µ¥¹ÕÑ•Ì€ø€À¤(€€€€€€€ì(€€€€€€€€€€€±…‰•°€¬ô0ˆ€ˆ€¬Õ¹¥Ñ1…‰•°¡µ¥¹ÕÑ•Ì°0‰µ¥¹ÕÑ”ˆ°0‰µ¥¹ÕÑ•Ìˆ¤ì(€€€€€€€ô(€€€ô(€€€•±Í”(€€€ì(€€€€€€€±…‰•°€ôÕ¹¥Ñ1…‰•°¡ÍÑèéµ…àñ±½¹œ±½¹œø Ä°µ¥¹ÕÑ•Ì¤°0‰µ¥¹ÕÑ”ˆ°0‰µ¥¹ÕÑ•Ìˆ¤ì(€€€ô(€€€É•ÑÕÉ¸½Ù•É‘Õ”€ü±…‰•°€¬0ˆ½Ù•É‘Õ”ˆ€è0‰¥¸€ˆ€¬±…‰•°ì)ô()ÍÑèéİÍÑÉ¥¹œI•µ¥¹‘•ÉM•ÉÙ¥”èé±•ÉÑ1…‰•°¡¥¹Ğµ¥¹ÕÑ•Ì°‰½½°…±±…ä¤)ì(€€€¥˜€¡…±±…ä€˜˜µ¥¹ÕÑ•Ì€øô€ÄĞĞÀ¤(€€€ì(€€€€€€€É•ÑÕÉ¸0ˆÄ‘…ä‰•™½É”ˆì(€€€ô(€€€¥˜€¡µ¥¹ÕÑ•Ì€ğô€À¤(€€€ì(€€€€€€€É•ÑÕÉ¸0‰ĞÑ¥µ”ˆì(€€€ô(€€€¥˜€¡µ¥¹ÕÑ•Ì€ğ€ØÀ¤(€€€ì(€€€€€€€É•ÑÕÉ¸ÍÑèéÑ½}İÍÑÉ¥¹œ¡µ¥¹ÕÑ•Ì¤€¬0ˆµ¥¹ÕÑ•Ì‰•™½É”ˆì(€€€ô(€€€¥˜€¡µ¥¹ÕÑ•Ì€ôô€ØÀ¤(€€€ì(€€€€€€€É•ÑÕÉ¸0ˆÄ¡½ÕÈ‰•™½É”ˆì(€€€ô(€€€¥˜€¡µ¥¹ÕÑ•Ì€ôô€ÄĞĞÀ¤(€€€ì(€€€€€€€É•ÑÕÉ¸0ˆÄ‘…ä‰•™½É”ˆì(€€€ô(€€€É•ÑÕÉ¸ÍÑèéÑ½}İÍÑÉ¥¹œ¡µ¥¹ÕÑ•Ì€¼€ØÀ¤€¬0ˆ¡½ÕÉÌ‰•™½É”ˆì)ô()I•µ¥¹‘•ÉAÉ¥½É¥ÑäI•µ¥¹‘•ÉM•ÉÙ¥”èéAÉ¥½É¥ÑåÉ½µMÑÉ¥¹œ¡½¹ÍĞÍÑèéİÍÑÉ¥¹œ˜Ù…±Õ”¤)ì(€€€½¹ÍĞÍÑèéİÍÑÉ¥¹œ±½İ•È€ôQ½1½İ•È¡Ù…±Õ”¤ì(€€€¥˜€¡±½İ•È€ôô0‰±½Üˆ¤(€€€ì(€€€€€€€É•ÑÕÉ¸I•µ¥¹‘•ÉAÉ¥½É¥Ñäèé1½Üì(€€€ô(€€€¥˜€¡±½İ•È€ôô0‰¡¥ ˆ¤(€€€ì(€€€€€€€É•ÑÕÉ¸I•µ¥¹‘•ÉAÉ¥½É¥Ñäèé!¥ ì(€€€ô(€€€É•ÑÕÉ¸I•µ¥¹‘•ÉAÉ¥½É¥Ñäèé9½Éµ…°ì)ô()I•µ¥¹‘•ÉI•Á•…ÑQåÁ”I•µ¥¹‘•ÉM•ÉÙ¥”èéI•Á•…ÑQåÁ•É½µMÑÉ¥¹œ¡½¹ÍĞÍÑèéİÍÑÉ¥¹œ˜Ù…±Õ”¤)ì(€€€½¹ÍĞÍÑèéİÍÑÉ¥¹œ±½İ•È€ôQ½1½İ•È¡Ù…±Õ”¤ì(€€€¥˜€¡±½İ•È€ôô0‰‘…¥±äˆ¤(€€€ì(€€€€€€€É•ÑÕÉ¸I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé…¥±äì(€€€ô(€€€¥˜€¡±½İ•È€ôô0‰İ••­±äˆ¤(€€€ì(€€€€€€€É•ÑÕÉ¸I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé]••­±äì(€€€ô(€€€¥˜€¡±½İ•È€ôô0‰µ½¹Ñ¡±äˆ¤(€€€ì(€€€€€€€É•ÑÕÉ¸I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé5½¹Ñ¡±äì(€€€ô(€€€¥˜€¡±½İ•È€ôô0‰å•…É±äˆ¤(€€€ì(€€€€€€€É•ÑÕÉ¸I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èée•…É±äì(€€€ô(€€€É•ÑÕÉ¸I•µ¥¹‘•ÉI•Á•…ÑQåÁ”èé9½¹”ì)ô
+    if (reminder.category.empty())
+    {
+        reminder.category = L"General";
+    }
+    const std::string repeatObject = ExtractObject(object, "repeat");
+    reminder.repeat.type = ReminderService::RepeatTypeFromString(ExtractString(repeatObject, "type"));
+    reminder.repeat.interval = std::max(1, ExtractInt(repeatObject, "interval", 1));
+    reminder.alertBeforeMinutes = std::max(0, ExtractInt(object, "alertBeforeMinutes", reminder.allDay ? 1440 : 15));
+    reminder.snoozedUntil = ExtractString(object, "snoozedUntil");
+    reminder.createdAt = ExtractString(object, "createdAt");
+    reminder.updatedAt = ExtractString(object, "updatedAt");
+    reminder.completedAt = ExtractString(object, "completedAt");
+    reminder.dismissedBannerUntil = ExtractString(object, "dismissedBannerUntil");
+    reminder.alertBeforeMinutesList = ExtractIntArray(object, "alertBeforeMinutesList");
+    if (reminder.alertBeforeMinutesList.empty())
+    {
+        reminder.alertBeforeMinutesList.push_back(reminder.alertBeforeMinutes);
+    }
+    return reminder;
+}
+
+void WriteStringField(std::ostringstream& output, const char* indent, const char* key, const std::wstring& value, bool comma = true)
+{
+    output << indent << "\"" << key << "\": " << JsonEscape(value);
+    if (comma)
+    {
+        output << ",";
+    }
+    output << "\n";
+}
+
+void WriteNullableStringField(std::ostringstream& output, const char* indent, const char* key, const std::wstring& value, bool comma = true)
+{
+    output << indent << "\"" << key << "\": ";
+    if (value.empty())
+    {
+        output << "null";
+    }
+    else
+    {
+        output << JsonEscape(value);
+    }
+    if (comma)
+    {
+        output << ",";
+    }
+    output << "\n";
+}
+
+std::wstring MonthName(int month)
+{
+    static constexpr wchar_t names[][4] {
+        L"Jan", L"Feb", L"Mar", L"Apr", L"May", L"Jun",
+        L"Jul", L"Aug", L"Sep", L"Oct", L"Nov", L"Dec"
+    };
+    if (month < 1 || month > 12)
+    {
+        return L"";
+    }
+    return names[month - 1];
+}
+
+std::optional<int> MonthFromName(const std::wstring& text)
+{
+    static const std::map<std::wstring, int> months {
+        { L"january", 1 }, { L"jan", 1 },
+        { L"february", 2 }, { L"feb", 2 },
+        { L"march", 3 }, { L"mar", 3 },
+        { L"april", 4 }, { L"apr", 4 },
+        { L"may", 5 },
+        { L"june", 6 }, { L"jun", 6 },
+        { L"july", 7 }, { L"jul", 7 },
+        { L"august", 8 }, { L"aug", 8 },
+        { L"september", 9 }, { L"sep", 9 },
+        { L"october", 10 }, { L"oct", 10 },
+        { L"november", 11 }, { L"nov", 11 },
+        { L"december", 12 }, { L"dec", 12 }
+    };
+    const auto found = months.find(text);
+    if (found == months.end())
+    {
+        return std::nullopt;
+    }
+    return found->second;
+}
+
+bool ParseHourMinuteText(const std::wstring& text, int& hour, int& minute)
+{
+    std::wstring value = ToLower(Trim(text));
+    const bool hasPm = value.find(L"pm") != std::wstring::npos;
+    const bool hasAm = value.find(L"am") != std::wstring::npos;
+    value.erase(std::remove_if(value.begin(), value.end(), [](wchar_t ch)
+    {
+        return ch == L'a' || ch == L'p' || ch == L'm' || iswspace(ch) != 0;
+    }), value.end());
+
+    int parsedHour = 0;
+    int parsedMinute = 0;
+    if (swscanf_s(value.c_str(), L"%d:%d", &parsedHour, &parsedMinute) < 1)
+    {
+        return false;
+    }
+
+    if (hasPm && parsedHour < 12)
+    {
+        parsedHour += 12;
+    }
+    if (hasAm && parsedHour == 12)
+    {
+        parsedHour = 0;
+    }
+    if (!hasAm && !hasPm && parsedHour >= 1 && parsedHour <= 7)
+    {
+        parsedHour += 12;
+    }
+    if (parsedHour < 0 || parsedHour > 23 || parsedMinute < 0 || parsedMinute > 59)
+    {
+        return false;
+    }
+
+    hour = parsedHour;
+    minute = parsedMinute;
+    return true;
+}
+}
+
+ReminderList ReminderStorage::Load(const std::filesystem::path& path, std::wstring& warning) const
+{
+    ReminderList list;
+    std::ifstream file(path, std::ios::binary);
+    if (!file)
+    {
+        return list;
+    }
+
+    std::string json((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    if (json.size() >= 3 &&
+        static_cast<unsigned char>(json[0]) == 0xEF &&
+        static_cast<unsigned char>(json[1]) == 0xBB &&
+        static_cast<unsigned char>(json[2]) == 0xBF)
+    {
+        json.erase(0, 3);
+    }
+
+    const std::vector<std::string> objects = ExtractReminderObjects(json);
+    if (json.find("\"reminders\"") == std::string::npos)
+    {
+        warning = L"Reminders could not read the saved file, so it started empty.";
+        return list;
+    }
+
+    for (const std::string& object : objects)
+    {
+        Reminder reminder = ReminderFromObject(object);
+        if (!reminder.id.empty() && !reminder.title.empty() && ReminderService::ParseLocalIso(reminder.dueAt))
+        {
+            list.reminders.push_back(std::move(reminder));
+        }
+    }
+    return list;
+}
+
+bool ReminderStorage::Save(const std::filesystem::path& path, const ReminderList& list, std::wstring& errorMessage) const
+{
+    std::error_code fileError;
+    std::filesystem::create_directories(path.parent_path(), fileError);
+    if (fileError)
+    {
+        errorMessage = L"Could not save reminders. The app data folder could not be created.";
+        return false;
+    }
+
+    if (std::filesystem::exists(path, fileError))
+    {
+        std::filesystem::copy_file(path, path.wstring() + L".bak", std::filesystem::copy_options::overwrite_existing, fileError);
+        fileError.clear();
+    }
+
+    std::ostringstream output;
+    output << "{\n  \"version\": 1,\n  \"reminders\": [\n";
+    const auto now = ReminderService::Now();
+    for (size_t index = 0; index < list.reminders.size(); ++index)
+    {
+        const Reminder& reminder = list.reminders[index];
+        output << "    {\n";
+        WriteStringField(output, "      ", "id", reminder.id);
+        WriteStringField(output, "      ", "title", reminder.title);
+        WriteStringField(output, "      ", "description", reminder.description);
+        WriteStringField(output, "      ", "dueAt", reminder.dueAt);
+        output << "      \"allDay\": " << (reminder.allDay ? "true" : "false") << ",\n";
+        WriteStringField(output, "      ", "status", ReminderService::StatusLabel(ReminderScheduler::StatusFor(reminder, now)));
+        WriteStringField(output, "      ", "priority", ReminderService::PriorityLabel(reminder.priority));
+        WriteStringField(output, "      ", "category", reminder.category);
+        output << "      \"repeat\": {\n";
+        WriteStringField(output, "        ", "type", ReminderService::RepeatTypeLabel(reminder.repeat.type));
+        output << "        \"interval\": " << std::max(1, reminder.repeat.interval) << "\n";
+        output << "      },\n";
+        output << "      \"alertBeforeMinutes\": " << reminder.alertBeforeMinutes << ",\n";
+        output << "      \"alertBeforeMinutesList\": [";
+        const std::vector<int> alertMinutes = reminder.alertBeforeMinutesList.empty()
+            ? std::vector<int> { reminder.alertBeforeMinutes }
+            : reminder.alertBeforeMinutesList;
+        for (size_t alertIndex = 0; alertIndex < alertMinutes.size(); ++alertIndex)
+        {
+            if (alertIndex > 0)
+            {
+                output << ", ";
+            }
+            output << std::max(0, alertMinutes[alertIndex]);
+        }
+        output << "],\n";
+        WriteNullableStringField(output, "      ", "snoozedUntil", reminder.snoozedUntil);
+        WriteStringField(output, "      ", "createdAt", reminder.createdAt);
+        WriteStringField(output, "      ", "updatedAt", reminder.updatedAt);
+        WriteNullableStringField(output, "      ", "completedAt", reminder.completedAt);
+        WriteNullableStringField(output, "      ", "dismissedBannerUntil", reminder.dismissedBannerUntil, false);
+        output << "    }";
+        if (index + 1 < list.reminders.size())
+        {
+            output << ",";
+        }
+        output << "\n";
+    }
+    output << "  ]\n}\n";
+
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file)
+    {
+        errorMessage = L"Could not save reminders. Permission was denied.";
+        return false;
+    }
+    file << output.str();
+    if (!file)
+    {
+        errorMessage = L"Could not save reminders.";
+        return false;
+    }
+    return true;
+}
+
+ReminderStatus ReminderScheduler::StatusFor(const Reminder& reminder, std::chrono::system_clock::time_point now)
+{
+    if (!reminder.completedAt.empty())
+    {
+        return ReminderStatus::Completed;
+    }
+
+    if (const auto snoozedUntil = ReminderService::ParseLocalIso(reminder.snoozedUntil))
+    {
+        if (*snoozedUntil > now)
+        {
+            return ReminderStatus::Snoozed;
+        }
+    }
+
+    const auto dueAt = ReminderService::ParseLocalIso(reminder.dueAt);
+    if (!dueAt)
+    {
+        return ReminderStatus::Upcoming;
+    }
+
+    const int alertMinutes = reminder.allDay
+        ? std::max(0, EarliestReminderAlertMinutes(reminder))
+        : EarliestReminderAlertMinutes(reminder);
+    const auto alertAt = *dueAt - std::chrono::minutes(std::max(0, alertMinutes));
+    if (now < alertAt)
+    {
+        return ReminderStatus::Upcoming;
+    }
+    if (now < *dueAt)
+    {
+        return ReminderStatus::DueSoon;
+    }
+    if (now < *dueAt + std::chrono::minutes(5))
+    {
+        return ReminderStatus::DueNow;
+    }
+    return ReminderStatus::Overdue;
+}
+
+ReminderAlert ReminderScheduler::BuildAlert(const Reminder& reminder, std::chrono::system_clock::time_point now)
+{
+    ReminderAlert alert;
+    const ReminderStatus status = StatusFor(reminder, now);
+    if (status != ReminderStatus::DueSoon && status != ReminderStatus::DueNow && status != ReminderStatus::Overdue)
+    {
+        return alert;
+    }
+
+    alert.hasValue = true;
+    alert.reminderId = reminder.id;
+    alert.title = reminder.title;
+    alert.subtext = ReminderService::CountdownLabel(reminder, now);
+    if (status == ReminderStatus::DueSoon)
+    {
+        alert.severity = ReminderAlertSeverity::DueSoon;
+        alert.message = L"Reminder due soon: " + reminder.title;
+    }
+    else if (status == ReminderStatus::DueNow)
+    {
+        alert.severity = ReminderAlertSeverity::DueNow;
+        alert.message = L"Reminder due now: " + reminder.title;
+    }
+    else
+    {
+        alert.severity = ReminderAlertSeverity::Overdue;
+        alert.message = L"Overdue reminder: " + reminder.title;
+    }
+    return alert;
+}
+
+bool ReminderScheduler::ShouldShowBanner(const Reminder& reminder, std::chrono::system_clock::time_point now)
+{
+    const ReminderStatus status = StatusFor(reminder, now);
+    if (status != ReminderStatus::DueSoon && status != ReminderStatus::DueNow && status != ReminderStatus::Overdue)
+    {
+        return false;
+    }
+
+    if (const auto dismissedUntil = ReminderService::ParseLocalIso(reminder.dismissedBannerUntil))
+    {
+        if (*dismissedUntil > now)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+ReminderAlert ReminderBannerManager::ChooseAlert(const ReminderList& list, std::chrono::system_clock::time_point now)
+{
+    const Reminder* best = nullptr;
+    auto priorityOf = [](ReminderStatus status)
+    {
+        if (status == ReminderStatus::Overdue) return 0;
+        if (status == ReminderStatus::DueNow) return 1;
+        if (status == ReminderStatus::DueSoon) return 2;
+        return 3;
+    };
+
+    for (const Reminder& reminder : list.reminders)
+    {
+        if (!ReminderScheduler::ShouldShowBanner(reminder, now))
+        {
+            continue;
+        }
+        if (!best)
+        {
+            best = &reminder;
+            continue;
+        }
+        const ReminderStatus currentStatus = ReminderScheduler::StatusFor(reminder, now);
+        const ReminderStatus bestStatus = ReminderScheduler::StatusFor(*best, now);
+        if (priorityOf(currentStatus) < priorityOf(bestStatus))
+        {
+            best = &reminder;
+            continue;
+        }
+        if (priorityOf(currentStatus) == priorityOf(bestStatus) && reminder.dueAt < best->dueAt)
+        {
+            best = &reminder;
+        }
+    }
+    return best ? ReminderScheduler::BuildAlert(*best, now) : ReminderAlert {};
+}
+
+ReminderList ReminderService::LoadReminders(const std::filesystem::path& path, std::wstring& warning) const
+{
+    return storage_.Load(path, warning);
+}
+
+bool ReminderService::SaveReminders(const std::filesystem::path& path, const ReminderList& list, std::wstring& errorMessage) const
+{
+    return storage_.Save(path, list, errorMessage);
+}
+
+Reminder ReminderService::CreateReminder(
+    const std::wstring& title,
+    const std::wstring& description,
+    std::chrono::system_clock::time_point dueAt,
+    bool allDay,
+    ReminderPriority priority,
+    const std::wstring& category,
+    RecurrenceRule repeat,
+    int alertBeforeMinutes) const
+{
+    Reminder reminder;
+    reminder.id = GenerateId();
+    reminder.title = Trim(title);
+    reminder.description = Trim(description);
+    reminder.dueAt = FormatLocalIso(dueAt);
+    reminder.allDay = allDay;
+    reminder.priority = priority;
+    reminder.category = Trim(category).empty() ? L"General" : Trim(category);
+    reminder.repeat = repeat;
+    reminder.repeat.interval = std::max(1, reminder.repeat.interval);
+    reminder.alertBeforeMinutes = std::max(0, alertBeforeMinutes);
+    reminder.alertBeforeMinutesList = { reminder.alertBeforeMinutes };
+    reminder.createdAt = FormatLocalIso(Now());
+    reminder.updatedAt = reminder.createdAt;
+    return reminder;
+}
+
+ReminderOperationResult ReminderService::CompleteReminder(Reminder& reminder, std::chrono::system_clock::time_point now) const
+{
+    if (reminder.repeat.type == ReminderRepeatType::None)
+    {
+        reminder.completedAt = FormatLocalIso(now);
+        reminder.updatedAt = reminder.completedAt;
+        reminder.snoozedUntil.clear();
+        reminder.dismissedBannerUntil.clear();
+        return { true, L"Reminder completed." };
+    }
+
+    reminder.dueAt = FormatLocalIso(NextOccurrence(reminder, now));
+    reminder.completedAt.clear();
+    reminder.snoozedUntil.clear();
+    reminder.dismissedBannerUntil.clear();
+    reminder.updatedAt = FormatLocalIso(now);
+    return { true, L"Recurring reminder advanced to the next occurrence." };
+}
+
+ReminderOperationResult ReminderService::SnoozeReminder(Reminder& reminder, std::chrono::system_clock::time_point until) const
+{
+    reminder.snoozedUntil = FormatLocalIso(until);
+    reminder.dismissedBannerUntil = reminder.snoozedUntil;
+    reminder.updatedAt = FormatLocalIso(Now());
+    return { true, L"Reminder snoozed." };
+}
+
+ReminderOperationResult ReminderService::DismissBanner(Reminder& reminder, std::chrono::system_clock::time_point until) const
+{
+    reminder.dismissedBannerUntil = FormatLocalIso(until);
+    reminder.updatedAt = FormatLocalIso(Now());
+    return { true, L"Reminder banner dismissed." };
+}
+
+std::chrono::system_clock::time_point ReminderService::Now()
+{
+    return std::chrono::system_clock::now();
+}
+
+std::wstring ReminderService::FormatLocalIso(std::chrono::system_clock::time_point value)
+{
+    const std::tm local = LocalTm(value);
+    wchar_t buffer[32] {};
+    wcsftime(buffer, std::size(buffer), L"%Y-%m-%dT%H:%M:%S", &local);
+    return buffer;
+}
+
+std::optional<std::chrono::system_clock::time_point> ReminderService::ParseLocalIso(const std::wstring& value)
+{
+    if (value.empty())
+    {
+        return std::nullopt;
+    }
+
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+    if (swscanf_s(value.c_str(), L"%d-%d-%dT%d:%d:%d", &year, &month, &day, &hour, &minute, &second) != 6)
+    {
+        return std::nullopt;
+    }
+    if (year < 1970 || month < 1 || month > 12 || day < 1 || day > DaysInMonth(year, month) ||
+        hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
+    {
+        return std::nullopt;
+    }
+
+    std::tm local {};
+    local.tm_year = year - 1900;
+    local.tm_mon = month - 1;
+    local.tm_mday = day;
+    local.tm_hour = hour;
+    local.tm_min = minute;
+    local.tm_sec = second;
+    return FromLocalTm(local);
+}
+
+std::optional<std::chrono::system_clock::time_point> ReminderService::ParseDateAndTime(const std::wstring& dateText, const std::wstring& timeText, bool allDay)
+{
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    std::wstring normalizedDate = Trim(dateText);
+    std::replace(normalizedDate.begin(), normalizedDate.end(), L'/', L'-');
+    if (swscanf_s(normalizedDate.c_str(), L"%d-%d-%d", &year, &month, &day) != 3)
+    {
+        return std::nullopt;
+    }
+    if (year < 1970 || month < 1 || month > 12 || day < 1 || day > DaysInMonth(year, month))
+    {
+        return std::nullopt;
+    }
+
+    int hour = allDay ? 9 : 0;
+    int minute = 0;
+    if (!allDay && !ParseHourMinuteText(timeText, hour, minute))
+    {
+        return std::nullopt;
+    }
+
+    std::tm local {};
+    local.tm_year = year - 1900;
+    local.tm_mon = month - 1;
+    local.tm_mday = day;
+    local.tm_hour = hour;
+    local.tm_min = minute;
+    return FromLocalTm(local);
+}
+
+bool ReminderService::TryParseNaturalDue(const std::wstring& text, std::chrono::system_clock::time_point now, std::chrono::system_clock::time_point& dueAt, bool& allDay)
+{
+    const std::wstring lower = ToLower(text);
+    std::wistringstream stream(lower);
+    std::wstring token;
+    std::vector<std::wstring> tokens;
+    while (stream >> token)
+    {
+        while (!token.empty() && iswpunct(token.front()) != 0)
+        {
+            token.erase(token.begin());
+        }
+        while (!token.empty() && token.back() != L':' && iswpunct(token.back()) != 0)
+        {
+            token.pop_back();
+        }
+        if (!token.empty())
+        {
+            tokens.push_back(token);
+        }
+    }
+
+    auto parseAmountWord = [](const std::wstring& value, int& amount)
+    {
+        if (value.empty())
+        {
+            return false;
+        }
+
+        static const std::map<std::wstring, int> wordAmounts {
+            { L"a", 1 }, { L"an", 1 }, { L"one", 1 },
+            { L"two", 2 }, { L"three", 3 }, { L"four", 4 }, { L"five", 5 },
+            { L"six", 6 }, { L"seven", 7 }, { L"eight", 8 }, { L"nine", 9 },
+            { L"ten", 10 }, { L"eleven", 11 }, { L"twelve", 12 },
+            { L"thirteen", 13 }, { L"fourteen", 14 }, { L"fifteen", 15 },
+            { L"sixteen", 16 }, { L"seventeen", 17 }, { L"eighteen", 18 },
+            { L"nineteen", 19 }, { L"twenty", 20 }, { L"thirty", 30 },
+            { L"forty", 40 }, { L"fifty", 50 }, { L"sixty", 60 }
+        };
+        if (const auto found = wordAmounts.find(value); found != wordAmounts.end())
+        {
+            amount = found->second;
+            return amount > 0;
+        }
+
+        return false;
+    };
+
+    auto parseAmount = [&](const std::wstring& value, int& amount)
+    {
+        if (parseAmountWord(value, amount))
+        {
+            return true;
+        }
+
+        if (value.empty())
+        {
+            return false;
+        }
+
+        if (std::any_of(value.begin(), value.end(), [](wchar_t ch)
+        {
+            return iswdigit(ch) == 0;
+        }))
+        {
+            return false;
+        }
+
+        long long parsed = 0;
+        for (wchar_t ch : value)
+        {
+            parsed = parsed * 10 + static_cast<long long>(ch - L'0');
+            if (parsed > kMaxNaturalReminderMinutes)
+            {
+                return false;
+            }
+        }
+
+        amount = static_cast<int>(parsed);
+        return amount > 0;
+    };
+
+    auto parseAmountAt = [&](size_t index, int& amount, size_t& consumed)
+    {
+        consumed = 0;
+        if (index >= tokens.size())
+        {
+            return false;
+        }
+
+        if (parseAmount(tokens[index], amount))
+        {
+            consumed = 1;
+
+            int ones = 0;
+            if (index + 1 < tokens.size() &&
+                amount >= 20 &&
+                amount % 10 == 0 &&
+                parseAmountWord(tokens[index + 1], ones) &&
+                ones > 0 &&
+                ones < 10)
+            {
+                amount += ones;
+                consumed = 2;
+            }
+
+            return true;
+        }
+
+        return false;
+    };
+
+    auto parseDayOfMonthToken = [](const std::wstring& value, int& day)
+    {
+        if (value.empty())
+        {
+            return false;
+        }
+
+        size_t position = 0;
+        long parsed = 0;
+        while (position < value.size() && iswdigit(value[position]) != 0)
+        {
+            parsed = parsed * 10 + static_cast<long>(value[position] - L'0');
+            ++position;
+        }
+
+        if (position == 0 || parsed < 1 || parsed > 31)
+        {
+            return false;
+        }
+
+        const std::wstring suffix = value.substr(position);
+        if (!suffix.empty() && suffix != L"st" && suffix != L"nd" && suffix != L"rd" && suffix != L"th")
+        {
+            return false;
+        }
+
+        day = static_cast<int>(parsed);
+        return true;
+    };
+
+    auto applyTimeAfterToken = [&](size_t tokenIndex, std::tm& local, bool& parsedAllDay)
+    {
+        parsedAllDay = true;
+        for (size_t index = tokenIndex; index + 1 < tokens.size(); ++index)
+        {
+            if (tokens[index] != L"at")
+            {
+                continue;
+            }
+
+            int hour = 0;
+            int minute = 0;
+            std::wstring timeText = tokens[index + 1];
+            if (index + 2 < tokens.size() && (tokens[index + 2] == L"am" || tokens[index + 2] == L"pm"))
+            {
+                timeText += tokens[index + 2];
+            }
+            if (ParseHourMinuteText(timeText, hour, minute))
+            {
+                local.tm_hour = hour;
+                local.tm_min = minute;
+                local.tm_sec = 0;
+                parsedAllDay = false;
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto unitToMinutes = [](const std::wstring& unit)
+    {
+        if (unit.find(L"minute") == 0 || unit == L"min" || unit == L"mins" || unit == L"mn" || unit == L"m")
+        {
+            return 1;
+        }
+        if (unit.find(L"hour") == 0 || unit == L"hr" || unit == L"hrs" || unit == L"h")
+        {
+            return 60;
+        }
+        if (unit.find(L"day") == 0 || unit == L"d")
+        {
+            return 24 * 60;
+        }
+        if (unit.find(L"week") == 0 || unit == L"wk" || unit == L"wks" || unit == L"w")
+        {
+            return 24 * 7 * 60;
+        }
+        return 0;
+    };
+
+    auto addMinutes = [](long long& totalMinutes, int amount, int unitMinutes)
+    {
+        if (amount <= 0 || unitMinutes <= 0)
+        {
+            return false;
+        }
+        const long long addition = static_cast<long long>(amount) * unitMinutes;
+        if (addition <= 0 || totalMinutes + addition > kMaxNaturalReminderMinutes)
+        {
+            return false;
+        }
+        totalMinutes += addition;
+        return true;
+    };
+
+    auto parseCompactDurationToken = [&](const std::wstring& value, int& minutes)
+    {
+        minutes = 0;
+        long long totalMinutes = 0;
+        bool parsedAny = false;
+        size_t position = 0;
+        while (position < value.size())
+        {
+            const size_t amountStart = position;
+            while (position < value.size() && iswdigit(value[position]) != 0)
+            {
+                ++position;
+            }
+            if (position == amountStart)
+            {
+                return false;
+            }
+
+            int amount = 0;
+            if (!parseAmount(value.substr(amountStart, position - amountStart), amount))
+            {
+                return false;
+            }
+
+            const size_t unitStart = position;
+            while (position < value.size() && iswalpha(value[position]) != 0)
+            {
+                ++position;
+            }
+            if (position == unitStart || position < value.size())
+            {
+                return false;
+            }
+
+            const int unitMinutes = unitToMinutes(value.substr(unitStart, position - unitStart));
+            if (!addMinutes(totalMinutes, amount, unitMinutes))
+            {
+                return false;
+            }
+            parsedAny = true;
+        }
+
+        if (!parsedAny || totalMinutes <= 0 || totalMinutes > kMaxNaturalReminderMinutes)
+        {
+            return false;
+        }
+        minutes = static_cast<int>(totalMinutes);
+        return true;
+    };
+
+    auto parseRelativeDuration = [&](size_t startIndex, int& totalMinutes)
+    {
+        bool parsedAny = false;
+        long long accumulatedMinutes = 0;
+
+        for (size_t index = startIndex; index < tokens.size();)
+        {
+            if (tokens[index] == L"and")
+            {
+                if (!parsedAny)
+                {
+                    return false;
+                }
+                ++index;
+                continue;
+            }
+
+            if (tokens[index] == L"half")
+            {
+                size_t unitIndex = index + 1;
+                if (unitIndex < tokens.size() && (tokens[unitIndex] == L"a" || tokens[unitIndex] == L"an"))
+                {
+                    ++unitIndex;
+                }
+                if (unitIndex < tokens.size())
+                {
+                    const int unitMinutes = unitToMinutes(tokens[unitIndex]);
+                    if (unitMinutes > 0)
+                    {
+                        if (!addMinutes(accumulatedMinutes, std::max(1, unitMinutes / 2), 1))
+                        {
+                            return false;
+                        }
+                        parsedAny = true;
+                        index = unitIndex + 1;
+                        continue;
+                    }
+                }
+            }
+
+            int amount = 0;
+            size_t amountTokens = 0;
+            if (parseAmountAt(index, amount, amountTokens) &&
+                index + amountTokens < tokens.size())
+            {
+                const int unitMinutes = unitToMinutes(tokens[index + amountTokens]);
+                if (unitMinutes > 0)
+                {
+                    if (!addMinutes(accumulatedMinutes, amount, unitMinutes))
+                    {
+                        return false;
+                    }
+                    parsedAny = true;
+                    index += amountTokens + 1;
+                    continue;
+                }
+            }
+
+            int compactMinutes = 0;
+            if (parseCompactDurationToken(tokens[index], compactMinutes))
+            {
+                if (!addMinutes(accumulatedMinutes, compactMinutes, 1))
+                {
+                    return false;
+                }
+                parsedAny = true;
+                ++index;
+                continue;
+            }
+
+            if (parsedAny &&
+                index + 2 < tokens.size() &&
+                (tokens[index] == L"a" || tokens[index] == L"an") &&
+                tokens[index + 1] == L"half")
+            {
+                const int unitMinutes = unitToMinutes(tokens[index + 2]);
+                if (unitMinutes > 0)
+                {
+                    if (!addMinutes(accumulatedMinutes, std::max(1, unitMinutes / 2), 1))
+                    {
+                        return false;
+                    }
+                    index += 3;
+                    continue;
+                }
+            }
+
+            break;
+        }
+
+        if (!parsedAny || accumulatedMinutes <= 0 || accumulatedMinutes > kMaxNaturalReminderMinutes)
+        {
+            totalMinutes = 0;
+            return false;
+        }
+        totalMinutes = static_cast<int>(accumulatedMinutes);
+        return true;
+    };
+
+    for (size_t index = 0; index < tokens.size(); ++index)
+    {
+        int totalMinutes = 0;
+        if (tokens[index] == L"in" &&
+            index + 1 < tokens.size() &&
+            parseRelativeDuration(index + 1, totalMinutes))
+        {
+            dueAt = now + std::chrono::minutes(totalMinutes);
+            allDay = false;
+            return true;
+        }
+        if (parseRelativeDuration(index, totalMinutes))
+        {
+            dueAt = now + std::chrono::minutes(totalMinutes);
+            allDay = false;
+            return true;
+        }
+    }
+
+    for (size_t index = 0; index < tokens.size(); ++index)
+    {
+        if (tokens[index] != L"on")
+        {
+            continue;
+        }
+
+        size_t dayIndex = index + 1;
+        if (dayIndex < tokens.size() && tokens[dayIndex] == L"the")
+        {
+            ++dayIndex;
+        }
+
+        int day = 0;
+        if (dayIndex >= tokens.size() || !parseDayOfMonthToken(tokens[dayIndex], day))
+        {
+            continue;
+        }
+
+        std::tm local = LocalTm(now);
+        local.tm_mday = day;
+        local.tm_hour = 9;
+        local.tm_min = 0;
+        local.tm_sec = 0;
+
+        bool parsedAllDay = true;
+        applyTimeAfterToken(dayIndex + 1, local, parsedAllDay);
+
+        int year = local.tm_year + 1900;
+        int month = local.tm_mon + 1;
+        if (day > DaysInMonth(year, month))
+        {
+            continue;
+        }
+
+        dueAt = FromLocalTm(local);
+        if (dueAt <= now)
+        {
+            ++local.tm_mon;
+            year = local.tm_year + 1900 + (local.tm_mon / 12);
+            month = (local.tm_mon % 12) + 1;
+            if (day > DaysInMonth(year, month))
+            {
+                continue;
+            }
+            dueAt = FromLocalTm(local);
+        }
+
+        allDay = parsedAllDay;
+        return true;
+    }
+
+    if (lower.find(L"tomorrow") != std::wstring::npos)
+    {
+        std::tm local = LocalTm(now + std::chrono::hours(24));
+        local.tm_hour = 9;
+        local.tm_min = 0;
+        local.tm_sec = 0;
+        const size_t atPosition = lower.find(L" at ");
+        if (atPosition != std::wstring::npos)
+        {
+            int hour = 0;
+            int minute = 0;
+            if (ParseHourMinuteText(lower.substr(atPosition + 4), hour, minute))
+            {
+                local.tm_hour = hour;
+                local.tm_min = minute;
+                allDay = false;
+            }
+        }
+        else
+        {
+            allDay = true;
+        }
+        dueAt = FromLocalTm(local);
+        return true;
+    }
+
+    static const std::vector<std::pair<std::wstring, int>> weekdays {
+        { L"sunday", 0 }, { L"monday", 1 }, { L"tuesday", 2 }, { L"wednesday", 3 },
+        { L"thursday", 4 }, { L"friday", 5 }, { L"saturday", 6 }
+    };
+    for (const auto& weekday : weekdays)
+    {
+        const std::wstring pattern = L"next " + weekday.first;
+        if (lower.find(pattern) != std::wstring::npos)
+        {
+            std::tm local = LocalTm(now);
+            int daysAhead = (weekday.second - local.tm_wday + 7) % 7;
+            if (daysAhead == 0)
+            {
+                daysAhead = 7;
+            }
+            dueAt = StartOfLocalDay(now) + std::chrono::hours(24 * daysAhead + 9);
+            allDay = true;
+            return true;
+        }
+    }
+
+    std::wistringstream monthStream(lower);
+    std::wstring word;
+    while (monthStream >> word)
+    {
+        const auto month = MonthFromName(word);
+        if (!month)
+        {
+            continue;
+        }
+        int day = 0;
+        if (!(monthStream >> day) || day < 1 || day > 31)
+        {
+            continue;
+        }
+        std::tm local = LocalTm(now);
+        int year = local.tm_year + 1900;
+        if (lower.find(L"next year") != std::wstring::npos)
+        {
+            ++year;
+        }
+        if (day > DaysInMonth(year, *month))
+        {
+            continue;
+        }
+        std::tm target {};
+        target.tm_year = year - 1900;
+        target.tm_mon = *month - 1;
+        target.tm_mday = day;
+        target.tm_hour = 9;
+        dueAt = FromLocalTm(target);
+        if (dueAt <= now)
+        {
+            target.tm_year += 1;
+            dueAt = FromLocalTm(target);
+        }
+        allDay = true;
+        return true;
+    }
+
+    // A title can specify only a clock time, such as "go to the gym at 1:30".
+    // Use the next occurrence so an already-passed time naturally lands tomorrow.
+    for (size_t index = 0; index + 1 < tokens.size(); ++index)
+    {
+        if (tokens[index] != L"at")
+        {
+            continue;
+        }
+
+        std::wstring timeText = tokens[index + 1];
+        if (index + 2 < tokens.size() && (tokens[index + 2] == L"am" || tokens[index + 2] == L"pm"))
+        {
+            timeText += tokens[index + 2];
+        }
+
+        int hour = 0;
+        int minute = 0;
+        if (!ParseHourMinuteText(timeText, hour, minute))
+        {
+            continue;
+        }
+
+        std::tm local = LocalTm(now);
+        local.tm_hour = hour;
+        local.tm_min = minute;
+        local.tm_sec = 0;
+        dueAt = FromLocalTm(local);
+        if (dueAt <= now)
+        {
+            local.tm_mday += 1;
+            dueAt = FromLocalTm(local);
+        }
+
+        allDay = false;
+        return true;
+    }
+
+    return false;
+}
+
+std::wstring ReminderService::PriorityLabel(ReminderPriority priority)
+{
+    switch (priority)
+    {
+    case ReminderPriority::Low:
+        return L"Low";
+    case ReminderPriority::Normal:
+        return L"Normal";
+    case ReminderPriority::High:
+        return L"High";
+    }
+    return L"Normal";
+}
+
+std::wstring ReminderService::RepeatTypeLabel(ReminderRepeatType repeat)
+{
+    switch (repeat)
+    {
+    case ReminderRepeatType::None:
+        return L"None";
+    case ReminderRepeatType::Daily:
+        return L"Daily";
+    case ReminderRepeatType::Weekly:
+        return L"Weekly";
+    case ReminderRepeatType::Monthly:
+        return L"Monthly";
+    case ReminderRepeatType::Yearly:
+        return L"Yearly";
+    }
+    return L"None";
+}
+
+std::wstring ReminderService::RepeatLabel(const Reminder& reminder)
+{
+    if (reminder.repeat.type == ReminderRepeatType::None)
+    {
+        return L"Does not repeat";
+    }
+    if (reminder.repeat.type == ReminderRepeatType::Weekly)
+    {
+        const auto dueAt = ParseLocalIso(reminder.dueAt);
+        if (dueAt)
+        {
+            static constexpr wchar_t weekdays[][10] {
+                L"Sunday", L"Monday", L"Tuesday", L"Wednesday", L"Thursday", L"Friday", L"Saturday"
+            };
+            const std::tm local = LocalTm(*dueAt);
+            return L"Repeats every " + std::wstring(weekdays[local.tm_wday]);
+        }
+    }
+    if (reminder.repeat.type == ReminderRepeatType::Monthly)
+    {
+        const auto dueAt = ParseLocalIso(reminder.dueAt);
+        if (dueAt)
+        {
+            const std::tm local = LocalTm(*dueAt);
+            return L"Repeats monthly on the " + std::to_wstring(local.tm_mday);
+        }
+    }
+    return L"Repeats " + ToLower(RepeatTypeLabel(reminder.repeat.type));
+}
+
+std::wstring ReminderService::StatusLabel(ReminderStatus status)
+{
+    switch (status)
+    {
+    case ReminderStatus::Upcoming:
+        return L"Upcoming";
+    case ReminderStatus::DueSoon:
+        return L"Due Soon";
+    case ReminderStatus::DueNow:
+        return L"Due Now";
+    case ReminderStatus::Overdue:
+        return L"Overdue";
+    case ReminderStatus::Completed:
+        return L"Completed";
+    case ReminderStatus::Snoozed:
+        return L"Snoozed";
+    }
+    return L"Upcoming";
+}
+
+std::wstring ReminderService::DueLabel(const Reminder& reminder, std::chrono::system_clock::time_point now)
+{
+    const auto dueAt = ParseLocalIso(reminder.dueAt);
+    if (!dueAt)
+    {
+        return L"Invalid date";
+    }
+
+    const std::tm due = LocalTm(*dueAt);
+    const bool today = SameLocalDate(*dueAt, now);
+    const bool tomorrow = SameLocalDate(*dueAt, now + std::chrono::hours(24));
+
+    wchar_t timeBuffer[32] {};
+    wcsftime(timeBuffer, std::size(timeBuffer), L"%I:%M %p", &due);
+    std::wstring timeText = timeBuffer;
+    if (!timeText.empty() && timeText.front() == L'0')
+    {
+        timeText.erase(timeText.begin());
+    }
+
+    if (today)
+    {
+        return reminder.allDay ? L"Today" : L"Today at " + timeText;
+    }
+    if (tomorrow)
+    {
+        return reminder.allDay ? L"Tomorrow" : L"Tomorrow at " + timeText;
+    }
+
+    std::wstring dateText = MonthName(due.tm_mon + 1) + L" " + std::to_wstring(due.tm_mday) + L", " + std::to_wstring(due.tm_year + 1900);
+    return reminder.allDay ? dateText : dateText + L" at " + timeText;
+}
+
+std::wstring ReminderService::CountdownLabel(const Reminder& reminder, std::chrono::system_clock::time_point now)
+{
+    const auto dueAt = ParseLocalIso(reminder.dueAt);
+    if (!dueAt)
+    {
+        return L"Invalid date";
+    }
+
+    const bool overdue = now > *dueAt;
+    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(overdue ? now - *dueAt : *dueAt - now).count();
+    const long long days = seconds / 86400;
+    const long long hours = (seconds % 86400) / 3600;
+    const long long minutes = (seconds % 3600) / 60;
+
+    auto unitLabel = [](long long value, const wchar_t* singular, const wchar_t* plural)
+    {
+        return std::to_wstring(value) + L" " + (value == 1 ? singular : plural);
+    };
+
+    std::wstring label;
+    if (days > 0)
+    {
+        label = unitLabel(days, L"day", L"days");
+        if (hours > 0)
+        {
+            label += L" " + unitLabel(hours, L"hour", L"hours");
+        }
+    }
+    else if (hours > 0)
+    {
+        label = unitLabel(hours, L"hour", L"hours");
+        if (minutes > 0)
+        {
+            label += L" " + unitLabel(minutes, L"minute", L"minutes");
+        }
+    }
+    else
+    {
+        label = unitLabel(std::max<long long>(1, minutes), L"minute", L"minutes");
+    }
+    return overdue ? label + L" overdue" : L"in " + label;
+}
+
+std::wstring ReminderService::AlertLabel(int minutes, bool allDay)
+{
+    if (allDay && minutes >= 1440)
+    {
+        return L"1 day before";
+    }
+    if (minutes <= 0)
+    {
+        return L"At time";
+    }
+    if (minutes < 60)
+    {
+        return std::to_wstring(minutes) + L" minutes before";
+    }
+    if (minutes == 60)
+    {
+        return L"1 hour before";
+    }
+    if (minutes == 1440)
+    {
+        return L"1 day before";
+    }
+    return std::to_wstring(minutes / 60) + L" hours before";
+}
+
+ReminderPriority ReminderService::PriorityFromString(const std::wstring& value)
+{
+    const std::wstring lower = ToLower(value);
+    if (lower == L"low")
+    {
+        return ReminderPriority::Low;
+    }
+    if (lower == L"high")
+    {
+        return ReminderPriority::High;
+    }
+    return ReminderPriority::Normal;
+}
+
+ReminderRepeatType ReminderService::RepeatTypeFromString(const std::wstring& value)
+{
+    const std::wstring lower = ToLower(value);
+    if (lower == L"daily")
+    {
+        return ReminderRepeatType::Daily;
+    }
+    if (lower == L"weekly")
+    {
+        return ReminderRepeatType::Weekly;
+    }
+    if (lower == L"monthly")
+    {
+        return ReminderRepeatType::Monthly;
+    }
+    if (lower == L"yearly")
+    {
+        return ReminderRepeatType::Yearly;
+    }
+    return ReminderRepeatType::None;
+}

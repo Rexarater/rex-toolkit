@@ -12,7 +12,11 @@ add_executable(RexToolkit WIN32
     src/main.cpp
     src/MediaDownloadService.cpp
     src/MediaDownloadService.h
+    src/MediaEditorPage.cpp
+    src/MediaEditorPage.h
     src/MacroRecorderService.cpp
+    src/MediaEditorService.cpp
+    src/MediaEditorService.h
     src/MacroRecorderService.h
     src/ReminderService.cpp
     src/ReminderService.h
@@ -32,6 +36,11 @@ target_compile_definitions(RexToolkit PRIVATE UNICODE _UNICODE NOMINMAX _WIN32_W
 
 target_link_libraries(RexToolkit PRIVATE
     Comdlg32
+    Mf
+    Mfplat
+    Mfuuid
+    Msimg32
+    Propsys
     Crypt32
     Dwmapi
     Gdiplus
@@ -40,6 +49,7 @@ target_link_libraries(RexToolkit PRIVATE
     OleAut32
     Secur32
     Shell32
+    Shlwapi
     UxTheme
     Windowscodecs
     Winhttp
