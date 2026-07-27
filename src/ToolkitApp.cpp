@@ -28564,8 +28564,31 @@ void ToolkitApp::PaintAppBackground(HDC hdc)
     graphics.DrawImage(appearanceBackgroundCache_.get(), 0, 0, clientRect_.right, clientRect_.bottom);
 }
 
-void ToolkitApp::PaintAppearancePreview(HDC hdc, const RECT& bounds)
+void ToolkitApp::PaintAppearancePreview(HDC hdc, const RECT& logicalBounds)
 {
+    POINT viewportOrigin {};
+    GetViewportOrgEx(hdc, &viewportOrigin);
+
+    RECT bounds = logicalBounds;
+    OffsetRect(&bounds, viewportOrigin.x, viewportOrigin.y);
+
+    const int savedDc = SaveDC(hdc);
+    if (savedDc == 0)
+    {
+        return;
+    }
+    struct ScopedDcRestore
+    {
+        HDC dc;
+        int state;
+        ~ScopedDcRestore()
+        {
+            RestoreDC(dc, state);
+        }
+    };
+    [[maybe_unused]] ScopedDcRestore restore { hdc, savedDc };
+    SetViewportOrgEx(hdc, 0, 0, nullptr);
+
     RECT paintClip {};
     const int clipType = GetClipBox(hdc, &paintClip);
     if (clipType == NULLREGION || (clipType != ERROR && !RectsOverlap(bounds, paintClip)))
