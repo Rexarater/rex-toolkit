@@ -2327,6 +2327,17 @@ int ToolkitApp::Run(int showCommand)
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {
         if (message.message == WM_KEYDOWN &&
+            message.wParam == 'V' &&
+            (GetKeyState(VK_CONTROL) & 0x8000) != 0 &&
+            currentPage_ == Page::Tool &&
+            currentTool_ == ToolKind::MediaEditor &&
+            (message.hwnd == hwnd_ || message.hwnd == mediaEditorPage_.WindowHandle()))
+        {
+            mediaEditorPage_.PasteFromClipboard();
+            continue;
+        }
+
+        if (message.message == WM_KEYDOWN &&
             message.wParam == 'A' &&
             (GetKeyState(VK_CONTROL) & 0x8000) != 0)
         {

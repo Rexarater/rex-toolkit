@@ -512,36 +512,10 @@ std::wstring CleanExternalToolOutput(std::wstring value)
     return condensed;
 }
 
-std::optional<std::wstring> FriendlyExternalToolError(const std::wstring& output, MediaPlatform platform)
-{
-    const std::wstring lower = ToLower(output);
-    if (lower.find(L"drm protected") != std::wstring::npos ||
-        lower.find(L"drm-protected") != std::wstring::npos)
-    {
-        if (platform == MediaPlatform::SoundCloud)
-        {
-            return L"This SoundCloud track is DRM protected, so Rex's Toolkit cannot download it.";
-        }
-        if (platform == MediaPlatform::YouTube)
-        {
-            return L"This YouTube video is DRM protected, so Rex's Toolkit cannot download it.";
-        }
-        return L"This media is DRM protected, so Rex's Toolkit cannot download it.";
-    }
-
-    return std::nullopt;
-}
-
 std::wstring FriendlyExternalToolMessage(
     const std::wstring& output,
-    MediaPlatform platform,
     const std::wstring& fallbackMessage)
 {
-    if (auto friendly = FriendlyExternalToolError(output, platform))
-    {
-        return *friendly;
-    }
-
     const std::wstring cleaned = CleanExternalToolOutput(output);
     return cleaned.empty() ? fallbackMessage : cleaned;
 }
@@ -2380,8 +2354,7 @@ std::optional<MediaDownloadJob> MediaMetadataService::Analyze(
 
     if (result.exitCode != 0)
     {
-        const MediaPlatform platform = SupportedPlatformRegistry::DetectPlatform(url);
-        errorMessage = FriendlyExternalToolMessage(result.output, platform, L"Could not analyze this URL.");
+        errorMessage = FriendlyExternalToolMessage(result.output, L"Could not analyze this URL.");
         return std::nullopt;
     }
 
@@ -2625,7 +2598,7 @@ MediaDownloadJob MediaDownloadService::Download(
     if (result.exitCode != 0)
     {
         job.status = MediaDownloadStatus::Failed;
-        job.errorMessage = FriendlyExternalToolMessage(result.output, job.platform, L"Download failed.");
+        job.errorMessage = FriendlyExternalToolMessage(result.output, L"Download failed.");
         return job;
     }
 

@@ -722,6 +722,148 @@ std::vector<std::filesystem::path> ClipboardFilePaths(HDROP drop)
     return paths;
 }
 
+Gdiplus::REAL FittedTextSize(
+    Gdiplus::Graphics& graphics,
+    const std::wstring& text,
+    Gdiplus::REAL width,
+    Gdiplus::REAL height)
+{
+    if (text.empty() || width <= 1.0f || height <= 1.0f)
+    {
+        return 2.0f;
+    }
+
+    Gdiplus::FontFamily preferredFamily(L"Segoe UI");
+    const Gdiplus::FontFamily* family =
+        preferredFamily.GetLastStatus() == Gdiplus::Ok
+            ? &preferredFamily
+            : Gdiplus::FontFamily::GenericSansSerif();
+    Gdiplus::StringFormat format;
+    format.SetFormatFlags(
+        Gdiplus::StringFormatFlagsMeasureTrailingSpaces |
+        Gdiplus::StringFormatFlagsLineLimit |
+        Gdiplus::StringFormatFlagsNoClip);
+    format.SetTrimming(Gdiplus::StringTrimmingNone);
+
+    Gdiplus::REAL low = 2.0f;
+    Gdiplus::REAL high = std::max(
+        low,
+        std::min<Gdiplus::REAL>(2048.0f, height));
+    for (int pass = 0; pass < 15; ++pass)
+    {
+        const Gdiplus::REAL candidate = (low + high) * 0.5f;
+        Gdiplus::Font font(
+            family,
+            candidate,
+            Gdiplus::FontStyleRegular,
+            Gdiplus::UnitPixel);
+        Gdiplus::RectF measured;
+        INT fitted = 0;
+        INT lines = 0;
+        const Gdiplus::REAL measurementHeight = std::max(
+            height * 2.0f,
+            height + candidate * 2.0f + 4.0f);
+        const Gdiplus::Status measuredStatus = graphics.MeasureString(
+            text.c_str(),
+            static_cast<INT>(text.size()),
+            &font,
+            Gdiplus::RectF(0.0f, 0.0f, width, measurementHeight),
+            &format,
+            &measured,
+            &fitted,
+            &lines);
+        const bool fits =
+            measuredStatus == Gdiplus::Ok &&
+            fitted >= static_cast<INT>(text.size()) &&
+            measured.Width <= width + 0.75f &&
+            measured.Height <= height + 0.75f;
+        if (fits) low = candidate;
+        else high = candidate;
+    }
+    return low;
+}
+
+void DrawTextBox(
+    Gdiplus::Graphics& graphics,
+    const MediaEditorTextBox& textBox)
+{
+    if (textBox.text.empty() ||
+        textBox.bounds.Width() <= 1.0f ||
+        textBox.bounds.Height() <= 1.0f)
+    {
+        return;
+    }
+
+    const int rotation =
+        ((textBox.rotationQuarterTurns % 4) + 4) % 4;
+    const bool sideways = (rotation % 2) != 0;
+    const Gdiplus::REAL physicalWidth = textBox.bounds.Width();
+    const Gdiplus::REAL physicalHeight = textBox.bounds.Height();
+    const Gdiplus::REAL logicalWidth =
+        sideways ? physicalHeight : physicalWidth;
+    const Gdiplus::REAL logicalHeight =
+        sideways ? physicalWidth : physicalHeight;
+    const Gdiplus::REAL padding = std::clamp(
+        std::min(logicalWidth, logicalHeight) * 0.035f,
+        1.5f,
+        18.0f);
+    const Gdiplus::REAL contentWidth =
+        std::max(1.0f, logicalWidth - padding * 2.0f);
+    const Gdiplus::REAL contentHeight =
+        std::max(1.0f, logicalHeight - padding * 2.0f);
+
+    const Gdiplus::GraphicsState state = graphics.Save();
+    graphics.SetClip(
+        Gdiplus::RectF(
+            textBox.bounds.left,
+            textBox.bounds.top,
+            physicalWidth,
+            physicalHeight),
+        Gdiplus::CombineModeIntersect);
+    graphics.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
+    graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+    graphics.TranslateTransform(
+        (textBox.bounds.left + textBox.bounds.right) * 0.5f,
+        (textBox.bounds.top + textBox.bounds.bottom) * 0.5f);
+    graphics.RotateTransform(static_cast<Gdiplus::REAL>(rotation * 90));
+
+    Gdiplus::FontFamily preferredFamily(L"Segoe UI");
+    const Gdiplus::FontFamily* family =
+        preferredFamily.GetLastStatus() == Gdiplus::Ok
+            ? &preferredFamily
+            : Gdiplus::FontFamily::GenericSansSerif();
+    const Gdiplus::REAL fontSize =
+        FittedTextSize(graphics, textBox.text, contentWidth, contentHeight);
+    Gdiplus::Font font(
+        family,
+        fontSize,
+        Gdiplus::FontStyleRegular,
+        Gdiplus::UnitPixel);
+    Gdiplus::StringFormat format;
+    format.SetFormatFlags(
+        Gdiplus::StringFormatFlagsMeasureTrailingSpaces |
+        Gdiplus::StringFormatFlagsLineLimit);
+    format.SetTrimming(Gdiplus::StringTrimmingNone);
+    const Gdiplus::RectF layoutRect(
+        -logicalWidth * 0.5f + padding,
+        -logicalHeight * 0.5f + padding,
+        contentWidth,
+        contentHeight);
+    Gdiplus::SolidBrush brush(Gdiplus::Color(
+        static_cast<BYTE>(std::clamp(textBox.opacity, 0.0f, 1.0f) * 255.0f),
+        GetRValue(textBox.color),
+        GetGValue(textBox.color),
+        GetBValue(textBox.color)));
+    graphics.DrawString(
+        textBox.text.c_str(),
+        static_cast<INT>(textBox.text.size()),
+        &font,
+        layoutRect,
+        &format,
+        &brush);
+    graphics.Restore(state);
+}
+
 std::wstring FileNameForMessage(const std::filesystem::path& path)
 {
     const std::wstring name = path.filename().wstring();
@@ -1015,10 +1157,9 @@ bool ImageEditingSession::LoadFromBuffer(
     sourcePath_ = std::move(nextSourcePath);
     crop_ = { 0.0f, 0.0f, static_cast<float>(orientedImage_.width), static_cast<float>(orientedImage_.height) };
     strokes_.clear();
+    textBoxes_.clear();
     rotationQuarterTurns_ = 0;
-    editActive_ = false;
-    undoStack_.clear();
-    redoStack_.clear();
+    ClearHistory();
     return true;
 }
 
@@ -1029,7 +1170,14 @@ void ImageEditingSession::Reset()
     sourcePath_.clear();
     crop_ = {};
     strokes_.clear();
+    textBoxes_.clear();
     rotationQuarterTurns_ = 0;
+    ClearHistory();
+}
+
+void ImageEditingSession::ClearHistory()
+{
+    editStart_ = {};
     editActive_ = false;
     undoStack_.clear();
     redoStack_.clear();
@@ -1042,6 +1190,7 @@ const MediaEditorImageBuffer& ImageEditingSession::Image() const { return orient
 const std::filesystem::path& ImageEditingSession::SourcePath() const { return sourcePath_; }
 const MediaEditorCropRect& ImageEditingSession::Crop() const { return crop_; }
 const std::vector<MediaEditorDrawingStroke>& ImageEditingSession::Strokes() const { return strokes_; }
+const std::vector<MediaEditorTextBox>& ImageEditingSession::TextBoxes() const { return textBoxes_; }
 int ImageEditingSession::RotationQuarterTurns() const { return rotationQuarterTurns_; }
 
 MediaEditorImageSnapshot ImageEditingSession::CaptureSnapshot() const
@@ -1049,6 +1198,7 @@ MediaEditorImageSnapshot ImageEditingSession::CaptureSnapshot() const
     MediaEditorImageSnapshot snapshot;
     snapshot.crop = crop_;
     snapshot.strokes = strokes_;
+    snapshot.textBoxes = textBoxes_;
     snapshot.rotationQuarterTurns = rotationQuarterTurns_;
     return snapshot;
 }
@@ -1074,6 +1224,7 @@ bool ImageEditingSession::RestoreSnapshot(const MediaEditorImageSnapshot& snapsh
     }
     crop_ = ClampCrop(nextSnapshot.crop);
     strokes_ = std::move(nextSnapshot.strokes);
+    textBoxes_ = std::move(nextSnapshot.textBoxes);
     return true;
 }
 
@@ -1336,6 +1487,31 @@ bool ImageEditingSession::AddStroke(MediaEditorDrawingStroke stroke)
     return changed;
 }
 
+bool ImageEditingSession::AddTextBox(MediaEditorTextBox textBox)
+{
+    if (!IsLoaded() || textBox.text.empty())
+    {
+        return false;
+    }
+    textBox.bounds = ClampCrop(textBox.bounds);
+    textBox.opacity = std::clamp(textBox.opacity, 0.05f, 1.0f);
+    textBox.rotationQuarterTurns =
+        ((textBox.rotationQuarterTurns % 4) + 4) % 4;
+    const bool ownEdit = !editActive_;
+    if (ownEdit) BeginEdit();
+    try
+    {
+        textBoxes_.push_back(std::move(textBox));
+    }
+    catch (const std::bad_alloc&)
+    {
+        if (ownEdit) CancelEdit();
+        return false;
+    }
+    if (ownEdit) CommitEdit();
+    return true;
+}
+
 bool ImageEditingSession::RotateClockwise()
 {
     if (!IsLoaded())
@@ -1373,6 +1549,18 @@ bool ImageEditingSession::RotateClockwise()
             point.x = oldHeight - point.y;
             point.y = oldX;
         }
+    }
+    for (MediaEditorTextBox& textBox : textBoxes_)
+    {
+        const MediaEditorCropRect previous = textBox.bounds;
+        textBox.bounds = {
+            oldHeight - previous.bottom,
+            previous.left,
+            oldHeight - previous.top,
+            previous.right
+        };
+        textBox.rotationQuarterTurns =
+            (textBox.rotationQuarterTurns + 1) % 4;
     }
     crop_ = ClampCrop(crop_);
     if (ownEdit) CommitEdit();
@@ -1582,6 +1770,11 @@ bool ImageEditingSession::Flatten(
                 drawing.DrawLines(&pen, points.data(), static_cast<INT>(points.size()));
             }
         }
+        drawing.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
+        for (const MediaEditorTextBox& textBox : textBoxes_)
+        {
+            DrawTextBox(drawing, textBox);
+        }
 
         Gdiplus::Bitmap output(
             static_cast<INT>(outputWidth),
@@ -1738,6 +1931,12 @@ void VideoTimelineModel::Reset()
     playheadSeconds_ = 0.0;
     durationSeconds_ = 0.0;
     nextClipId_ = 1;
+    ClearHistory();
+}
+
+void VideoTimelineModel::ClearHistory()
+{
+    editStart_ = {};
     editActive_ = false;
     editChanged_ = false;
     undoStack_.clear();

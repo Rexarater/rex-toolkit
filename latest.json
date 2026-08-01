@@ -1,11 +1,11 @@
 {
-  "latestVersion": "0.8.0",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.8.0/RexsToolkit_v0.8.0.zip",
+  "latestVersion": "0.8.2",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.8.2/RexsToolkit_v0.8.2.zip",
   "releaseNotes": [
-    "Added the Video & Image Editor with video trimming, clip arranging, GPU-assisted export, image cropping, drawing, clipboard copy, and save workflows.",
-    "Redesigned the Video Compressor, Reminders, and File Converter around simpler, clearer workflows.",
-    "Expanded Appearance settings with custom backgrounds and refined surface styling, plus smoother and faster scrolling throughout the app.",
-    "Improved video playback, frame stepping, timeline editing, export accuracy, and image editing behavior.",
-    "Enabled Edit in Rex's Toolkit in Windows file menus by default for new installs."
+    "Rebuilt the photo editor toolbar into a compact, organized layout with contextual controls.",
+    "Added a Text tool for placing automatically fitted text boxes directly onto images.",
+    "Fixed an issue with how lines were drawn in the photo editor.",
+    "Fixed Undo incorrectly being available immediately after importing media which could break the editor.",
+    "Fixed uneven UI alignment in the video editor's upper control row."
   ]
 }

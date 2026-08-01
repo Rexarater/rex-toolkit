@@ -94,10 +94,20 @@ struct MediaEditorDrawingStroke
     bool eraser = false;
 };
 
+struct MediaEditorTextBox
+{
+    MediaEditorCropRect bounds;
+    std::wstring text;
+    COLORREF color = RGB(255, 74, 92);
+    float opacity = 1.0f;
+    int rotationQuarterTurns = 0;
+};
+
 struct MediaEditorImageSnapshot
 {
     MediaEditorCropRect crop;
     std::vector<MediaEditorDrawingStroke> strokes;
+    std::vector<MediaEditorTextBox> textBoxes;
     int rotationQuarterTurns = 0;
 };
 
@@ -110,6 +120,7 @@ public:
         const std::filesystem::path& sourcePath,
         std::wstring& errorMessage);
     void Reset();
+    void ClearHistory();
 
     bool IsLoaded() const;
     UINT Width() const;
@@ -118,6 +129,7 @@ public:
     const std::filesystem::path& SourcePath() const;
     const MediaEditorCropRect& Crop() const;
     const std::vector<MediaEditorDrawingStroke>& Strokes() const;
+    const std::vector<MediaEditorTextBox>& TextBoxes() const;
     int RotationQuarterTurns() const;
 
     void BeginEdit();
@@ -126,6 +138,7 @@ public:
     void SetCrop(MediaEditorCropRect crop);
     void ResetCrop();
     bool AddStroke(MediaEditorDrawingStroke stroke);
+    bool AddTextBox(MediaEditorTextBox textBox);
     bool RotateClockwise();
 
     bool CanUndo() const;
@@ -150,6 +163,7 @@ private:
     std::filesystem::path sourcePath_;
     MediaEditorCropRect crop_;
     std::vector<MediaEditorDrawingStroke> strokes_;
+    std::vector<MediaEditorTextBox> textBoxes_;
     int rotationQuarterTurns_ = 0;
     bool editActive_ = false;
     MediaEditorImageSnapshot editStart_;
@@ -195,6 +209,7 @@ public:
     double DurationSeconds() const;
 
     void Reset();
+    void ClearHistory();
     void AddClip(VideoAnalysis analysis);
     bool SelectClip(int index);
     void SetPlayhead(double seconds);
