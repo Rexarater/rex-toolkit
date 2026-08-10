@@ -1,3 +1,4 @@
+#include "CacheManager.h"
 #include "MediaDownloadService.h"
 
 #include <knownfolders.h>
@@ -721,14 +722,13 @@ std::wstring FirstHttpLine(const std::wstring& text)
 
 std::filesystem::path TemporaryPathWithExtension(const std::wstring& extension)
 {
-    std::array<wchar_t, MAX_PATH> tempPath {};
-    const DWORD length = GetTempPathW(static_cast<DWORD>(tempPath.size()), tempPath.data());
-    std::filesystem::path directory = (length > 0 && length < tempPath.size())
-        ? std::filesystem::path(tempPath.data())
-        : std::filesystem::temp_directory_path();
+    std::filesystem::path directory = CacheManager::AudioAnalysisTemporaryRoot();
+    std::error_code directoryError;
+    std::filesystem::create_directories(directory, directoryError);
+    if (directoryError) directory = std::filesystem::temp_directory_path();
 
     const std::wstring baseName =
-        L"RexToolkitAudio_" +
+        L"analysis-" +
         std::to_wstring(GetCurrentProcessId()) +
         L"_" +
         std::to_wstring(GetTickCount64());

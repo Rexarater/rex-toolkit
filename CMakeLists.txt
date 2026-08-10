@@ -6,6 +6,8 @@ add_executable(RexToolkit WIN32
     resources.rc
     src/AnimeTrackerService.cpp
     src/AnimeTrackerService.h
+    src/CacheManager.cpp
+    src/CacheManager.h
     src/AppConstants.h
     src/FileConversionService.cpp
     src/FileConversionService.h
@@ -24,6 +26,8 @@ add_executable(RexToolkit WIN32
     src/SmartFileTransferService.h
     src/ToolkitApp.cpp
     src/ToolkitApp.h
+    src/UiComponents.cpp
+    src/UiComponents.h
     src/UpdateChecker.cpp
     src/UpdateChecker.h
     src/VideoCompressionService.cpp
@@ -158,4 +162,34 @@ endif()
 
 if (MSVC)
     target_compile_options(RexToolkit PRIVATE /W4 /permissive-)
+endif()
+
+include(CTest)
+if (BUILD_TESTING)
+    add_executable(RexToolkitCacheTests EXCLUDE_FROM_ALL
+        tests/CacheManagerTests.cpp
+        src/CacheManager.cpp
+        src/CacheManager.h
+    )
+    target_compile_features(RexToolkitCacheTests PRIVATE cxx_std_17)
+    target_compile_definitions(RexToolkitCacheTests PRIVATE UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
+    target_include_directories(RexToolkitCacheTests PRIVATE src)
+    if (MSVC)
+        target_compile_options(RexToolkitCacheTests PRIVATE /W4 /permissive-)
+    endif()
+    add_test(NAME RexToolkitCacheTests COMMAND RexToolkitCacheTests)
+
+    add_executable(RexToolkitUiComponentsTests EXCLUDE_FROM_ALL
+        tests/UiComponentsTests.cpp
+        src/UiComponents.cpp
+        src/UiComponents.h
+    )
+    target_compile_features(RexToolkitUiComponentsTests PRIVATE cxx_std_17)
+    target_compile_definitions(RexToolkitUiComponentsTests PRIVATE UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
+    target_include_directories(RexToolkitUiComponentsTests PRIVATE src)
+    target_link_libraries(RexToolkitUiComponentsTests PRIVATE Gdiplus)
+    if (MSVC)
+        target_compile_options(RexToolkitUiComponentsTests PRIVATE /W4 /permissive-)
+    endif()
+    add_test(NAME RexToolkitUiComponentsTests COMMAND RexToolkitUiComponentsTests)
 endif()

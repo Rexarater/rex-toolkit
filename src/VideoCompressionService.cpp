@@ -1,3 +1,4 @@
+#include "CacheManager.h"
 #include "VideoCompressionService.h"
 
 #include <windows.h>
@@ -234,15 +235,17 @@ std::filesystem::path CreateWorkingOutputPath(const std::filesystem::path& desti
 
 std::filesystem::path CreateJobTempDirectory()
 {
-    wchar_t tempPath[MAX_PATH] {};
-    if (GetTempPathW(static_cast<DWORD>(std::size(tempPath)), tempPath) == 0)
+    const std::filesystem::path root = CacheManager::VideoCompressionTemporaryRoot();
+    if (root.empty())
     {
         return {};
     }
-    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-    const std::filesystem::path result = std::filesystem::path(tempPath) /
-        (L"RexToolkitVideoCompression_" + std::to_wstring(GetCurrentProcessId()) + L"_" + std::to_wstring(stamp));
     std::error_code error;
+    std::filesystem::create_directories(root, error);
+    if (error) return {};
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path result = root /
+        (L"job-" + std::to_wstring(GetCurrentProcessId()) + L"_" + std::to_wstring(stamp));
     std::filesystem::create_directories(result, error);
     return error ? std::filesystem::path {} : result;
 }

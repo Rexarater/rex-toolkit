@@ -1,11 +1,11 @@
 {
-  "latestVersion": "0.8.2",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.8.2/RexsToolkit_v0.8.2.zip",
+  "latestVersion": "0.8.5",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.8.5/RexsToolkit_v0.8.5.zip",
   "releaseNotes": [
-    "Rebuilt the photo editor toolbar into a compact, organized layout with contextual controls.",
-    "Added a Text tool for placing automatically fitted text boxes directly onto images.",
-    "Fixed an issue with how lines were drawn in the photo editor.",
-    "Fixed Undo incorrectly being available immediately after importing media which could break the editor.",
-    "Fixed uneven UI alignment in the video editor's upper control row."
+    "Redesigned Anime Tracker around a media-focused watchlist and detailed anime workspace.",
+    "Added integrated AniList search, richer cover artwork, airing details, and streamlined list importing.",
+    "Improved Anime Tracker responsiveness with persistent artwork caching and virtualized large episode lists.",
+    "Fixed search popup repaint issues and several Anime Tracker scrolling and alignment problems.",
+    "Improved Auto Clicker keyboard output reliability for games and other applications."
   ]
 }

@@ -8,6 +8,7 @@
 #include "ReminderService.h"
 #include "SmartFileTransferService.h"
 #include "UpdateChecker.h"
+#include "UiComponents.h"
 #include "VideoCompressionService.h"
 
 #include <windows.h>
@@ -16,11 +17,13 @@
 #include <array>
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -85,6 +88,7 @@ enum class DropdownKind
     MediaFormat,
     MediaQuality,
     AnimeFilter,
+    AnimeManagement,
     ReminderFilter,
     ReminderSort,
     ReminderPreset,
@@ -122,8 +126,17 @@ enum class DropdownKind
 
 enum class AnimeTrackerTab
 {
-    Search,
-    Anime
+    Watchlist,
+    Airing,
+    Favorites
+};
+
+enum class AnimeDetailTab
+{
+    Overview,
+    Episodes,
+    Sequels,
+    Notes
 };
 
 enum class SmartTransferTab
@@ -343,15 +356,6 @@ public:
 
     void SetPendingEditPath(std::filesystem::path path);
 private:
-    struct ToggleSwitchAnimationState
-    {
-        float position = 0.0f;
-        float target = 0.0f;
-        RECT bounds {};
-        bool initialized = false;
-        bool animating = false;
-    };
-
     struct ToolCardCacheEntry
     {
         ToolKind tool = ToolKind::None;
@@ -363,6 +367,22 @@ private:
         HDC dc = nullptr;
         HBITMAP bitmap = nullptr;
         HBITMAP previousBitmap = nullptr;
+    };
+
+    struct AnimeBitmapCacheEntry
+    {
+        std::unique_ptr<Gdiplus::Bitmap> bitmap;
+        std::uintmax_t bytes = 0;
+        std::uint64_t lastUse = 0;
+    };
+
+    struct AnimeSearchCoverCacheEntry
+    {
+        std::unique_ptr<Gdiplus::Bitmap> bitmap;
+        int width = 0;
+        int height = 0;
+        int radius = 0;
+        std::uint64_t lastUse = 0;
     };
 
 
@@ -429,6 +449,14 @@ private:
     void PaintBitmap(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds);
     void PaintBitmapTinted(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds, COLORREF tint);
     void PaintBitmapCover(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& bounds, int radius);
+    void PaintHiddenEditText(
+        HDC hdc,
+        HWND edit,
+        const RECT& editWindowRect,
+        HFONT font,
+        COLORREF color,
+        bool multiline = false,
+        const wchar_t* emptyText = nullptr);
     void PaintResizePlaceholder(HDC hdc);
     void PaintContent(HDC hdc);
     void PaintNavItem(HDC hdc, const RECT& bounds, const wchar_t* label, bool selected);
@@ -474,7 +502,7 @@ private:
     void PaintAniListIcon(HDC hdc, const RECT& bounds);
     void PaintReminderIcon(HDC hdc, const RECT& bounds);
     void PaintReminderCalendar(HDC hdc);
-    void PaintFavoriteStar(HDC hdc, const RECT& bounds, bool favorite);
+    void PaintFavoriteStar(HDC hdc, const RECT& bounds, bool favorite, COLORREF activeColor);
     void PaintAutoClicker(HDC hdc);
     void PaintFileConverter(HDC hdc);
     void PaintMediaDownloader(HDC hdc);
@@ -688,6 +716,7 @@ private:
     std::wstring RemindersFilePath() const;
     void CreateReminderControls();
     void UpdateReminderControls();
+    RECT ReminderEditWindowRect(HWND edit, const RECT& rect, bool multiline = false) const;
     void SetReminderFormDefaults();
     void LoadReminderFormFromSelection();
     void SaveReminderFromForm();
@@ -728,6 +757,15 @@ private:
     void StartAnimeSearch(bool appendResults);
     void StartAnimeImport();
     void FinishAnimeThread();
+    Gdiplus::Bitmap* FindAnimeBitmap(const std::wstring& imageUrl);
+    Gdiplus::Bitmap* FindAnimeSearchCoverBitmap(
+        const std::wstring& imageUrl,
+        int width,
+        int height,
+        int radius);
+    void TrimAnimeSearchCoverCache();
+    void StoreAnimeBitmap(const std::wstring& imageUrl, std::unique_ptr<Gdiplus::Bitmap> bitmap);
+    void TrimAnimeBitmapCache();
     void ApplyAnimeSearchResponse(const AnimeSearchResponse& response, const std::wstring& message, bool appendResults);
     void ApplyAnimeImportResult(const AnimeImportResult& result, const std::wstring& userName, AnimeImportSource source, const std::wstring& message);
     void ShowAnimeImportSourceChoice(
@@ -746,6 +784,7 @@ private:
     void RefreshAllAnime();
     void ApplyAnimeRefreshResult(const AnimeSearchResult& result, int listIndex, const std::wstring& message);
     void SelectAnimeEntry(int index);
+    void OpenAnimeSearchResult(size_t index);
     void RemoveAnimeEntry(size_t index);
     void IncrementAnimeEpisode(size_t index);
     void DecrementSelectedAnimeEpisode();
@@ -753,6 +792,7 @@ private:
     void ToggleSelectedAnimeFavorite();
     void SaveSelectedAnimeNotes();
     void ShowAnimeFilterDropdown();
+    void ShowAnimeManagementDropdown();
     std::vector<size_t> VisibleAnimeEntryIndexes() const;
     std::vector<AnimeRelation> VisibleUpcomingSequels() const;
     std::wstring AnimeSearchText() const;
@@ -763,6 +803,8 @@ private:
     RECT AnimeListRowRect(size_t visibleIndex) const;
     RECT AnimeListActionRect(size_t visibleIndex, int actionIndex) const;
     RECT AnimeSequelActionRect(size_t index, int actionIndex) const;
+    RECT AnimeEpisodeRect(size_t episode) const;
+    std::optional<int> AnimeEpisodeAtPoint(POINT point, int totalEpisodes) const;
     void EnableAutomationInputs();
     void DisableAutomationInputs();
     void InstallInputHooks();
@@ -917,8 +959,15 @@ private:
     std::wstring smartTransferReceiveStatusMessage_;
     std::wstring smartTransferReceiveWebRtcMessage_;
     std::wstring lastReminderNotificationKey_;
-    std::map<std::wstring, std::unique_ptr<Gdiplus::Bitmap>> animeCoverCache_;
+    std::map<std::wstring, AnimeBitmapCacheEntry> animeCoverCache_;
+    std::set<std::wstring> animeCoverCacheMisses_;
+    std::map<std::wstring, AnimeSearchCoverCacheEntry> animeSearchCoverCache_;
+    std::map<int, AnimeSearchResult> animeDetailsCache_;
+    std::set<int> animeDetailsRequested_;
+    std::uintmax_t animeCoverCacheBytes_ = 0;
+    std::uint64_t animeCoverCacheUseCounter_ = 0;
     std::vector<ImageFormat> supportedOutputFormats_;
+    std::uint64_t animeSearchCoverCacheUseCounter_ = 0;
     int selectedConversionJob_ = -1;
     int selectedAnimeSearchIndex_ = -1;
     std::wstring fileConverterSummary_;
@@ -961,7 +1010,9 @@ private:
     bool updateInstalling_ = false;
     bool updateCheckSilent_ = false;
     bool updateNotificationVisible_ = false;
+    std::wstring allToolsSearchText_;
     bool allToolsSearchPlaceholderActive_ = false;
+    bool animeSearchPlaceholderActive_ = false;
     bool smartTransferConnecting_ = false;
     bool smartTransferDownloading_ = false;
     bool smartTransferHosting_ = false;
@@ -978,6 +1029,9 @@ private:
     bool animeRefreshing_ = false;
     bool animeImporting_ = false;
     bool animeImportSourceChoiceOpen_ = false;
+    bool animeImportPanelOpen_ = false;
+    bool animeSearchDropdownOpen_ = false;
+    bool animeSearchPending_ = false;
     bool animeSearchHasRun_ = false;
     bool animeCanLoadMore_ = false;
     bool animeAppendSearch_ = false;
@@ -985,6 +1039,7 @@ private:
     std::wstring updateInstallStatus_;
     int animeCurrentPage_ = 1;
     int selectedAnimeIndex_ = -1;
+    int animeSearchKeyboardIndex_ = -1;
     int selectedMacroIndex_ = -1;
     MacroRecordingMode macroRecordingMode_;
     MacroHotkey macroRecordHotkey_ { 0, VK_F8 };
@@ -993,7 +1048,9 @@ private:
     MacroPlaybackOptions macroPlaybackOptions_;
     AnimeUserStatus animeFilter_ = AnimeUserStatus::Watching;
     bool animeFilterAll_ = true;
-    AnimeTrackerTab animeTrackerTab_ = AnimeTrackerTab::Search;
+    AnimeTrackerTab animeTrackerTab_ = AnimeTrackerTab::Watchlist;
+    AnimeDetailTab animeDetailTab_ = AnimeDetailTab::Overview;
+    std::wstring animeSearchRequestText_;
     ReminderFilter reminderFilter_ = ReminderFilter::All;
     ReminderSort reminderSort_ = ReminderSort::SoonestFirst;
     ReminderPriority reminderFormPriority_ = ReminderPriority::Normal;
@@ -1274,6 +1331,8 @@ private:
     RECT settingsReportIssueButtonRect_ {};
     RECT animeSearchTabRect_ {};
     RECT animeListTabRect_ {};
+    RECT animeAiringTabRect_ {};
+    RECT animeFavoritesTabRect_ {};
     RECT animeSearchEditRect_ {};
     RECT animeSearchButtonRect_ {};
     RECT animeLoadMoreButtonRect_ {};
@@ -1282,6 +1341,7 @@ private:
     RECT animeSearchDetailReminderButtonRect_ {};
     RECT animeSearchDetailOpenButtonRect_ {};
     RECT animeResultsRect_ {};
+    RECT animeSearchDropdownRect_ {};
     RECT animeListRect_ {};
     RECT animeUpcomingRect_ {};
     RECT animeSequelsRect_ {};
@@ -1289,6 +1349,9 @@ private:
     RECT animeFilterButtonRect_ {};
     RECT animeImportEditRect_ {};
     RECT animeImportButtonRect_ {};
+    RECT animeImportPanelRect_ {};
+    RECT animeImportSubmitButtonRect_ {};
+    RECT animeImportCancelButtonRect_ {};
     RECT animeImportChoicePanelRect_ {};
     RECT animeImportChoiceAniListButtonRect_ {};
     RECT animeImportChoiceMyAnimeListButtonRect_ {};
@@ -1298,6 +1361,9 @@ private:
     RECT animeEpisodePlusButtonRect_ {};
     RECT animeFavoriteButtonRect_ {};
     RECT animeReminderButtonRect_ {};
+    RECT animeRefreshSelectedButtonRect_ {};
+    RECT animeRemoveButtonRect_ {};
+    std::array<RECT, 4> animeDetailTabRects_ {};
     RECT animeSaveNotesButtonRect_ {};
     RECT animeNotesEditRect_ {};
     RECT reminderNewButtonRect_ {};
@@ -1373,7 +1439,7 @@ private:
     POINT toolGlowPaintPoint_ { -32768, -32768 };
     ULONGLONG lastToolGlowRepaintTick_ = 0;
     bool toolGlowRedrawPending_ = false;
-    std::map<UINT_PTR, ToggleSwitchAnimationState> toggleSwitchAnimations_;
+    std::map<UINT_PTR, rex::ui::SwitchAnimationState> toggleSwitchAnimations_;
     std::wstring lastClockLabel_;
     HANDLE clockTimerQueueTimer_ = nullptr;
     std::atomic_bool clockTickPosted_ { false };
@@ -1433,6 +1499,8 @@ private:
     HFONT bodyFont_ = nullptr;
     HFONT searchInputFont_ = nullptr;
     HFONT monospaceFont_ = nullptr;
+    HFONT animeItemFont_ = nullptr;
+    HFONT animeBodyFont_ = nullptr;
     int dpi_ = 96;
     int macroOverlayDpi_ = 96;
 };

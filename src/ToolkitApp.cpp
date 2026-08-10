@@ -1,4 +1,5 @@
 #include "AppConstants.h"
+#include "CacheManager.h"
 #include "ToolkitApp.h"
 #include "resource.h"
 
@@ -93,6 +94,9 @@ constexpr wchar_t kStartupRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVers
 constexpr wchar_t kStartupRunValueName[] = L"RexToolkit";
 constexpr int kMinClicksPerSecond = 1;
 constexpr int kMaxClicksPerSecond = 100;
+constexpr std::size_t kMaxAnimeBitmapCacheEntries = 160;
+constexpr std::size_t kMaxAnimeSearchCoverCacheEntries = 24;
+constexpr std::uintmax_t kMaxAnimeBitmapCacheBytes = 96ull * 1024ull * 1024ull;
 constexpr UINT_PTR kClockTimerId = 1002;
 constexpr UINT_PTR kAnimeNotesAutosaveTimerId = 1003;
 constexpr UINT kAnimeNotesAutosaveDelayMs = 850;
@@ -114,6 +118,8 @@ constexpr UINT_PTR kToolGlowTimerId = 1011;
 constexpr UINT kToolGlowFrameMs = 16;
 constexpr UINT_PTR kToggleSwitchTimerId = 1012;
 constexpr UINT kToggleSwitchFrameMs = 16;
+constexpr UINT_PTR kAnimeSearchDebounceTimerId = 1013;
+constexpr UINT kAnimeSearchDebounceMs = 300;
 constexpr UINT_PTR kBorderEdgeGlowToggleAnimationKey = 1;
 constexpr UINT_PTR kSmoothScrollingToggleAnimationKey = 2;
 constexpr UINT_PTR kAutoClickerAlternateToggleAnimationKey = 3;
@@ -142,6 +148,8 @@ ToolkitApp* g_activeApp = nullptr;
 UiSurfaceStyle gUiSurfaceStyle = UiSurfaceStyle::Solid;
 int gUiSurfaceOpacity = 100;
 
+std::uint64_t gComponentPaletteRevision = 1;
+
 enum class UiSurfaceRole
 {
     None,
@@ -156,6 +164,7 @@ void ApplyUiSurfaceAppearance(const AppearanceSettings& appearance)
 {
     gUiSurfaceStyle = appearance.uiSurfaceStyle;
     gUiSurfaceOpacity = std::clamp(appearance.uiSurfaceOpacity, 35, 100);
+    ++gComponentPaletteRevision;
 }
 
 UiSurfaceRole UiSurfaceRoleForColor(COLORREF color)
@@ -419,6 +428,7 @@ void ApplyPalette(AppTheme theme)
     kDropdownBackground = palette.dropdownBackground;
     kDropdownHover = palette.dropdownHover;
     kDropdownSelected = palette.dropdownSelected;
+    ++gComponentPaletteRevision;
 }
 
 COLORREF BlendColor(COLORREF base, COLORREF tint, int tintPercent)
@@ -440,6 +450,7 @@ Gdiplus::Color AlphaColor(COLORREF color, BYTE alpha)
     return Gdiplus::Color(alpha, GetRValue(color), GetGValue(color), GetBValue(color));
 }
 
+
 bool IsLightUiPalette()
 {
     const int luminance =
@@ -454,6 +465,52 @@ COLORREF GlassFrostHighlight()
     return IsLightUiPalette()
         ? RGB(255, 255, 255)
         : BlendColor(kTextPrimary, RGB(255, 255, 255), 30);
+}
+
+const rex::ui::Palette& ComponentPalette()
+{
+    static rex::ui::Palette palette;
+    static std::uint64_t cachedRevision = 0;
+    if (cachedRevision == gComponentPaletteRevision)
+    {
+        return palette;
+    }
+
+    palette.pageBackground = kAppBackground;
+    palette.inputBackground = kInputBackground;
+    palette.buttonBackground = kButtonBackground;
+    palette.buttonHover = kButtonHover;
+    palette.buttonPressed = kButtonPressed;
+    palette.disabledBackground = kDisabledBackground;
+    palette.disabledText = kDisabledText;
+    palette.dropdownBackground = kDropdownBackground;
+    palette.dropdownHover = kDropdownHover;
+    palette.dropdownSelected = kDropdownSelected;
+    palette.border = kBorder;
+    palette.textPrimary = kTextPrimary;
+    palette.textSecondary = kTextSecondary;
+    palette.accent = kAccent;
+    palette.accentSoft = kAccentSoft;
+    palette.danger = RGB(178, 72, 72);
+    palette.dangerAccent = RGB(220, 96, 96);
+    palette.frostHighlight = GlassFrostHighlight();
+    palette.surfaceOpacity = gUiSurfaceOpacity;
+    palette.light = IsLightUiPalette();
+    switch (gUiSurfaceStyle)
+    {
+    case UiSurfaceStyle::Translucent:
+        palette.surfaceStyle = rex::ui::SurfaceStyle::Translucent;
+        break;
+    case UiSurfaceStyle::Glass:
+        palette.surfaceStyle = rex::ui::SurfaceStyle::Glass;
+        break;
+    case UiSurfaceStyle::Solid:
+    default:
+        palette.surfaceStyle = rex::ui::SurfaceStyle::Solid;
+        break;
+    }
+    cachedRevision = gComponentPaletteRevision;
+    return palette;
 }
 
 void BuildRoundedPath(Gdiplus::GraphicsPath& path, const RECT& rect, int radius)
@@ -492,6 +549,7 @@ struct AnimeSearchThreadResult
 {
     AnimeSearchResponse response;
     std::wstring message;
+    std::wstring query;
     std::vector<std::pair<std::wstring, std::wstring>> coverFiles;
     bool append = false;
 };
@@ -722,6 +780,29 @@ std::wstring LocalTimeZoneLabel()
         name = timeZone.DaylightName;
     }
     return name && name[0] != L'\0' ? std::wstring(name) : L"local time";
+}
+
+std::wstring LocalTimeZoneShortLabel()
+{
+    const std::wstring label = LocalTimeZoneLabel();
+    std::wstring initials;
+    bool atWordStart = true;
+    for (wchar_t character : label)
+    {
+        if (std::iswalpha(character))
+        {
+            if (atWordStart)
+            {
+                initials.push_back(static_cast<wchar_t>(std::towupper(character)));
+            }
+            atWordStart = false;
+        }
+        else
+        {
+            atWordStart = true;
+        }
+    }
+    return initials.size() >= 2 && initials.size() <= 5 ? initials : label;
 }
 
 std::wstring FriendlyRefreshedLabel(const std::wstring& isoUtc)
@@ -1113,17 +1194,6 @@ AnimeImportInput NormalizeAnimeImportInput(const std::wstring& value)
     return input;
 }
 
-unsigned long long StableHash(const std::wstring& value)
-{
-    unsigned long long hash = 1469598103934665603ull;
-    for (wchar_t ch : value)
-    {
-        hash ^= static_cast<unsigned long long>(ch);
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
-
 bool IsReadableBitmapFile(const std::filesystem::path& path)
 {
     Gdiplus::Bitmap bitmap(path.wstring().c_str());
@@ -1137,15 +1207,7 @@ std::optional<std::filesystem::path> DownloadAnimeCoverToCache(const std::wstrin
         return std::nullopt;
     }
 
-    wchar_t appDataPath[MAX_PATH] {};
-    const DWORD length = GetEnvironmentVariableW(L"APPDATA", appDataPath, static_cast<DWORD>(std::size(appDataPath)));
-    if (length == 0 || length >= std::size(appDataPath))
-    {
-        return std::nullopt;
-    }
-
-    const std::filesystem::path cacheDirectory =
-        std::filesystem::path(appDataPath) / L"RexsToolkit" / L"anime_covers";
+    const std::filesystem::path cacheDirectory = CacheManager::AnimeArtworkDirectory();
     std::error_code fileError;
     std::filesystem::create_directories(cacheDirectory, fileError);
     if (fileError)
@@ -1153,13 +1215,13 @@ std::optional<std::filesystem::path> DownloadAnimeCoverToCache(const std::wstrin
         return std::nullopt;
     }
 
-    std::wostringstream fileName;
-    fileName << std::hex << StableHash(url) << L".img";
-    const std::filesystem::path coverPath = cacheDirectory / fileName.str();
+    const std::filesystem::path coverPath =
+        cacheDirectory / CacheManager::VersionedFileName(1, url, L"img");
     if (std::filesystem::exists(coverPath, fileError) && !fileError)
     {
         if (IsReadableBitmapFile(coverPath))
         {
+            CacheManager::Touch(coverPath);
             return coverPath;
         }
         std::filesystem::remove(coverPath, fileError);
@@ -1586,6 +1648,26 @@ void FillSolidRect(HDC hdc, const RECT& rect, COLORREF color)
 void FillRoundRect(HDC hdc, const RECT& rect, int radius, COLORREF color)
 {
     FillUiSurfaceRoundRect(hdc, rect, radius, color, UiSurfaceRoleForColor(color));
+}
+
+void FillOpaqueRoundRect(HDC hdc, const RECT& rect, int radius, COLORREF color)
+{
+    HBRUSH brush = CreateSolidBrush(color);
+    HBRUSH oldBrush = static_cast<HBRUSH>(SelectObject(hdc, brush));
+    HPEN pen = CreatePen(PS_SOLID, 1, color);
+    HPEN oldPen = static_cast<HPEN>(SelectObject(hdc, pen));
+
+    const int diameter = std::max(2, std::min(
+        radius * 2,
+        std::min(
+            static_cast<int>(rect.right - rect.left),
+            static_cast<int>(rect.bottom - rect.top))));
+    RoundRect(hdc, rect.left, rect.top, rect.right, rect.bottom, diameter, diameter);
+
+    SelectObject(hdc, oldPen);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(pen);
+    DeleteObject(brush);
 }
 
 void StrokeRoundRect(HDC hdc, const RECT& rect, int radius, COLORREF color)
@@ -2135,6 +2217,35 @@ DWORD MouseUpFlag(OutputMouseButton button)
     return MOUSEEVENTF_LEFTUP;
 }
 
+INPUT AutoClickKeyboardInput(UINT virtualKey, bool keyUp)
+{
+    INPUT input {};
+    input.type = INPUT_KEYBOARD;
+
+    const UINT mappedScanCode = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC_EX);
+    const UINT scanCodePrefix = mappedScanCode & 0xFF00u;
+    if (mappedScanCode != 0 && scanCodePrefix != 0xE100u)
+    {
+        input.ki.wScan = static_cast<WORD>(mappedScanCode & 0xFFu);
+        input.ki.dwFlags = KEYEVENTF_SCANCODE;
+        if (scanCodePrefix == 0xE000u)
+        {
+            input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+        }
+    }
+    else
+    {
+        input.ki.wVk = static_cast<WORD>(virtualKey);
+    }
+
+    if (keyUp)
+    {
+        input.ki.dwFlags |= KEYEVENTF_KEYUP;
+    }
+    input.ki.dwExtraInfo = kAutoClickExtraInfo;
+    return input;
+}
+
 bool NotifyExistingToolkitInstance(const std::filesystem::path& editPath = {})
 {
     for (int attempt = 0; attempt < 25; ++attempt)
@@ -2317,6 +2428,10 @@ int ToolkitApp::Run(int showCommand)
         return 0;
     }
 
+    const CacheMaintenanceReport cacheReport = CacheManager::PerformStartupMaintenance();
+    const std::wstring cacheSummary = cacheReport.Summary() + L"\r\n";
+    OutputDebugStringW(cacheSummary.c_str());
+
     if (!RegisterWindowClass() || !CreateMainWindow(showCommand))
     {
         ReleaseSingleInstance();
@@ -2436,22 +2551,73 @@ int ToolkitApp::Run(int showCommand)
     }
 
     if (message.message == WM_KEYDOWN &&
-        message.wParam == VK_RETURN &&
-        message.hwnd == animeSearchEdit_ &&
         currentPage_ == Page::Tool &&
-            currentTool_ == ToolKind::AnimeTracker &&
-            animeTrackerTab_ == AnimeTrackerTab::Search)
+        currentTool_ == ToolKind::AnimeTracker)
+    {
+        const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        if (message.wParam == 'K' && controlDown)
         {
-        StartAnimeSearch(false);
-        continue;
+            animeSearchDropdownOpen_ = true;
+            SetFocus(animeSearchEdit_);
+            SendMessageW(animeSearchEdit_, EM_SETSEL, 0, -1);
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            continue;
+        }
+
+        if (message.hwnd == animeSearchEdit_)
+        {
+            const int resultCount = std::min(7, static_cast<int>(animeSearchResults_.size()));
+            if (message.wParam == VK_ESCAPE)
+            {
+                animeSearchDropdownOpen_ = false;
+                animeSearchKeyboardIndex_ = -1;
+                SetFocus(hwnd_);
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                continue;
+            }
+            if ((message.wParam == VK_UP || message.wParam == VK_DOWN) &&
+                animeSearchDropdownOpen_ &&
+                resultCount > 0)
+            {
+                if (message.wParam == VK_DOWN)
+                {
+                    animeSearchKeyboardIndex_ =
+                        animeSearchKeyboardIndex_ < 0
+                        ? 0
+                        : (animeSearchKeyboardIndex_ + 1) % resultCount;
+                }
+                else
+                {
+                    animeSearchKeyboardIndex_ =
+                        animeSearchKeyboardIndex_ < 0
+                        ? resultCount - 1
+                        : (animeSearchKeyboardIndex_ + resultCount - 1) % resultCount;
+                }
+                InvalidateRect(hwnd_, &animeSearchDropdownRect_, FALSE);
+                continue;
+            }
+            if (message.wParam == VK_RETURN)
+            {
+                if (animeSearchDropdownOpen_ &&
+                    animeSearchKeyboardIndex_ >= 0 &&
+                    animeSearchKeyboardIndex_ < resultCount)
+                {
+                    OpenAnimeSearchResult(static_cast<size_t>(animeSearchKeyboardIndex_));
+                }
+                else
+                {
+                    StartAnimeSearch(false);
+                }
+                continue;
+            }
+        }
     }
 
     if (message.message == WM_KEYDOWN &&
         message.wParam == VK_RETURN &&
         message.hwnd == animeImportEdit_ &&
         currentPage_ == Page::Tool &&
-        currentTool_ == ToolKind::AnimeTracker &&
-        animeTrackerTab_ == AnimeTrackerTab::Anime)
+        currentTool_ == ToolKind::AnimeTracker)
     {
         StartAnimeImport();
         continue;
@@ -2668,6 +2834,8 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         bodyFont_ = CreateUiFont(dpi_, 11, FW_NORMAL);
         searchInputFont_ = CreateUiFont(dpi_, 12, FW_NORMAL);
         monospaceFont_ = CreateUiFont(dpi_, 10, FW_NORMAL, L"Cascadia Mono");
+        animeItemFont_ = CreateUiFont(dpi_, 14, FW_SEMIBOLD);
+        animeBodyFont_ = CreateUiFont(dpi_, 12, FW_NORMAL);
         if (mediaUrlEdit_)
         {
             SendMessageW(mediaUrlEdit_, WM_SETFONT, reinterpret_cast<WPARAM>(searchInputFont_), TRUE);
@@ -2727,6 +2895,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
     {
         dpi_ = HIWORD(wParam);
         InvalidateToolCardCache();
+        animeSearchCoverCache_.clear();
 
         DeleteObject(titleFont_);
         DeleteObject(navFont_);
@@ -2734,6 +2903,8 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         DeleteObject(bodyFont_);
         DeleteObject(searchInputFont_);
         DeleteObject(monospaceFont_);
+        DeleteObject(animeItemFont_);
+        DeleteObject(animeBodyFont_);
 
         titleFont_ = CreateUiFont(dpi_, 17, FW_SEMIBOLD);
         navFont_ = CreateUiFont(dpi_, 12, FW_SEMIBOLD);
@@ -2741,6 +2912,8 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         bodyFont_ = CreateUiFont(dpi_, 11, FW_NORMAL);
         searchInputFont_ = CreateUiFont(dpi_, 12, FW_NORMAL);
         monospaceFont_ = CreateUiFont(dpi_, 10, FW_NORMAL, L"Cascadia Mono");
+        animeItemFont_ = CreateUiFont(dpi_, 14, FW_SEMIBOLD);
+        animeBodyFont_ = CreateUiFont(dpi_, 12, FW_NORMAL);
 
         for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_, videoCompressorTargetEdit_, smartTransferNameEdit_, smartTransferCodeEdit_, allToolsSearchEdit_, reminderTitleEdit_, reminderDateEdit_, reminderTimeEdit_, reminderCategoryEdit_, reminderSearchEdit_, macroNameEdit_ })
         {
@@ -2859,7 +3032,8 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         const HWND editControl = reinterpret_cast<HWND>(lParam);
         SetTextColor(
             editDc,
-            editControl == allToolsSearchEdit_ && allToolsSearchPlaceholderActive_
+            (editControl == allToolsSearchEdit_ && allToolsSearchPlaceholderActive_) ||
+                (editControl == animeSearchEdit_ && animeSearchPlaceholderActive_)
                 ? kTextSecondary
                 : kTextPrimary);
         SetBkColor(editDc, kInputBackground);
@@ -2895,7 +3069,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
             if (notification == EN_KILLFOCUS)
             {
-                if (TrimWhitespace(GetWindowTextString(allToolsSearchEdit_)).empty())
+                if (TrimWhitespace(allToolsSearchText_).empty())
                 {
                     allToolsSearchPlaceholderActive_ = true;
                     SetWindowTextW(allToolsSearchEdit_, L"Search");
@@ -2907,6 +3081,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             {
                 if (!allToolsSearchPlaceholderActive_)
                 {
+                    allToolsSearchText_ = GetWindowTextString(allToolsSearchEdit_);
                     hoverToolIndex_ = -1;
                     hoverFavoriteIndex_ = -1;
                     toolHoverPoint_ = { -32768, -32768 };
@@ -2920,19 +3095,74 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         }
         if (reinterpret_cast<HWND>(lParam) == animeSearchEdit_ && HIWORD(wParam) == EN_CHANGE)
         {
-            if (GetWindowTextString(animeSearchEdit_).empty() &&
-                (!animeSearchResults_.empty() || animeSearchHasRun_ || animeCanLoadMore_))
+            if (animeSearchPlaceholderActive_)
+            {
+                return 0;
+            }
+            KillTimer(hwnd_, kAnimeSearchDebounceTimerId);
+            const std::wstring query = NormalizeAnimeSearchQuery(AnimeSearchText());
+            animeSearchKeyboardIndex_ = -1;
+            if (query.size() < 2)
             {
                 animeSearchResults_.clear();
                 animeSearchResponse_ = {};
                 animeSearchHasRun_ = false;
                 animeCanLoadMore_ = false;
                 animeCurrentPage_ = 1;
+                animeSearchPending_ = false;
+                animeSearchDropdownOpen_ = false;
                 selectedAnimeSearchIndex_ = -1;
                 hoverAnimeSearchResultIndex_ = -1;
-                animeStatusMessage_ = L"Search cleared.";
+                animeStatusMessage_ = query.empty()
+                    ? L"Ready."
+                    : L"Type at least two characters to search AniList.";
+            }
+            else
+            {
+                if (query != animeSearchRequestText_)
+                {
+                    animeSearchResults_.clear();
+                    animeSearchResponse_ = {};
+                    animeSearchHasRun_ = false;
+                    animeCanLoadMore_ = false;
+                    selectedAnimeSearchIndex_ = -1;
+                    hoverAnimeSearchResultIndex_ = -1;
+                }
+                animeSearchDropdownOpen_ = true;
+                animeSearchPending_ = true;
+                animeStatusMessage_ = L"Searching AniList...";
+                SetTimer(hwnd_, kAnimeSearchDebounceTimerId, kAnimeSearchDebounceMs, nullptr);
+            }
+            RecalculateLayout();
+            UpdateAnimeTrackerControls();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return 0;
+        }
+        if (reinterpret_cast<HWND>(lParam) == animeSearchEdit_ &&
+            HIWORD(wParam) == EN_SETFOCUS)
+        {
+            if (animeSearchPlaceholderActive_)
+            {
+                animeSearchPlaceholderActive_ = false;
+                SetWindowTextW(animeSearchEdit_, L"");
+            }
+            if (NormalizeAnimeSearchQuery(AnimeSearchText()).size() >= 2)
+            {
+                animeSearchDropdownOpen_ = true;
                 RecalculateLayout();
-                InvalidateRect(hwnd_, nullptr, FALSE);
+                UpdateAnimeTrackerControls();
+            }
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return 0;
+        }
+        if (reinterpret_cast<HWND>(lParam) == animeSearchEdit_ &&
+            HIWORD(wParam) == EN_KILLFOCUS)
+        {
+            if (NormalizeAnimeSearchQuery(AnimeSearchText()).empty())
+            {
+                animeSearchPlaceholderActive_ = true;
+                SetWindowTextW(animeSearchEdit_, L"Search anime by title...");
+                InvalidateRect(hwnd_, &animeSearchEditRect_, FALSE);
             }
             return 0;
         }
@@ -3164,6 +3394,25 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         break;
 
     case WM_TIMER:
+        if (wParam == kAnimeSearchDebounceTimerId)
+        {
+            KillTimer(hwnd_, kAnimeSearchDebounceTimerId);
+            const std::wstring query = NormalizeAnimeSearchQuery(AnimeSearchText());
+            if (currentPage_ == Page::Tool &&
+                currentTool_ == ToolKind::AnimeTracker &&
+                query.size() >= 2)
+            {
+                if (animeSearching_ || animeRefreshing_ || animeImporting_)
+                {
+                    animeSearchPending_ = true;
+                }
+                else
+                {
+                    StartAnimeSearch(false);
+                }
+            }
+            return 0;
+        }
         if (wParam == kClockTimerId)
         {
             RefreshClockDisplay();
@@ -3612,6 +3861,8 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
     {
         std::unique_ptr<AnimeSearchThreadResult> result(reinterpret_cast<AnimeSearchThreadResult*>(lParam));
         animeSearching_ = false;
+        const std::wstring currentQuery = NormalizeAnimeSearchQuery(AnimeSearchText());
+        const bool responseIsCurrent = result && result->query == currentQuery;
         if (result)
         {
             for (const auto& cover : result->coverFiles)
@@ -3624,7 +3875,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 auto bitmap = std::make_unique<Gdiplus::Bitmap>(cover.second.c_str());
                 if (bitmap && bitmap->GetLastStatus() == Gdiplus::Ok)
                 {
-                    animeCoverCache_[cover.first] = std::move(bitmap);
+                    StoreAnimeBitmap(cover.first, std::move(bitmap));
                 }
                 else
                 {
@@ -3632,9 +3883,19 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
                     std::filesystem::remove(cover.second, imageError);
                 }
             }
+        }
+        if (responseIsCurrent)
+        {
             ApplyAnimeSearchResponse(result->response, result->message, result->append);
         }
         FinishAnimeThread();
+        if (currentQuery.size() >= 2 &&
+            (animeSearchPending_ || !responseIsCurrent))
+        {
+            StartAnimeSearch(false);
+            return 0;
+        }
+        animeSearchPending_ = false;
         RecalculateLayout();
         UpdateAnimeTrackerControls();
         InvalidateRect(hwnd_, nullptr, FALSE);
@@ -3651,9 +3912,22 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         }
         else if (result)
         {
+            if (result->listIndex >= 0 &&
+                result->listIndex < static_cast<int>(animeWatchList_.anime.size()))
+            {
+                animeDetailsRequested_.erase(
+                    animeWatchList_.anime[static_cast<size_t>(result->listIndex)].anilistId);
+            }
             animeStatusMessage_ = result->message;
         }
         FinishAnimeThread();
+        if (animeSearchPending_ &&
+            NormalizeAnimeSearchQuery(AnimeSearchText()).size() >= 2)
+        {
+            StartAnimeSearch(false);
+            return 0;
+        }
+        RecalculateLayout();
         UpdateAnimeTrackerControls();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
@@ -3673,6 +3947,13 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         }
         FinishAnimeThread();
         SaveAnimeTrackerData();
+        if (animeSearchPending_ &&
+            NormalizeAnimeSearchQuery(AnimeSearchText()).size() >= 2)
+        {
+            StartAnimeSearch(false);
+            return 0;
+        }
+        RecalculateLayout();
         UpdateAnimeTrackerControls();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
@@ -3694,7 +3975,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 auto bitmap = std::make_unique<Gdiplus::Bitmap>(cover.second.c_str());
                 if (bitmap && bitmap->GetLastStatus() == Gdiplus::Ok)
                 {
-                    animeCoverCache_[cover.first] = std::move(bitmap);
+                    StoreAnimeBitmap(cover.first, std::move(bitmap));
                 }
                 else
                 {
@@ -3717,6 +3998,22 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
         FinishAnimeThread();
+        if (!animeImportSourceChoiceOpen_ &&
+            animeSearchPending_ &&
+            NormalizeAnimeSearchQuery(AnimeSearchText()).size() >= 2)
+        {
+            StartAnimeSearch(false);
+            return 0;
+        }
+        if (!animeImportSourceChoiceOpen_ &&
+            currentPage_ == Page::Tool &&
+            currentTool_ == ToolKind::AnimeTracker &&
+            selectedAnimeIndex_ >= 0 &&
+            selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()))
+        {
+            SelectAnimeEntry(selectedAnimeIndex_);
+            return 0;
+        }
         RecalculateLayout();
         UpdateAnimeTrackerControls();
         InvalidateRect(hwnd_, nullptr, FALSE);
@@ -3892,6 +4189,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         return 0;
 
     case WM_DESTROY:
+        KillTimer(hwnd_, kAnimeSearchDebounceTimerId);
         if (clockTimerQueueTimer_)
         {
             DeleteTimerQueueTimer(nullptr, clockTimerQueueTimer_, INVALID_HANDLE_VALUE);
@@ -3964,6 +4262,10 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         allToolsIconTinted_.reset();
         settingsIconTinted_.reset();
         customImageIconTinted_.reset();
+        animeCoverCache_.clear();
+        animeCoverCacheMisses_.clear();
+        animeCoverCacheBytes_ = 0;
+        animeCoverCacheUseCounter_ = 0;
         appearanceSourceBitmap_.reset();
         appearancePreviewBackgroundCache_.reset();
         ReleaseAppearanceBackgroundNativeCache();
@@ -3980,6 +4282,8 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         DeleteObject(bodyFont_);
         DeleteObject(searchInputFont_);
         DeleteObject(monospaceFont_);
+        DeleteObject(animeItemFont_);
+        DeleteObject(animeBodyFont_);
         DeleteObject(editBackgroundBrush_);
         PostQuitMessage(0);
         return 0;
@@ -7194,9 +7498,7 @@ void ToolkitApp::RecalculateLayout()
         animeSearchDetailReminderButtonRect_.left - Dips(12),
         animeSearchDetailTop + Dips(40)
     };
-    int animeSectionTop = animeTrackerTab_ == AnimeTrackerTab::Search
-        ? animeBodyTop
-        : animeBodyTop;
+    int animeSectionTop = animeBodyTop;
     const int animeVisibleListRows = std::max(1, static_cast<int>(VisibleAnimeEntryIndexes().size()));
     const int animeListHeight = Dips(268) + animeVisibleListRows * Dips(68) + Dips(20);
     animeListRect_ = {
@@ -7296,6 +7598,317 @@ void ToolkitApp::RecalculateLayout()
         animeDetailRight - Dips(22),
         animeSectionTop + Dips(156)
     };
+    // Anime Tracker workspace. The legacy rectangles above are intentionally
+    // overwritten here so the service and persistence code can stay unchanged
+    // while the UI uses one persistent two-pane layout.
+    {
+        const int availableLeft = contentRect_.left + contentMargin;
+        const int availableRight = contentRect_.right - contentMargin;
+        const int availableWidth = std::max(1, availableRight - availableLeft);
+        const int workspaceWidth = std::min(availableWidth, Dips(1840));
+        const int workspaceLeft = availableLeft + (availableWidth - workspaceWidth) / 2;
+        const int workspaceRight = workspaceLeft + workspaceWidth;
+        const int workspaceTop = contentTop + Dips(kToolBodyTopDip);
+
+        animeImportButtonRect_ = {
+            workspaceRight - Dips(132),
+            workspaceTop + Dips(3),
+            workspaceRight,
+            workspaceTop + Dips(43)
+        };
+        const int searchRight = std::min(
+            static_cast<int>(animeImportButtonRect_.left) - Dips(18),
+            workspaceLeft + Dips(800));
+        animeSearchEditRect_ = {
+            workspaceLeft,
+            workspaceTop,
+            std::max(workspaceLeft + Dips(280), searchRight),
+            workspaceTop + Dips(46)
+        };
+        animeSearchButtonRect_ = {};
+        animeLoadMoreButtonRect_ = {};
+        animeSearchDetailBackButtonRect_ = {};
+
+        animeSearchTabRect_ = {
+            workspaceLeft,
+            animeSearchEditRect_.bottom + Dips(14),
+            workspaceLeft + Dips(164),
+            animeSearchEditRect_.bottom + Dips(58)
+        };
+        animeAiringTabRect_ = {
+            animeSearchTabRect_.right + Dips(8),
+            animeSearchTabRect_.top,
+            animeSearchTabRect_.right + Dips(144),
+            animeSearchTabRect_.bottom
+        };
+        animeFavoritesTabRect_ = {
+            animeAiringTabRect_.right + Dips(8),
+            animeSearchTabRect_.top,
+            animeAiringTabRect_.right + Dips(158),
+            animeSearchTabRect_.bottom
+        };
+        animeListTabRect_ = {};
+
+        const int paneTop = animeSearchTabRect_.bottom + Dips(12);
+        const int paneGap = Dips(16);
+        const int paneWidth = std::max(1, workspaceWidth - paneGap);
+        const int leftPaneWidth = std::clamp(
+            paneWidth * 38 / 100,
+            Dips(400),
+            Dips(680));
+        const int visibleRows = std::max(1, static_cast<int>(VisibleAnimeEntryIndexes().size()));
+        const int listHeight = std::max(Dips(420), Dips(130) + visibleRows * Dips(150));
+
+        const int rightPaneWidth = std::max(
+            1,
+            workspaceRight - (workspaceLeft + leftPaneWidth + paneGap));
+        int detailHeight = Dips(720);
+        if (animeDetailTab_ == AnimeDetailTab::Overview)
+        {
+            const AnimeSearchResult* layoutDetails = nullptr;
+            if (selectedAnimeSearchIndex_ >= 0 &&
+                selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size()))
+            {
+                layoutDetails = &animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)];
+            }
+            else if (selectedAnimeIndex_ >= 0 &&
+                selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()))
+            {
+                const int anilistId =
+                    animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)].anilistId;
+                const auto cached = animeDetailsCache_.find(anilistId);
+                if (cached != animeDetailsCache_.end())
+                {
+                    layoutDetails = &cached->second;
+                }
+            }
+
+            if (layoutDetails && !layoutDetails->description.empty())
+            {
+                std::wstring description = layoutDetails->description;
+                std::wstring supplementalNote;
+                const size_t productionNote = description.find(L"Note:");
+                if (productionNote != std::wstring::npos)
+                {
+                    supplementalNote = TrimWhitespace(description.substr(productionNote + 5));
+                    description = TrimWhitespace(description.substr(0, productionNote));
+                }
+
+                const int innerWidth = std::max(1, rightPaneWidth - Dips(40));
+                const bool twoColumns = innerWidth >= Dips(680);
+                const int synopsisWidth = twoColumns ? innerWidth * 56 / 100 : innerWidth;
+                HDC measureDc = GetDC(hwnd_);
+                auto measureBlock = [&](const std::wstring& text, HFONT font)
+                {
+                    if (text.empty())
+                    {
+                        return 0;
+                    }
+                    if (!measureDc || !font)
+                    {
+                        return Dips(24) * std::max(
+                            1,
+                            static_cast<int>(text.size() / 70) + 1);
+                    }
+                    const HGDIOBJ oldFont = SelectObject(measureDc, font);
+                    RECT measured { 0, 0, std::max(1, synopsisWidth), 0 };
+                    DrawTextW(
+                        measureDc,
+                        text.c_str(),
+                        -1,
+                        &measured,
+                        DT_LEFT | DT_WORDBREAK | DT_CALCRECT | DT_NOPREFIX);
+                    SelectObject(measureDc, oldFont);
+                    return std::max(
+                        Dips(24),
+                        static_cast<int>(measured.bottom - measured.top));
+                };
+                const int primaryHeight = measureBlock(description, animeBodyFont_);
+                const int noteHeight = measureBlock(supplementalNote, bodyFont_);
+                if (measureDc)
+                {
+                    ReleaseDC(hwnd_, measureDc);
+                }
+                const int textColumnHeight = primaryHeight +
+                    (noteHeight > 0 ? Dips(20) + noteHeight : 0);
+                const int metadataHeight = Dips(224);
+                const int overviewHeight = twoColumns
+                    ? std::max(textColumnHeight, metadataHeight)
+                    : textColumnHeight + Dips(18) + metadataHeight;
+                detailHeight = std::max(
+                    Dips(720),
+                    Dips(476) + overviewHeight);
+            }
+        }
+        else if (animeDetailTab_ == AnimeDetailTab::Episodes)
+        {
+            int episodeCount = 0;
+            if (selectedAnimeSearchIndex_ >= 0 &&
+                selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size()))
+            {
+                episodeCount = animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)].episodes;
+            }
+            else if (selectedAnimeIndex_ >= 0 &&
+                selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()))
+            {
+                episodeCount = animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)].totalEpisodes;
+            }
+            const int columns = std::max(4, rightPaneWidth / Dips(62));
+            const int rows = episodeCount > 0 ? (episodeCount + columns - 1) / columns : 1;
+            detailHeight = std::max(Dips(720), Dips(414) + rows * Dips(44));
+        }
+        else if (animeDetailTab_ == AnimeDetailTab::Sequels)
+        {
+            detailHeight = std::max(Dips(720), Dips(430) + static_cast<int>(VisibleUpcomingSequels().size()) * Dips(76));
+        }
+        animeListRect_ = {
+            workspaceLeft,
+            paneTop,
+            workspaceLeft + leftPaneWidth,
+            paneTop + listHeight
+        };
+        animeResultsRect_ = {
+            animeListRect_.right + paneGap,
+            paneTop,
+            workspaceRight,
+            paneTop + detailHeight
+        };
+
+        animeRefreshAllButtonRect_ = {
+            animeListRect_.right - Dips(126),
+            animeListRect_.top + Dips(18),
+            animeListRect_.right - Dips(18),
+            animeListRect_.top + Dips(56)
+        };
+        animeFilterButtonRect_ = {
+            std::max(
+                static_cast<int>(animeListRect_.left) + Dips(18),
+                static_cast<int>(animeRefreshAllButtonRect_.left) - Dips(182)),
+            animeRefreshAllButtonRect_.top,
+            animeRefreshAllButtonRect_.left - Dips(10),
+            animeRefreshAllButtonRect_.bottom
+        };
+
+        animeSearchDetailOpenButtonRect_ = {
+            animeResultsRect_.right - Dips(64),
+            animeResultsRect_.top + Dips(20),
+            animeResultsRect_.right - Dips(20),
+            animeResultsRect_.top + Dips(60)
+        };
+        animeFavoriteButtonRect_ = {
+            animeSearchDetailOpenButtonRect_.left - Dips(52),
+            animeSearchDetailOpenButtonRect_.top,
+            animeSearchDetailOpenButtonRect_.left - Dips(8),
+            animeSearchDetailOpenButtonRect_.bottom
+        };
+        animeRefreshSelectedButtonRect_ = {};
+        animeRemoveButtonRect_ = {};
+        animeSearchDetailAddButtonRect_ = {
+            animeSearchDetailOpenButtonRect_.left - Dips(124),
+            animeSearchDetailOpenButtonRect_.top,
+            animeSearchDetailOpenButtonRect_.left - Dips(8),
+            animeSearchDetailOpenButtonRect_.bottom
+        };
+
+        const int detailPaneWidth = std::max(1, static_cast<int>(animeResultsRect_.right - animeResultsRect_.left));
+        const int detailCoverWidth = std::clamp(detailPaneWidth / 5, Dips(150), Dips(176));
+        const int detailInfoLeft = animeResultsRect_.left + Dips(20) + detailCoverWidth + Dips(20);
+        animeStatusButtonRect_ = {
+            detailInfoLeft,
+            animeResultsRect_.top + Dips(88),
+            detailInfoLeft + Dips(124),
+            animeResultsRect_.top + Dips(122)
+        };
+        animeEpisodeMinusButtonRect_ = {
+            detailInfoLeft,
+            animeResultsRect_.top + Dips(188),
+            detailInfoLeft + Dips(50),
+            animeResultsRect_.top + Dips(232)
+        };
+        animeEpisodePlusButtonRect_ = {
+            animeEpisodeMinusButtonRect_.right + Dips(64),
+            animeEpisodeMinusButtonRect_.top,
+            animeEpisodeMinusButtonRect_.right + Dips(114),
+            animeEpisodeMinusButtonRect_.bottom
+        };
+        animeUpcomingRect_ = {
+            animeResultsRect_.left + Dips(20),
+            animeResultsRect_.top + Dips(258),
+            animeResultsRect_.right - Dips(20),
+            animeResultsRect_.top + Dips(366)
+        };
+        animeReminderButtonRect_ = {
+            animeUpcomingRect_.right - Dips(136),
+            animeUpcomingRect_.top + Dips(56),
+            animeUpcomingRect_.right - Dips(16),
+            animeUpcomingRect_.bottom - Dips(14)
+        };
+        animeSearchDetailReminderButtonRect_ = animeReminderButtonRect_;
+
+        const int detailTabsTop = animeResultsRect_.top + Dips(380);
+        const int tabWidth = std::max(
+            Dips(84),
+            (static_cast<int>(animeResultsRect_.right - animeResultsRect_.left) - Dips(40)) / 4);
+        for (size_t index = 0; index < animeDetailTabRects_.size(); ++index)
+        {
+            const int left = animeResultsRect_.left + Dips(20) + static_cast<int>(index) * tabWidth;
+            animeDetailTabRects_[index] = {
+                left,
+                detailTabsTop,
+                index + 1 == animeDetailTabRects_.size() ? animeResultsRect_.right - Dips(20) : left + tabWidth,
+                detailTabsTop + Dips(42)
+            };
+        }
+
+        animeSequelsRect_ = {
+            animeResultsRect_.left + Dips(20),
+            detailTabsTop + Dips(66),
+            animeResultsRect_.right - Dips(20),
+            animeResultsRect_.bottom - Dips(20)
+        };
+        animeNotesEditRect_ = {
+            animeSequelsRect_.left,
+            animeSequelsRect_.top + Dips(44),
+            animeSequelsRect_.right,
+            std::min(animeSequelsRect_.bottom, animeSequelsRect_.top + Dips(230))
+        };
+        animeSaveNotesButtonRect_ = {};
+
+        const int searchRows = animeSearching_ && animeSearchResults_.empty()
+            ? 1
+            : std::max(1, std::min(7, static_cast<int>(animeSearchResults_.size())));
+        animeSearchDropdownRect_ = {
+            animeSearchEditRect_.left,
+            animeSearchEditRect_.bottom + Dips(6),
+            animeSearchEditRect_.right,
+            animeSearchEditRect_.bottom + Dips(18) + searchRows * Dips(72)
+        };
+
+        animeImportPanelRect_ = {
+            workspaceRight - Dips(520),
+            animeImportButtonRect_.bottom + Dips(8),
+            workspaceRight,
+            animeImportButtonRect_.bottom + Dips(154)
+        };
+        animeImportEditRect_ = {
+            animeImportPanelRect_.left + Dips(18),
+            animeImportPanelRect_.top + Dips(54),
+            animeImportPanelRect_.right - Dips(142),
+            animeImportPanelRect_.top + Dips(94)
+        };
+        animeImportSubmitButtonRect_ = {
+            animeImportEditRect_.right + Dips(10),
+            animeImportEditRect_.top,
+            animeImportPanelRect_.right - Dips(18),
+            animeImportEditRect_.bottom
+        };
+        animeImportCancelButtonRect_ = {
+            animeImportPanelRect_.right - Dips(110),
+            animeImportPanelRect_.top + Dips(104),
+            animeImportPanelRect_.right - Dips(18),
+            animeImportPanelRect_.bottom - Dips(12)
+        };
+    }
 
     const int reminderLeft = contentRect_.left + contentMargin;
     const int reminderRight = contentRect_.right - contentMargin;
@@ -7888,9 +8501,9 @@ void ToolkitApp::RecalculateLayout()
     }
     else if (currentPage_ == Page::Tool && currentTool_ == ToolKind::AnimeTracker)
     {
-        const int animePageBottom = animeTrackerTab_ == AnimeTrackerTab::Search
-            ? static_cast<int>(animeResultsRect_.bottom)
-            : static_cast<int>(animeNotesEditRect_.bottom);
+        const int animePageBottom = std::max(
+            static_cast<int>(animeListRect_.bottom),
+            static_cast<int>(animeResultsRect_.bottom));
         desiredContentHeight = std::max(Dips(620), animePageBottom + Dips(48) - contentTop);
     }
     else if (currentPage_ == Page::Tool && currentTool_ == ToolKind::Reminders)
@@ -8479,6 +9092,14 @@ void ToolkitApp::OpenTool(ToolKind tool)
     UpdateReminderControls();
     UpdateMacroRecorderControls();
     RecalculateLayout();
+    if (tool == ToolKind::AnimeTracker &&
+        selectedAnimeSearchIndex_ < 0 &&
+        selectedAnimeIndex_ >= 0 &&
+        selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()))
+    {
+        SelectAnimeEntry(selectedAnimeIndex_);
+        return;
+    }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -8561,6 +9182,21 @@ void ToolkitApp::Paint(HDC hdc, const RECT& paintRect)
     IntersectClipRect(backBufferDc_, clippedPaint.left, clippedPaint.top, clippedPaint.right, clippedPaint.bottom);
 
     PaintAppBackground(backBufferDc_);
+    if (currentPage_ == Page::Tool &&
+        currentTool_ == ToolKind::AnimeTracker &&
+        RectsOverlap(clippedPaint, contentRect_))
+    {
+        Gdiplus::Graphics graphics(backBufferDc_);
+        Gdiplus::SolidBrush backdrop(
+            AlphaColor(kAppBackground, IsLightUiPalette() ? 142 : 104));
+        graphics.FillRectangle(
+            &backdrop,
+            Gdiplus::Rect(
+                static_cast<INT>(contentRect_.left),
+                static_cast<INT>(contentRect_.top),
+                static_cast<INT>(contentRect_.right - contentRect_.left),
+                static_cast<INT>(contentRect_.bottom - contentRect_.top)));
+    }
     if (RectsOverlap(clippedPaint, headerRect_))
     {
         PaintHeader(backBufferDc_);
@@ -8897,6 +9533,111 @@ void ToolkitApp::PaintBitmapCover(HDC hdc, Gdiplus::Bitmap* bitmap, const RECT& 
     graphics.ResetClip();
 }
 
+void ToolkitApp::PaintHiddenEditText(
+    HDC hdc,
+    HWND edit,
+    const RECT& editWindowRect,
+    HFONT font,
+    COLORREF color,
+    bool multiline,
+    const wchar_t* emptyText)
+{
+    if (!edit || !HasArea(editWindowRect))
+    {
+        return;
+    }
+
+    std::wstring text = GetWindowTextString(edit);
+    const bool paintingPlaceholder = text.empty();
+    if (paintingPlaceholder)
+    {
+        if (!emptyText || emptyText[0] == L'\0')
+        {
+            return;
+        }
+        text = emptyText;
+    }
+
+    size_t firstCharacter = 0;
+    if (multiline && !paintingPlaceholder)
+    {
+        const LRESULT firstVisibleLine = SendMessageW(edit, EM_GETFIRSTVISIBLELINE, 0, 0);
+        const LRESULT lineStart = SendMessageW(
+            edit,
+            EM_LINEINDEX,
+            static_cast<WPARAM>(std::max<LRESULT>(0, firstVisibleLine)),
+            0);
+        if (lineStart >= 0)
+        {
+            firstCharacter = std::min(
+                static_cast<size_t>(lineStart),
+                text.size());
+        }
+    }
+
+    const LRESULT margins = SendMessageW(edit, EM_GETMARGINS, 0, 0);
+    const int leftMargin = LOWORD(margins);
+    const int rightMargin = HIWORD(margins);
+    RECT clipRect = editWindowRect;
+    clipRect.left += leftMargin;
+    clipRect.right -= rightMargin;
+    RECT visibleClip {};
+    if (!IntersectRect(&visibleClip, &clipRect, &contentRect_))
+    {
+        return;
+    }
+
+    RECT textRect = editWindowRect;
+    textRect.right = clipRect.right;
+    textRect.bottom = clipRect.bottom;
+    bool hasNativeOrigin = false;
+    if (!paintingPlaceholder)
+    {
+        const LRESULT characterPosition = SendMessageW(
+            edit,
+            EM_POSFROMCHAR,
+            static_cast<WPARAM>(firstCharacter),
+            0);
+        const int characterX = static_cast<short>(LOWORD(characterPosition));
+        const int characterY = static_cast<short>(HIWORD(characterPosition));
+        if (characterX != -1 || characterY != -1)
+        {
+            textRect.left += characterX;
+            textRect.top += characterY;
+            hasNativeOrigin = true;
+        }
+    }
+    if (!hasNativeOrigin)
+    {
+        textRect.left += leftMargin;
+    }
+
+    const int savedDc = SaveDC(hdc);
+    IntersectClipRect(
+        hdc,
+        visibleClip.left,
+        visibleClip.top,
+        visibleClip.right,
+        visibleClip.bottom);
+    UINT format = DT_LEFT | (multiline ? (DT_TOP | DT_WORDBREAK | DT_EDITCONTROL) : DT_SINGLELINE);
+    if (!multiline && !hasNativeOrigin)
+    {
+        format |= DT_VCENTER;
+    }
+    else
+    {
+        format |= DT_TOP;
+    }
+    DrawTextLine(
+        hdc,
+        text.c_str() + firstCharacter,
+        textRect,
+        font,
+        paintingPlaceholder ? kDisabledText : color,
+        format);
+    RestoreDC(hdc, savedDc);
+}
+
 void ToolkitApp::PaintResizePlaceholder(HDC hdc)
 {
     const int margin = Dips(42);
@@ -9084,6 +9825,18 @@ void ToolkitApp::PaintContent(HDC hdc)
             hdc,
             searchIconRect,
             GetFocus() == allToolsSearchEdit_ ? kAccent : kTextSecondary);
+
+        const bool nativeSearchHidden =
+            liveResize_ || smoothScrollActive_ || scrollBarDragging_;
+        if (nativeSearchHidden)
+        {
+            PaintHiddenEditText(
+                hdc,
+                allToolsSearchEdit_,
+                allToolsSearchEditRect_,
+                searchInputFont_,
+                allToolsSearchPlaceholderActive_ ? kTextSecondary : kTextPrimary);
+        }
         ruleTop = allToolsSearchRect_.bottom + Dips(20);
     }
 
@@ -9110,9 +9863,7 @@ void ToolkitApp::PaintContent(HDC hdc)
     }
     else
     {
-        const bool hasSearch =
-            !allToolsSearchPlaceholderActive_ &&
-            !TrimWhitespace(GetWindowTextString(allToolsSearchEdit_)).empty();
+        const bool hasSearch = !TrimWhitespace(allToolsSearchText_).empty();
         PaintEmptyState(
             hdc,
             hasSearch ? L"No matching tools found." : L"No tools available yet.",
@@ -9170,7 +9921,7 @@ void ToolkitApp::PaintNavItem(HDC hdc, const RECT& bounds, const wchar_t* label,
 
     if (navIndex == 0)
     {
-        PaintFavoriteStar(hdc, iconRect, selected);
+        PaintFavoriteStar(hdc, iconRect, selected, kTextPrimary);
     }
     else if (navIndex == 1)
     {
@@ -9607,73 +10358,25 @@ void ToolkitApp::PaintAutoClicker(HDC hdc)
 
 void ToolkitApp::PaintButton(HDC hdc, const RECT& bounds, const wchar_t* label, bool primary, bool active, bool enabled)
 {
-    const bool hovered = enabled && hasHoveredButton_ && EqualRect(&bounds, &hoveredButtonRect_);
-    const bool pressed = enabled && hasPressedButton_ && EqualRect(&bounds, &pressedButtonRect_);
-    const bool danger = primary && active;
-    const COLORREF dangerBase = RGB(178, 72, 72);
-    const COLORREF dangerAccent = RGB(220, 96, 96);
-    const COLORREF actionBase = danger ? dangerBase : kAccentSoft;
-    const COLORREF actionAccent = danger ? dangerAccent : kAccent;
-    COLORREF background = kButtonBackground;
-    if (!enabled)
-    {
-        background = kDisabledBackground;
-    }
-    else if (primary)
-    {
-        background = pressed
-            ? BlendColor(actionBase, kAppBackground, 24)
-            : hovered
-            ? BlendColor(actionBase, actionAccent, 44)
-            : actionBase;
-    }
-    else if (active)
-    {
-        background = pressed
-            ? BlendColor(kAccentSoft, kAppBackground, 22)
-            : hovered
-            ? BlendColor(kAccentSoft, kAccent, 36)
-            : kAccentSoft;
-    }
-    else if (pressed)
-    {
-        background = kButtonPressed;
-    }
-    else if (hovered)
-    {
-        background = kButtonHover;
-    }
+    rex::ui::ControlState state;
+    state.hovered = enabled && hasHoveredButton_ && EqualRect(&bounds, &hoveredButtonRect_);
+    state.pressed = enabled && hasPressedButton_ && EqualRect(&bounds, &pressedButtonRect_);
+    state.active = active;
+    state.enabled = enabled;
 
-    const COLORREF border = !enabled
-        ? BlendColor(kBorder, kDisabledBackground, 28)
-        : primary
-        ? (pressed
-            ? BlendColor(actionAccent, kAppBackground, 20)
-            : hovered
-            ? actionAccent
-            : BlendColor(kBorder, actionAccent, 68))
-        : pressed
-        ? BlendColor(kBorder, kAccent, 58)
-        : hovered || active
-        ? BlendColor(kBorder, kAccent, 44)
-        : kBorder;
-    const COLORREF text = enabled ? kTextPrimary : kDisabledText;
-
-    RECT paintBounds = bounds;
-    if (pressed && bounds.right - bounds.left > Dips(4) && bounds.bottom - bounds.top > Dips(4))
-    {
-        paintBounds = ShrinkRect(paintBounds, Dips(1), Dips(1));
-    }
-
-    FillRoundRect(hdc, paintBounds, Dips(10), background);
-    StrokeRoundRect(hdc, paintBounds, Dips(10), border);
-
-    RECT textBounds = paintBounds;
-    if (textBounds.right - textBounds.left > Dips(24))
-    {
-        textBounds = ShrinkRect(textBounds, Dips(8), 0);
-    }
-    DrawTextLine(hdc, label, textBounds, navFont_, text, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    rex::ui::ButtonOptions options;
+    options.role = primary
+        ? (active ? rex::ui::ButtonRole::Danger : rex::ui::ButtonRole::Primary)
+        : rex::ui::ButtonRole::Neutral;
+    rex::ui::PaintButton(
+        hdc,
+        bounds,
+        label ? std::wstring_view(label) : std::wstring_view(),
+        navFont_,
+        dpi_,
+        ComponentPalette(),
+        state,
+        options);
 }
 
 void ToolkitApp::PaintCheckbox(HDC hdc, const RECT& bounds, bool checked, const wchar_t* label)
@@ -9722,131 +10425,19 @@ void ToolkitApp::PaintToggleSwitch(
     bool hovered,
     bool pressed)
 {
-    const float target = enabled ? 1.0f : 0.0f;
-    ToggleSwitchAnimationState& animation = toggleSwitchAnimations_[animationKey];
-    if (!animation.initialized)
+    rex::ui::SwitchAnimationState& animation = toggleSwitchAnimations_[animationKey];
+    if (rex::ui::SetSwitchTarget(animation, enabled, bounds))
     {
-        animation.position = target;
-        animation.target = target;
-        animation.initialized = true;
-    }
-    else if (std::fabs(animation.target - target) > 0.001f)
-    {
-        animation.target = target;
-        animation.animating = true;
         SetTimer(hwnd_, kToggleSwitchTimerId, kToggleSwitchFrameMs, nullptr);
     }
-    animation.bounds = bounds;
-
-    const int width = static_cast<int>(bounds.right - bounds.left);
-    const int height = static_cast<int>(bounds.bottom - bounds.top);
-    if (width <= 0 || height <= 0)
-    {
-        return;
-    }
-
-    const float position = std::clamp(animation.position, 0.0f, 1.0f);
-    const int activePercent = static_cast<int>(std::round(position * 100.0f));
-    const COLORREF offTrack = BlendColor(kButtonBackground, kInputBackground, 24);
-    const COLORREF onTrack = BlendColor(kAccentSoft, kAccent, 64);
-    COLORREF trackColor = BlendColor(offTrack, onTrack, activePercent);
-    if (hovered)
-    {
-        trackColor = BlendColor(trackColor, kAccent, 10);
-    }
-    if (pressed)
-    {
-        trackColor = BlendColor(trackColor, kAppBackground, 9);
-    }
-
-    const COLORREF trackTop = BlendColor(
-        trackColor,
-        RGB(255, 255, 255),
-        IsLightUiPalette() ? 5 : 10);
-    const COLORREF trackBottom = BlendColor(
-        trackColor,
-        kAppBackground,
-        IsLightUiPalette() ? 3 : 12);
-    const COLORREF trackBorder = BlendColor(
-        kBorder,
-        kAccent,
-        std::clamp(activePercent * 3 / 5 + (hovered ? 20 : 0), 0, 82));
-
-    Gdiplus::Graphics graphics(hdc);
-    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
-
-    Gdiplus::GraphicsPath trackPath;
-    BuildRoundedPath(trackPath, bounds, height / 2);
-    if (hovered || position > 0.01f)
-    {
-        const BYTE glowAlpha = static_cast<BYTE>(std::clamp(
-            static_cast<int>(34.0f + position * 42.0f + (hovered ? 28.0f : 0.0f)),
-            0,
-            112));
-        Gdiplus::Pen glowPen(
-            AlphaColor(kAccent, glowAlpha),
-            static_cast<Gdiplus::REAL>(std::max(1, Dips(2))));
-        graphics.DrawPath(&glowPen, &trackPath);
-    }
-
-    Gdiplus::RectF trackRect(
-        static_cast<Gdiplus::REAL>(bounds.left),
-        static_cast<Gdiplus::REAL>(bounds.top),
-        static_cast<Gdiplus::REAL>(width),
-        static_cast<Gdiplus::REAL>(height));
-    Gdiplus::LinearGradientBrush trackBrush(
-        trackRect,
-        AlphaColor(trackTop, 255),
-        AlphaColor(trackBottom, 255),
-        Gdiplus::LinearGradientModeVertical);
-    graphics.FillPath(&trackBrush, &trackPath);
-    Gdiplus::Pen borderPen(
-        AlphaColor(trackBorder, 255),
-        static_cast<Gdiplus::REAL>(std::max(1, Dips(1))));
-    graphics.DrawPath(&borderPen, &trackPath);
-
-    const Gdiplus::REAL inset = static_cast<Gdiplus::REAL>(Dips(3));
-    const Gdiplus::REAL baseThumbSize = std::max<Gdiplus::REAL>(
-        1.0f,
-        static_cast<Gdiplus::REAL>(height) - inset * 2.0f);
-    const Gdiplus::REAL pressInset = pressed
-        ? static_cast<Gdiplus::REAL>(Dips(1))
-        : 0.0f;
-    const Gdiplus::REAL travel = std::max<Gdiplus::REAL>(
-        0.0f,
-        static_cast<Gdiplus::REAL>(width) - inset * 2.0f - baseThumbSize);
-    const Gdiplus::REAL thumbSize = std::max<Gdiplus::REAL>(
-        1.0f,
-        baseThumbSize - pressInset * 2.0f);
-    const Gdiplus::REAL thumbLeft =
-        static_cast<Gdiplus::REAL>(bounds.left) + inset + travel * position + pressInset;
-    const Gdiplus::REAL thumbTop =
-        static_cast<Gdiplus::REAL>(bounds.top) + inset + pressInset;
-
-    Gdiplus::RectF shadowRect(
-        thumbLeft,
-        thumbTop + static_cast<Gdiplus::REAL>(Dips(1)),
-        thumbSize,
-        thumbSize);
-    Gdiplus::SolidBrush shadowBrush(Gdiplus::Color(62, 0, 0, 0));
-    graphics.FillEllipse(&shadowBrush, shadowRect);
-
-    Gdiplus::RectF thumbRect(thumbLeft, thumbTop, thumbSize, thumbSize);
-    const COLORREF thumbTopColor = RGB(255, 255, 255);
-    const COLORREF thumbBottomColor = IsLightUiPalette()
-        ? RGB(235, 239, 246)
-        : RGB(226, 232, 242);
-    Gdiplus::LinearGradientBrush thumbBrush(
-        thumbRect,
-        AlphaColor(thumbTopColor, 255),
-        AlphaColor(thumbBottomColor, 255),
-        Gdiplus::LinearGradientModeVertical);
-    graphics.FillEllipse(&thumbBrush, thumbRect);
-    Gdiplus::Pen thumbBorder(
-        Gdiplus::Color(72, GetRValue(kBorder), GetGValue(kBorder), GetBValue(kBorder)),
-        static_cast<Gdiplus::REAL>(std::max(1, Dips(1))));
-    graphics.DrawEllipse(&thumbBorder, thumbRect);
+    rex::ui::PaintSwitch(
+        hdc,
+        bounds,
+        animation.position,
+        dpi_,
+        ComponentPalette(),
+        hovered,
+        pressed);
 }
 
 bool ToolkitApp::StepToggleSwitchAnimations()
@@ -9860,24 +10451,9 @@ bool ToolkitApp::StepToggleSwitchAnimations()
             continue;
         }
 
-        const float delta = animation.target - animation.position;
-        if (std::fabs(delta) <= 0.012f)
+        if (rex::ui::StepSwitchAnimation(animation))
         {
-            animation.position = animation.target;
-            animation.animating = false;
-        }
-        else
-        {
-            animation.position += delta * 0.42f;
-            if (std::fabs(animation.target - animation.position) <= 0.012f)
-            {
-                animation.position = animation.target;
-                animation.animating = false;
-            }
-            else
-            {
-                hasActiveAnimation = true;
-            }
+            hasActiveAnimation = true;
         }
 
         RECT repaint = PaddedRect(animation.bounds, Dips(6));
@@ -9885,6 +10461,7 @@ bool ToolkitApp::StepToggleSwitchAnimations()
     }
     return hasActiveAnimation;
 }
+
 void ToolkitApp::PaintChevron(HDC hdc, const RECT& bounds, bool down, COLORREF color)
 {
     const int centerX = bounds.left + ((bounds.right - bounds.left) / 2);
@@ -9920,26 +10497,7 @@ void ToolkitApp::PaintChevron(HDC hdc, const RECT& bounds, bool down, COLORREF c
 
 void ToolkitApp::PaintDropdownChevron(HDC hdc, const RECT& bounds, bool expanded, COLORREF color)
 {
-    const Gdiplus::REAL centerX = static_cast<Gdiplus::REAL>(bounds.left + bounds.right) * 0.5f;
-    const Gdiplus::REAL centerY = static_cast<Gdiplus::REAL>(bounds.top + bounds.bottom) * 0.5f;
-    const Gdiplus::REAL halfWidth = static_cast<Gdiplus::REAL>(Dips(5));
-    const Gdiplus::REAL halfHeight = static_cast<Gdiplus::REAL>(Dips(3));
-    Gdiplus::PointF points[3] {
-        { centerX - halfWidth, centerY + (expanded ? halfHeight : -halfHeight) },
-        { centerX, centerY + (expanded ? -halfHeight : halfHeight) },
-        { centerX + halfWidth, centerY + (expanded ? halfHeight : -halfHeight) }
-    };
-
-    Gdiplus::Graphics graphics(hdc);
-    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
-    Gdiplus::Pen pen(
-        Gdiplus::Color(255, GetRValue(color), GetGValue(color), GetBValue(color)),
-        static_cast<Gdiplus::REAL>(std::max(1, Dips(2))));
-    pen.SetStartCap(Gdiplus::LineCapRound);
-    pen.SetEndCap(Gdiplus::LineCapRound);
-    pen.SetLineJoin(Gdiplus::LineJoinRound);
-    graphics.DrawLines(&pen, points, static_cast<INT>(std::size(points)));
+    rex::ui::PaintDropdownChevron(hdc, bounds, expanded, color, dpi_);
 }
 
 void ToolkitApp::PaintXIcon(HDC hdc, const RECT& bounds, COLORREF color)
@@ -9997,61 +10555,24 @@ void ToolkitApp::PaintBackButton(HDC hdc, const RECT& bounds)
 
 void ToolkitApp::PaintDropdownButton(HDC hdc, const RECT& bounds, const wchar_t* label, bool enabled, bool down)
 {
-    const bool hovered = enabled && hasHoveredButton_ && EqualRect(&bounds, &hoveredButtonRect_);
-    const bool pressed = enabled && hasPressedButton_ && EqualRect(&bounds, &pressedButtonRect_);
-    const bool expanded = enabled && activeDropdown_ != DropdownKind::None && EqualRect(&bounds, &dropdownAnchorRect_);
-    const COLORREF background = !enabled
-        ? kDisabledBackground
-        : expanded
-        ? kDropdownSelected
-        : pressed
-        ? kButtonPressed
-        : hovered
-        ? kDropdownHover
-        : kInputBackground;
-    const COLORREF border = !enabled
-        ? kBorder
-        : expanded
-        ? BlendColor(kBorder, kAccent, 52)
-        : pressed
-        ? BlendColor(kBorder, kAccent, 42)
-        : hovered
-        ? BlendColor(kBorder, kAccent, 36)
-        : kBorder;
-    const COLORREF text = enabled ? kTextPrimary : kDisabledText;
-
-    RECT paintBounds = bounds;
-    if (pressed)
-    {
-        OffsetRect(&paintBounds, 0, Dips(1));
-    }
-
-    FillRoundRect(hdc, paintBounds, Dips(10), background);
-    StrokeRoundRect(hdc, paintBounds, Dips(10), border);
-
-    RECT labelRect {
-        paintBounds.left + Dips(16),
-        paintBounds.top,
-        paintBounds.right - Dips(43),
-        paintBounds.bottom
-    };
-    DrawTextLine(hdc, label, labelRect, navFont_, text, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
-    if (!enabled)
-    {
-        return;
-    }
-
-    RECT chevronRect {
-        paintBounds.right - Dips(32),
-        paintBounds.top,
-        paintBounds.right - Dips(10),
-        paintBounds.bottom
-    };
-    PaintDropdownChevron(
+    rex::ui::ControlState state;
+    state.hovered = enabled && hasHoveredButton_ && EqualRect(&bounds, &hoveredButtonRect_);
+    state.pressed = enabled && hasPressedButton_ && EqualRect(&bounds, &pressedButtonRect_);
+    state.enabled = enabled;
+    const bool expanded =
+        enabled &&
+        activeDropdown_ != DropdownKind::None &&
+        EqualRect(&bounds, &dropdownAnchorRect_);
+    rex::ui::PaintDropdownField(
         hdc,
-        chevronRect,
-        expanded && down,
-        expanded || hovered || pressed ? kTextPrimary : kTextSecondary);
+        bounds,
+        label ? std::wstring_view(label) : std::wstring_view(),
+        navFont_,
+        dpi_,
+        ComponentPalette(),
+        state,
+        expanded,
+        down);
 }
 
 void ToolkitApp::PaintSlider(HDC hdc)
@@ -10061,44 +10582,7 @@ void ToolkitApp::PaintSlider(HDC hdc)
 
 void ToolkitApp::PaintModernSlider(HDC hdc, const RECT& track, const RECT& thumb, bool enabled)
 {
-    if (!HasArea(track) || !HasArea(thumb))
-    {
-        return;
-    }
-
-    const int centerY = (track.top + track.bottom) / 2;
-    const int trackHeight = std::max(Dips(4), static_cast<int>(track.bottom - track.top) / 2);
-    RECT slimTrack { track.left, centerY - trackHeight / 2, track.right, centerY + (trackHeight + 1) / 2 };
-    FillRoundRect(hdc, slimTrack, trackHeight, enabled ? kBorder : kDisabledBackground);
-
-    RECT activeTrack = slimTrack;
-    activeTrack.right = std::clamp((thumb.left + thumb.right) / 2, slimTrack.left, slimTrack.right);
-    if (activeTrack.right > activeTrack.left)
-    {
-        FillRoundRect(hdc, activeTrack, trackHeight, enabled ? kAccent : kDisabledText);
-    }
-
-    const int thumbCenterX = (thumb.left + thumb.right) / 2;
-    const int thumbCenterY = (thumb.top + thumb.bottom) / 2;
-    const int outerRadius = Dips(10);
-    const int innerRadius = Dips(6);
-    Gdiplus::Graphics graphics(hdc);
-    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    const COLORREF thumbColor = enabled ? kAccent : kDisabledText;
-    Gdiplus::SolidBrush halo(Gdiplus::Color(
-        enabled ? 64 : 28,
-        GetRValue(thumbColor), GetGValue(thumbColor), GetBValue(thumbColor)));
-    graphics.FillEllipse(&halo, thumbCenterX - outerRadius, thumbCenterY - outerRadius, outerRadius * 2, outerRadius * 2);
-    Gdiplus::SolidBrush face(Gdiplus::Color(
-        255,
-        GetRValue(enabled ? kTextPrimary : kDisabledText),
-        GetGValue(enabled ? kTextPrimary : kDisabledText),
-        GetBValue(enabled ? kTextPrimary : kDisabledText)));
-    graphics.FillEllipse(&face, thumbCenterX - innerRadius, thumbCenterY - innerRadius, innerRadius * 2, innerRadius * 2);
-    Gdiplus::Pen ring(
-        Gdiplus::Color(255, GetRValue(thumbColor), GetGValue(thumbColor), GetBValue(thumbColor)),
-        static_cast<Gdiplus::REAL>(Dips(2)));
-    graphics.DrawEllipse(&ring, thumbCenterX - innerRadius, thumbCenterY - innerRadius, innerRadius * 2, innerRadius * 2);
+    rex::ui::PaintSlider(hdc, track, thumb, dpi_, ComponentPalette(), enabled);
 }
 
 void ToolkitApp::PaintFileConverter(HDC hdc)
@@ -11632,6 +12116,7 @@ void ToolkitApp::PaintVideoCompressor(HDC hdc)
     }
 }
 
+#if 0
 void ToolkitApp::PaintAnimeTracker(HDC hdc)
 {
     const int margin = Dips(42);
@@ -11865,10 +12350,9 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
             heroPanel.bottom - Dips(20)
         };
         FillRoundRect(hdc, cover, Dips(14), kPanelBackground);
-        auto coverBitmap = animeCoverCache_.find(selected.coverImageUrl);
-        if (coverBitmap != animeCoverCache_.end() && coverBitmap->second)
+        if (Gdiplus::Bitmap* coverBitmap = FindAnimeBitmap(selected.coverImageUrl))
         {
-            PaintBitmapCover(hdc, coverBitmap->second.get(), cover, Dips(14));
+            PaintBitmapCover(hdc, coverBitmap, cover, Dips(14));
         }
         else
         {
@@ -12125,10 +12609,9 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
                     characterCard.left + portraitWidth,
                     characterCard.bottom
                 };
-                auto characterBitmap = animeCoverCache_.find(character.character.imageUrl);
-                if (characterBitmap != animeCoverCache_.end() && characterBitmap->second)
+                if (Gdiplus::Bitmap* characterBitmap = FindAnimeBitmap(character.character.imageUrl))
                 {
-                    PaintBitmapCover(hdc, characterBitmap->second.get(), characterPortrait, 0);
+                    PaintBitmapCover(hdc, characterBitmap, characterPortrait, 0);
                 }
                 else
                 {
@@ -12145,10 +12628,9 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
                 };
                 if (hasVoiceActorPortrait)
                 {
-                    auto voiceActorBitmap = animeCoverCache_.find(character.voiceActor.imageUrl);
-                    if (voiceActorBitmap != animeCoverCache_.end() && voiceActorBitmap->second)
+                    if (Gdiplus::Bitmap* voiceActorBitmap = FindAnimeBitmap(character.voiceActor.imageUrl))
                     {
-                        PaintBitmapCover(hdc, voiceActorBitmap->second.get(), voiceActorPortrait, 0);
+                        PaintBitmapCover(hdc, voiceActorBitmap, voiceActorPortrait, 0);
                     }
                     else
                     {
@@ -12417,6 +12899,11 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
         {
             const AnimeSearchResult& result = animeSearchResults_[static_cast<size_t>(index)];
             RECT card = AnimeSearchResultCardRect(static_cast<size_t>(index));
+            if (!RectsOverlap(PaddedRect(card, Dips(10)), contentRect_))
+            {
+                continue;
+            }
+
             const bool hovered = hoverAnimeSearchResultIndex_ == index;
             const bool pressed = false;
             RECT paintCard = card;
@@ -12436,11 +12923,22 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
                 paintCard.right,
                 paintCard.top + Dips(318)
             };
-            auto coverBitmap = animeCoverCache_.find(result.coverImageUrl);
-            if (coverBitmap != animeCoverCache_.end() && coverBitmap->second)
+            const int coverWidth = std::max(1, static_cast<int>(cover.right - cover.left));
+            const int coverHeight = std::max(1, static_cast<int>(cover.bottom - cover.top));
+            if (Gdiplus::Bitmap* coverBitmap = FindAnimeSearchCoverBitmap(
+                    result.coverImageUrl,
+                    coverWidth,
+                    coverHeight,
+                    Dips(12)))
             {
                 FillRoundRect(hdc, cover, Dips(8), kInputBackground);
-                PaintBitmapCover(hdc, coverBitmap->second.get(), cover, Dips(12));
+                Gdiplus::Graphics graphics(hdc);
+                graphics.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
+                graphics.SetCompositingQuality(Gdiplus::CompositingQualityHighSpeed);
+                graphics.DrawImage(
+                    coverBitmap,
+                    static_cast<INT>(cover.left),
+                    static_cast<INT>(cover.top));
             }
             else
             {
@@ -12513,11 +13011,11 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
                 detailsPanel.left + Dips(150),
                 detailsPanel.bottom - Dips(18)
             };
-            auto coverBitmap = animeCoverCache_.find(selected.coverImageUrl);
+            Gdiplus::Bitmap* coverBitmap = FindAnimeBitmap(selected.coverImageUrl);
             FillRoundRect(hdc, cover, Dips(12), kPanelBackground);
-            if (coverBitmap != animeCoverCache_.end() && coverBitmap->second)
+            if (coverBitmap)
             {
-                PaintBitmapCover(hdc, coverBitmap->second.get(), cover, Dips(12));
+                PaintBitmapCover(hdc, coverBitmap, cover, Dips(12));
             }
 
             RECT detailTitle {
@@ -12956,6 +13454,1809 @@ void ToolkitApp::PaintAnimeTracker(HDC hdc)
     }
 }
 
+#endif
+
+void ToolkitApp::PaintAnimeTracker(HDC hdc)
+{
+    const int contentTop = contentRect_.top - scrollOffsetY_;
+    const ToolDefinition* tool = FindTool(ToolKind::AnimeTracker);
+    const COLORREF panelColor = kPanelBackground;
+    const COLORREF rowColor = BlendColor(kInputBackground, kPanelBackground, 18);
+    const COLORREF selectedRowColor = BlendColor(rowColor, kAccent, 11);
+
+    PaintBackButton(hdc, backButtonRect_);
+
+    RECT titleRect {
+        backButtonRect_.right + Dips(20),
+        contentTop + Dips(kToolHeaderTopDip - 2),
+        contentRect_.right - Dips(42),
+        contentTop + Dips(kToolHeaderTopDip + 30)
+    };
+    DrawTextLine(
+        hdc,
+        tool ? tool->name.c_str() : L"Anime Tracker",
+        titleRect,
+        headingFont_,
+        kTextPrimary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+
+    RECT subtitleRect = titleRect;
+    subtitleRect.top = titleRect.bottom + Dips(2);
+    subtitleRect.bottom = subtitleRect.top + Dips(24);
+    DrawTextLine(
+        hdc,
+        L"Find anime, follow your watchlist, and keep upcoming episodes in view.",
+        subtitleRect,
+        bodyFont_,
+        kTextSecondary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    auto paintCover = [&](const std::wstring& imageUrl, const RECT& bounds, int radius)
+    {
+        FillOpaqueRoundRect(hdc, bounds, radius, kInputBackground);
+        Gdiplus::Bitmap* bitmap = FindAnimeBitmap(imageUrl);
+        if (!bitmap || bitmap->GetWidth() == 0 || bitmap->GetHeight() == 0)
+        {
+            DrawTextLine(
+                hdc,
+                L"NO COVER",
+                bounds,
+                bodyFont_,
+                kTextSecondary,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+            return;
+        }
+
+        const double imageWidth = static_cast<double>(bitmap->GetWidth());
+        const double imageHeight = static_cast<double>(bitmap->GetHeight());
+        const double outputWidth = static_cast<double>(std::max(1L, bounds.right - bounds.left));
+        const double outputHeight = static_cast<double>(std::max(1L, bounds.bottom - bounds.top));
+        const double scale = std::max(outputWidth / imageWidth, outputHeight / imageHeight);
+        const double sourceWidth = outputWidth / scale;
+        const double sourceHeight = outputHeight / scale;
+        const double sourceX = (imageWidth - sourceWidth) / 2.0;
+        const double sourceY = (imageHeight - sourceHeight) / 2.0;
+
+        Gdiplus::Graphics graphics(hdc);
+        graphics.SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
+        graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+        graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        Gdiplus::GraphicsPath clip;
+        BuildRoundedPath(clip, bounds, radius);
+        graphics.SetClip(&clip);
+        graphics.DrawImage(
+            bitmap,
+            Gdiplus::Rect(
+                bounds.left,
+                bounds.top,
+                std::max(1L, bounds.right - bounds.left),
+                std::max(1L, bounds.bottom - bounds.top)),
+            static_cast<INT>(sourceX),
+            static_cast<INT>(sourceY),
+            std::max(1, static_cast<INT>(sourceWidth)),
+            std::max(1, static_cast<INT>(sourceHeight)),
+            Gdiplus::UnitPixel);
+        graphics.ResetClip();
+    };
+
+    auto statusColor = [&](AnimeUserStatus status)
+    {
+        switch (status)
+        {
+        case AnimeUserStatus::Watching:
+            return RGB(65, 154, 245);
+        case AnimeUserStatus::Completed:
+            return RGB(66, 184, 128);
+        case AnimeUserStatus::OnHold:
+            return RGB(224, 166, 64);
+        case AnimeUserStatus::Dropped:
+            return RGB(210, 91, 103);
+        case AnimeUserStatus::Planned:
+        default:
+            return kAccent;
+        }
+    };
+
+    auto paintChip = [&](RECT bounds, const std::wstring& label, COLORREF color, bool centered = true)
+    {
+        FillOpaqueRoundRect(hdc, bounds, Dips(9), BlendColor(kInputBackground, color, 22));
+        StrokeRoundRect(hdc, bounds, Dips(9), BlendColor(kBorder, color, 50));
+        DrawTextLine(
+            hdc,
+            label.c_str(),
+            bounds,
+            animeBodyFont_,
+            IsLightUiPalette() ? BlendColor(color, RGB(0, 0, 0), 32) : BlendColor(color, RGB(255, 255, 255), 26),
+            (centered ? DT_CENTER : DT_LEFT) | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    };
+
+    auto paintTab = [&](const RECT& bounds, const wchar_t* label, bool selected)
+    {
+        const bool hovered = hasHoveredButton_ && EqualRect(&bounds, &hoveredButtonRect_);
+        DrawTextLine(
+            hdc,
+            label,
+            bounds,
+            animeItemFont_,
+            selected ? kTextPrimary : (hovered ? BlendColor(kTextSecondary, kAccent, 34) : kTextSecondary),
+            DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        if (selected)
+        {
+            const int labelWidth = MeasureTextWidth(hdc, label, animeItemFont_);
+            const int underlineWidth = std::min(
+                std::max(Dips(54), labelWidth + Dips(30)),
+                std::max(Dips(54), static_cast<int>(bounds.right - bounds.left) - Dips(24)));
+            const int center = bounds.left + (bounds.right - bounds.left) / 2;
+            RECT underline {
+                center - underlineWidth / 2,
+                bounds.bottom - Dips(3),
+                center + (underlineWidth + 1) / 2,
+                bounds.bottom
+            };
+            FillOpaqueRoundRect(hdc, underline, Dips(2), kAccent);
+        }
+    };
+
+    auto paintOverflowDots = [&](const RECT& bounds, COLORREF color)
+    {
+        Gdiplus::Graphics graphics(hdc);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+        Gdiplus::SolidBrush brush(AlphaColor(color, 255));
+        const Gdiplus::REAL diameter = static_cast<Gdiplus::REAL>(std::max(2, Dips(3)));
+        const Gdiplus::REAL centerX =
+            (static_cast<Gdiplus::REAL>(bounds.left) + static_cast<Gdiplus::REAL>(bounds.right)) / 2.0f;
+        const Gdiplus::REAL centerY =
+            (static_cast<Gdiplus::REAL>(bounds.top) + static_cast<Gdiplus::REAL>(bounds.bottom)) / 2.0f;
+        for (int offset = -1; offset <= 1; ++offset)
+        {
+            const Gdiplus::REAL dotX = centerX + static_cast<Gdiplus::REAL>(offset * Dips(7)) - diameter / 2.0f;
+            graphics.FillEllipse(&brush, dotX, centerY - diameter / 2.0f, diameter, diameter);
+        }
+    };
+
+    auto paintCalendarIcon = [&](const RECT& bounds, COLORREF color)
+    {
+        Gdiplus::Graphics graphics(hdc);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+        Gdiplus::Pen pen(
+            AlphaColor(color, 255),
+            static_cast<Gdiplus::REAL>(std::max(1, Dips(1))));
+        const Gdiplus::REAL left = static_cast<Gdiplus::REAL>(bounds.left + Dips(1));
+        const Gdiplus::REAL top = static_cast<Gdiplus::REAL>(bounds.top + Dips(3));
+        const Gdiplus::REAL width = static_cast<Gdiplus::REAL>(std::max(1L, bounds.right - bounds.left - Dips(2)));
+        const Gdiplus::REAL height = static_cast<Gdiplus::REAL>(std::max(1L, bounds.bottom - bounds.top - Dips(4)));
+        graphics.DrawRectangle(&pen, left, top, width, height);
+        graphics.DrawLine(&pen, left, top + height * 0.30f, left + width, top + height * 0.30f);
+        graphics.DrawLine(&pen, left + width * 0.28f, static_cast<Gdiplus::REAL>(bounds.top), left + width * 0.28f, top + height * 0.18f);
+        graphics.DrawLine(&pen, left + width * 0.72f, static_cast<Gdiplus::REAL>(bounds.top), left + width * 0.72f, top + height * 0.18f);
+    };
+
+    auto paintBookmarkIcon = [&](const RECT& bounds, COLORREF color)
+    {
+        Gdiplus::Graphics graphics(hdc);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+        Gdiplus::Pen pen(
+            AlphaColor(color, 255),
+            static_cast<Gdiplus::REAL>(std::max(1, Dips(1))));
+        pen.SetLineJoin(Gdiplus::LineJoinRound);
+        const Gdiplus::REAL left = static_cast<Gdiplus::REAL>(bounds.left + Dips(2));
+        const Gdiplus::REAL top = static_cast<Gdiplus::REAL>(bounds.top + Dips(1));
+        const Gdiplus::REAL right = static_cast<Gdiplus::REAL>(bounds.right - Dips(2));
+        const Gdiplus::REAL bottom = static_cast<Gdiplus::REAL>(bounds.bottom - Dips(1));
+        const Gdiplus::REAL center = (left + right) / 2.0f;
+        Gdiplus::GraphicsPath path;
+        path.StartFigure();
+        path.AddLine(left, top, right, top);
+        path.AddLine(right, top, right, bottom);
+        path.AddLine(right, bottom, center, bottom - Dips(5));
+        path.AddLine(center, bottom - Dips(5), left, bottom);
+        path.CloseFigure();
+        graphics.DrawPath(&pen, &path);
+    };
+
+    auto paintUploadIcon = [&](const RECT& bounds, COLORREF color)
+    {
+        Gdiplus::Graphics graphics(hdc);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+        Gdiplus::Pen pen(
+            AlphaColor(color, 255),
+            static_cast<Gdiplus::REAL>(std::max(1, Dips(1))));
+        const Gdiplus::REAL center = (bounds.left + bounds.right) / 2.0f;
+        const Gdiplus::REAL top = static_cast<Gdiplus::REAL>(bounds.top + Dips(1));
+        const Gdiplus::REAL shaftBottom = static_cast<Gdiplus::REAL>(bounds.bottom - Dips(7));
+        graphics.DrawLine(&pen, center, top, center, shaftBottom);
+        graphics.DrawLine(&pen, center, top, center - Dips(4), top + Dips(4));
+        graphics.DrawLine(&pen, center, top, center + Dips(4), top + Dips(4));
+        const Gdiplus::REAL trayLeft = static_cast<Gdiplus::REAL>(bounds.left + Dips(1));
+        const Gdiplus::REAL trayRight = static_cast<Gdiplus::REAL>(bounds.right - Dips(1));
+        const Gdiplus::REAL trayTop = static_cast<Gdiplus::REAL>(bounds.bottom - Dips(5));
+        const Gdiplus::REAL trayBottom = static_cast<Gdiplus::REAL>(bounds.bottom - Dips(1));
+        graphics.DrawLine(&pen, trayLeft, trayTop, trayLeft, trayBottom);
+        graphics.DrawLine(&pen, trayLeft, trayBottom, trayRight, trayBottom);
+        graphics.DrawLine(&pen, trayRight, trayBottom, trayRight, trayTop);
+    };
+
+    auto paintEmptyState = [&](
+        const RECT& bounds,
+        const wchar_t* title,
+        const wchar_t* hint,
+        bool reminderIcon)
+    {
+        if (!HasArea(bounds))
+        {
+            return;
+        }
+
+        FillOpaqueRoundRect(
+            hdc,
+            bounds,
+            Dips(10),
+            BlendColor(panelColor, kInputBackground, 42));
+        StrokeRoundRect(
+            hdc,
+            bounds,
+            Dips(10),
+            BlendColor(kBorder, kAccent, 12));
+
+        const bool compact = bounds.bottom - bounds.top <= Dips(120);
+        RECT iconSurface {};
+        RECT emptyTitle {};
+        RECT emptyHint {};
+        if (compact)
+        {
+            const int iconSize = Dips(40);
+            const int iconTop = bounds.top + (bounds.bottom - bounds.top - iconSize) / 2;
+            iconSurface = {
+                bounds.left + Dips(14),
+                iconTop,
+                bounds.left + Dips(14) + iconSize,
+                iconTop + iconSize
+            };
+            emptyTitle = {
+                iconSurface.right + Dips(14),
+                bounds.top + Dips(12),
+                bounds.right - Dips(16),
+                bounds.top + Dips(40)
+            };
+            emptyHint = {
+                emptyTitle.left,
+                emptyTitle.bottom - Dips(2),
+                emptyTitle.right,
+                bounds.bottom - Dips(10)
+            };
+        }
+        else
+        {
+            const int groupTop = bounds.top + std::max(
+                Dips(20),
+                (static_cast<int>(bounds.bottom - bounds.top) - Dips(124)) / 2);
+            iconSurface = {
+                bounds.left + (bounds.right - bounds.left - Dips(44)) / 2,
+                groupTop,
+                bounds.left + (bounds.right - bounds.left + Dips(44)) / 2,
+                groupTop + Dips(44)
+            };
+            emptyTitle = {
+                bounds.left + Dips(20),
+                iconSurface.bottom + Dips(8),
+                bounds.right - Dips(20),
+                iconSurface.bottom + Dips(38)
+            };
+            emptyHint = {
+                bounds.left + Dips(28),
+                emptyTitle.bottom + Dips(2),
+                bounds.right - Dips(28),
+                emptyTitle.bottom + Dips(54)
+            };
+        }
+
+        FillOpaqueRoundRect(
+            hdc,
+            iconSurface,
+            Dips(9),
+            BlendColor(kInputBackground, kAccent, 14));
+        StrokeRoundRect(hdc, iconSurface, Dips(9), BlendColor(kBorder, kAccent, 38));
+        const RECT icon = ShrinkRect(iconSurface, Dips(10), Dips(10));
+        if (reminderIcon)
+        {
+            PaintReminderIcon(hdc, icon);
+        }
+        else
+        {
+            PaintSearchIcon(hdc, icon, kTextSecondary);
+        }
+        DrawTextLine(
+            hdc,
+            title,
+            emptyTitle,
+            animeItemFont_,
+            kTextPrimary,
+            compact
+                ? DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS
+                : DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        DrawTextLine(
+            hdc,
+            hint,
+            emptyHint,
+            bodyFont_,
+            kTextSecondary,
+            compact
+                ? DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS
+                : DT_CENTER | DT_WORDBREAK | DT_END_ELLIPSIS);
+    };
+
+    FillOpaqueRoundRect(hdc, animeSearchEditRect_, Dips(11), kInputBackground);
+    RECT searchIcon {
+        animeSearchEditRect_.left + Dips(14),
+        animeSearchEditRect_.top + Dips(13),
+        animeSearchEditRect_.left + Dips(32),
+        animeSearchEditRect_.bottom - Dips(13)
+    };
+    PaintSearchIcon(
+        hdc,
+        searchIcon,
+        GetFocus() == animeSearchEdit_ ? kAccent : kTextSecondary);
+    RECT searchShortcut {
+        animeSearchEditRect_.right - Dips(62),
+        animeSearchEditRect_.top + Dips(10),
+        animeSearchEditRect_.right - Dips(12),
+        animeSearchEditRect_.bottom - Dips(10)
+    };
+    FillOpaqueRoundRect(
+        hdc,
+        searchShortcut,
+        Dips(6),
+        BlendColor(kInputBackground, kPanelBackground, 34));
+    StrokeRoundRect(hdc, searchShortcut, Dips(6), kBorder);
+    DrawTextLine(
+        hdc,
+        L"Ctrl K",
+        searchShortcut,
+        bodyFont_,
+        kTextSecondary,
+        DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    const bool nativeAnimeSearchHidden =
+        liveResize_ || smoothScrollActive_ || scrollBarDragging_;
+    if (nativeAnimeSearchHidden)
+    {
+        const int hiddenEditHeight = Dips(24);
+        const int hiddenEditTop =
+            animeSearchEditRect_.top +
+            (animeSearchEditRect_.bottom - animeSearchEditRect_.top - hiddenEditHeight) / 2 +
+            Dips(2);
+        RECT hiddenEditRect {
+            animeSearchEditRect_.left + Dips(40),
+            hiddenEditTop,
+            animeSearchEditRect_.right - Dips(72),
+            hiddenEditTop + hiddenEditHeight
+        };
+        PaintHiddenEditText(
+            hdc,
+            animeSearchEdit_,
+            hiddenEditRect,
+            searchInputFont_,
+            animeSearchPlaceholderActive_ ? kTextSecondary : kTextPrimary);
+    }
+    PaintButton(
+        hdc,
+        animeImportButtonRect_,
+        animeImportPanelOpen_ ? L"Close import" : L"    Import",
+        false,
+        animeImportPanelOpen_,
+        !animeImporting_ && !animeRefreshing_);
+    if (!animeImportPanelOpen_)
+    {
+        RECT importIcon {
+            animeImportButtonRect_.left + Dips(18),
+            animeImportButtonRect_.top + Dips(12),
+            animeImportButtonRect_.left + Dips(36),
+            animeImportButtonRect_.bottom - Dips(12)
+        };
+        paintUploadIcon(importIcon, kTextSecondary);
+    }
+
+    RECT trackerTabRail {
+        animeSearchTabRect_.left,
+        animeSearchTabRect_.bottom - Dips(1),
+        animeFavoritesTabRect_.right,
+        animeSearchTabRect_.bottom
+    };
+    FillOpaqueRoundRect(hdc, trackerTabRail, 0, kBorder);
+    paintTab(animeSearchTabRect_, L"Watchlist", animeTrackerTab_ == AnimeTrackerTab::Watchlist);
+    paintTab(animeAiringTabRect_, L"Airing", animeTrackerTab_ == AnimeTrackerTab::Airing);
+    paintTab(animeFavoritesTabRect_, L"Favorites", animeTrackerTab_ == AnimeTrackerTab::Favorites);
+
+    FillOpaqueRoundRect(hdc, animeListRect_, Dips(12), panelColor);
+    StrokeRoundRect(hdc, animeListRect_, Dips(12), kBorder);
+    FillOpaqueRoundRect(hdc, animeResultsRect_, Dips(12), panelColor);
+    StrokeRoundRect(hdc, animeResultsRect_, Dips(12), kBorder);
+
+    const wchar_t* listHeading = L"Watchlist";
+    if (animeTrackerTab_ == AnimeTrackerTab::Airing)
+    {
+        listHeading = L"Coming up";
+    }
+    else if (animeTrackerTab_ == AnimeTrackerTab::Favorites)
+    {
+        listHeading = L"Favorites";
+    }
+
+    RECT listHeadingIcon {
+        animeListRect_.left + Dips(18),
+        animeListRect_.top + Dips(25),
+        animeListRect_.left + Dips(38),
+        animeListRect_.top + Dips(45)
+    };
+    paintBookmarkIcon(listHeadingIcon, kTextSecondary);
+    RECT listHeadingRect {
+        listHeadingIcon.right + Dips(10),
+        animeListRect_.top + Dips(16),
+        animeFilterButtonRect_.left - Dips(8),
+        animeListRect_.top + Dips(54)
+    };
+    if (listHeadingRect.right - listHeadingRect.left >= Dips(72))
+    {
+        DrawTextLine(
+            hdc,
+            listHeading,
+            listHeadingRect,
+            titleFont_,
+            kTextPrimary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    }
+
+    std::wstring filterLabel = animeFilterAll_
+        ? L"All statuses"
+        : AnimeTrackerService::UserStatusLabel(animeFilter_);
+    PaintButton(hdc, animeFilterButtonRect_, filterLabel.c_str(), false);
+    PaintChevron(
+        hdc,
+        {
+            animeFilterButtonRect_.right - Dips(24),
+            animeFilterButtonRect_.top + Dips(13),
+            animeFilterButtonRect_.right - Dips(12),
+            animeFilterButtonRect_.bottom - Dips(13)
+        },
+        true,
+        kTextSecondary);
+    PaintButton(
+        hdc,
+        animeRefreshAllButtonRect_,
+        animeRefreshing_ ? L"Refreshing" : L"    Refresh",
+        false,
+        animeRefreshing_,
+        !animeRefreshing_ && !animeImporting_ && !animeWatchList_.anime.empty());
+    if (!animeRefreshing_)
+    {
+        const bool refreshEnabled =
+            !animeImporting_ && !animeWatchList_.anime.empty();
+        RECT refreshIcon {
+            animeRefreshAllButtonRect_.left + Dips(12),
+            animeRefreshAllButtonRect_.top + Dips(11),
+            animeRefreshAllButtonRect_.left + Dips(28),
+            animeRefreshAllButtonRect_.bottom - Dips(11)
+        };
+        PaintCircularArrowIcon(
+            hdc,
+            refreshIcon,
+            refreshEnabled ? kTextSecondary : kDisabledText,
+            true);
+    }
+
+    const std::vector<size_t> visibleEntries = VisibleAnimeEntryIndexes();
+    if (visibleEntries.empty())
+    {
+        RECT emptyState {
+            animeListRect_.left + Dips(18),
+            animeListRect_.top + Dips(80),
+            animeListRect_.right - Dips(18),
+            animeListRect_.bottom - Dips(52)
+        };
+        const wchar_t* title = animeTrackerTab_ == AnimeTrackerTab::Favorites
+            ? L"No favorites yet"
+            : animeTrackerTab_ == AnimeTrackerTab::Airing
+            ? L"Nothing airing soon"
+            : L"Your watchlist is empty";
+        const wchar_t* hint = animeTrackerTab_ == AnimeTrackerTab::Watchlist
+            ? L"Search above to add your first anime."
+            : L"Saved anime that match this view will appear here.";
+        paintEmptyState(
+            emptyState,
+            title,
+            hint,
+            false);
+    }
+    else
+    {
+        for (size_t visibleIndex = 0; visibleIndex < visibleEntries.size(); ++visibleIndex)
+        {
+            const size_t entryIndex = visibleEntries[visibleIndex];
+            const AnimeEntry& entry = animeWatchList_.anime[entryIndex];
+            const RECT row = AnimeListRowRect(visibleIndex);
+            const bool selected =
+                selectedAnimeSearchIndex_ < 0 &&
+                selectedAnimeIndex_ == static_cast<int>(entryIndex);
+            const bool hovered = hasHoveredButton_ && EqualRect(&row, &hoveredButtonRect_);
+
+            FillOpaqueRoundRect(
+                hdc,
+                row,
+                Dips(9),
+                selected ? selectedRowColor :
+                hovered ? BlendColor(rowColor, kAccent, 5) : rowColor);
+            if (hovered && !selected)
+            {
+                StrokeRoundRect(hdc, row, Dips(9), BlendColor(kBorder, kAccent, 40));
+            }
+            if (selected)
+            {
+                StrokeRoundRect(hdc, row, Dips(9), BlendColor(kBorder, kAccent, 38));
+                RECT marker { row.left, row.top + Dips(10), row.left + Dips(3), row.bottom - Dips(10) };
+                FillOpaqueRoundRect(hdc, marker, Dips(2), kAccent);
+            }
+
+            RECT cover {
+                row.left + Dips(12),
+                row.top + Dips(8),
+                row.left + Dips(104),
+                row.bottom - Dips(8)
+            };
+            paintCover(entry.coverImageUrl, cover, Dips(7));
+
+            const int textLeft = cover.right + Dips(16);
+            RECT nameRect {
+                textLeft,
+                row.top + Dips(10),
+                row.right - Dips(12),
+                row.top + Dips(56)
+            };
+            DrawTextLine(
+                hdc,
+                entry.title.c_str(),
+                nameRect,
+                animeItemFont_,
+                kTextPrimary,
+                DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+
+            const std::wstring statusLabel = AnimeStatusText(entry);
+            const int chipWidth = std::clamp(
+                MeasureTextWidth(hdc, statusLabel.c_str(), animeBodyFont_) + Dips(20),
+                Dips(68),
+                Dips(108));
+            RECT chip {
+                textLeft,
+                row.top + Dips(62),
+                textLeft + chipWidth,
+                row.top + Dips(90)
+            };
+            paintChip(chip, statusLabel, statusColor(entry.userStatus));
+
+            RECT progressText {
+                chip.right + Dips(10),
+                chip.top,
+                row.right - Dips(12),
+                chip.bottom
+            };
+            DrawTextLine(
+                hdc,
+                AnimeProgressText(entry).c_str(),
+                progressText,
+                animeBodyFont_,
+                kTextSecondary,
+                DT_RIGHT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+            RECT progressTrack {
+                textLeft,
+                row.top + Dips(97),
+                row.right - Dips(12),
+                row.top + Dips(103)
+            };
+            FillOpaqueRoundRect(hdc, progressTrack, Dips(3), kBorder);
+            if (entry.totalEpisodes > 0 && entry.currentEpisode > 0)
+            {
+                RECT progressFill = progressTrack;
+                progressFill.right = progressTrack.left +
+                    MulDiv(
+                        progressTrack.right - progressTrack.left,
+                        std::min(entry.currentEpisode, entry.totalEpisodes),
+                        entry.totalEpisodes);
+                FillOpaqueRoundRect(hdc, progressFill, Dips(3), kAccent);
+            }
+
+            if (entry.nextAiringEpisode.hasValue &&
+                entry.nextAiringEpisode.airingAt > CurrentEpochSeconds())
+            {
+                RECT nextIcon {
+                    textLeft,
+                    row.top + Dips(113),
+                    textLeft + Dips(15),
+                    row.top + Dips(128)
+                };
+                paintCalendarIcon(nextIcon, kTextSecondary);
+                RECT nextRect {
+                    nextIcon.right + Dips(7),
+                    row.top + Dips(108),
+                    row.right - Dips(12),
+                    row.bottom - Dips(4)
+                };
+                std::wstring next = L"Ep " + std::to_wstring(entry.nextAiringEpisode.episode) +
+                    L"  /  " + AnimeTrackerService::CountdownLabel(entry.nextAiringEpisode.airingAt);
+                DrawTextLine(
+                    hdc,
+                    next.c_str(),
+                    nextRect,
+                    animeBodyFont_,
+                    kTextSecondary,
+                    DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            }
+        }
+    }
+
+    RECT listFooter {
+        animeListRect_.left + Dips(18),
+        animeListRect_.bottom - Dips(36),
+        animeListRect_.right - Dips(18),
+        animeListRect_.bottom - Dips(10)
+    };
+    const std::wstring listCount =
+        std::to_wstring(visibleEntries.size()) +
+        (visibleEntries.size() == 1 ? L" anime" : L" anime");
+    RECT listCountRect = listFooter;
+    listCountRect.right = listCountRect.left + Dips(88);
+    RECT listStatusRect = listFooter;
+    listStatusRect.left = listCountRect.right + Dips(8);
+    DrawTextLine(
+        hdc,
+        listCount.c_str(),
+        listCountRect,
+        bodyFont_,
+        kTextSecondary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    std::wstring listSummary = animeFilterAll_
+        ? L"All statuses"
+        : AnimeTrackerService::UserStatusLabel(animeFilter_);
+    if (animeTrackerTab_ == AnimeTrackerTab::Airing)
+    {
+        listSummary = L"Airing soon";
+    }
+    else if (animeTrackerTab_ == AnimeTrackerTab::Favorites)
+    {
+        listSummary = L"Favorites only";
+    }
+    DrawTextLine(
+        hdc,
+        listSummary.c_str(),
+        listStatusRect,
+        bodyFont_,
+        kTextSecondary,
+        DT_RIGHT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    const bool showingSearchResult =
+        selectedAnimeSearchIndex_ >= 0 &&
+        selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size());
+    const bool hasSavedSelection =
+        selectedAnimeIndex_ >= 0 &&
+        selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size());
+    const AnimeSearchResult* searchResult = showingSearchResult
+        ? &animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)]
+        : nullptr;
+    const AnimeEntry* savedEntry = !showingSearchResult && hasSavedSelection
+        ? &animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)]
+        : nullptr;
+    const AnimeSearchResult* richDetails = searchResult;
+    if (!richDetails && savedEntry)
+    {
+        const auto cached = animeDetailsCache_.find(savedEntry->anilistId);
+        if (cached != animeDetailsCache_.end())
+        {
+            richDetails = &cached->second;
+        }
+    }
+
+    const AnimeEntry* matchingSavedEntry = savedEntry;
+    if (searchResult)
+    {
+        for (const AnimeEntry& entry : animeWatchList_.anime)
+        {
+            if (entry.anilistId == searchResult->anilistId)
+            {
+                matchingSavedEntry = &entry;
+                break;
+            }
+        }
+    }
+
+    if (!searchResult && !savedEntry)
+    {
+        RECT emptyState {
+            animeResultsRect_.left + Dips(24),
+            animeResultsRect_.top + Dips(80),
+            animeResultsRect_.right - Dips(24),
+            animeResultsRect_.bottom - Dips(80)
+        };
+        paintEmptyState(
+            emptyState,
+            L"Select an anime",
+            L"Choose something from your watchlist or search AniList above.",
+            false);
+    }
+    else
+    {
+        const std::wstring title = searchResult ? searchResult->title : savedEntry->title;
+        const std::wstring coverUrl = searchResult ? searchResult->coverImageUrl : savedEntry->coverImageUrl;
+        const std::wstring siteUrl = searchResult ? searchResult->siteUrl : savedEntry->siteUrl;
+        const AiringInfo airing = searchResult ? searchResult->nextAiringEpisode : savedEntry->nextAiringEpisode;
+        const int totalEpisodes = searchResult ? searchResult->episodes : savedEntry->totalEpisodes;
+        const int watchedEpisodes = matchingSavedEntry ? matchingSavedEntry->currentEpisode : 0;
+        const AnimeUserStatus userStatus = matchingSavedEntry
+            ? matchingSavedEntry->userStatus
+            : AnimeUserStatus::Planned;
+
+        const COLORREF sectionSurface = BlendColor(panelColor, kInputBackground, 36);
+        const COLORREF sectionBorder = BlendColor(kBorder, kAccent, 10);
+        RECT identityZone {
+            animeResultsRect_.left + Dips(12),
+            animeResultsRect_.top + Dips(12),
+            animeResultsRect_.right - Dips(12),
+            animeResultsRect_.top + Dips(246)
+        };
+        RECT tabbedZone {
+            animeResultsRect_.left + Dips(12),
+            animeDetailTabRects_.front().top - Dips(8),
+            animeResultsRect_.right - Dips(12),
+            animeResultsRect_.bottom - Dips(12)
+        };
+        FillOpaqueRoundRect(hdc, identityZone, Dips(10), sectionSurface);
+        StrokeRoundRect(hdc, identityZone, Dips(10), sectionBorder);
+        FillOpaqueRoundRect(
+            hdc,
+            tabbedZone,
+            Dips(10),
+            BlendColor(panelColor, kInputBackground, 24));
+        StrokeRoundRect(hdc, tabbedZone, Dips(10), sectionBorder);
+
+        RECT cover {
+            animeResultsRect_.left + Dips(20),
+            animeResultsRect_.top + Dips(24),
+            animeStatusButtonRect_.left - Dips(20),
+            0
+        };
+        cover.bottom = identityZone.bottom - Dips(16);
+        paintCover(coverUrl, cover, Dips(9));
+
+        if (showingSearchResult)
+        {
+            PaintButton(
+                hdc,
+                animeSearchDetailAddButtonRect_,
+                matchingSavedEntry ? L"In watchlist" : L"Add",
+                !matchingSavedEntry,
+                false,
+                !matchingSavedEntry);
+        }
+        else
+        {
+            PaintButton(
+                hdc,
+                animeFavoriteButtonRect_,
+                L"",
+                false,
+                matchingSavedEntry && matchingSavedEntry->favorite);
+            PaintFavoriteStar(
+                hdc,
+                ShrinkRect(animeFavoriteButtonRect_, Dips(12), Dips(10)),
+                matchingSavedEntry && matchingSavedEntry->favorite,
+                kAccent);
+        }
+
+        const bool overflowEnabled = !showingSearchResult || !siteUrl.empty();
+        PaintButton(
+            hdc,
+            animeSearchDetailOpenButtonRect_,
+            L"",
+            false,
+            false,
+            overflowEnabled);
+        paintOverflowDots(
+            animeSearchDetailOpenButtonRect_,
+            overflowEnabled ? kTextPrimary : kDisabledText);
+
+        const int titleActionsLeft = showingSearchResult
+            ? animeSearchDetailAddButtonRect_.left
+            : animeFavoriteButtonRect_.left;
+        RECT detailTitle {
+            cover.right + Dips(20),
+            animeResultsRect_.top + Dips(20),
+            std::max(static_cast<int>(cover.right) + Dips(140), titleActionsLeft - Dips(12)),
+            animeResultsRect_.top + Dips(84)
+        };
+        const bool titleFitsOneLine =
+            MeasureTextWidth(hdc, title.c_str(), headingFont_) <= detailTitle.right - detailTitle.left;
+        DrawTextLine(
+            hdc,
+            title.c_str(),
+            detailTitle,
+            titleFitsOneLine ? headingFont_ : titleFont_,
+            kTextPrimary,
+            titleFitsOneLine
+                ? DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS
+                : DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+
+        paintChip(
+            animeStatusButtonRect_,
+            matchingSavedEntry ? AnimeTrackerService::UserStatusLabel(userStatus) : L"Not saved",
+            matchingSavedEntry ? statusColor(userStatus) : kTextSecondary);
+
+        RECT formatRect {
+            animeStatusButtonRect_.right + Dips(10),
+            animeStatusButtonRect_.top,
+            animeResultsRect_.right - Dips(20),
+            animeStatusButtonRect_.bottom
+        };
+        std::wstring formatLine;
+        if (richDetails)
+        {
+            formatLine = richDetails->format;
+            if (richDetails->seasonYear > 0)
+            {
+                if (!formatLine.empty()) formatLine += L" / ";
+                formatLine += std::to_wstring(richDetails->seasonYear);
+            }
+            if (richDetails->averageScore > 0)
+            {
+                formatLine += L" / " + std::to_wstring(richDetails->averageScore) + L"% score";
+            }
+        }
+        else if (savedEntry)
+        {
+            formatLine = savedEntry->format;
+        }
+        DrawTextLine(
+            hdc,
+            formatLine.c_str(),
+            formatRect,
+            animeBodyFont_,
+            kTextSecondary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+        const int watchedPercent = totalEpisodes > 0
+            ? MulDiv(std::min(watchedEpisodes, totalEpisodes), 100, totalEpisodes)
+            : 0;
+        RECT progressLabel {
+            cover.right + Dips(20),
+            animeResultsRect_.top + Dips(146),
+            animeResultsRect_.right - Dips(20),
+            animeResultsRect_.top + Dips(172)
+        };
+        std::wstring progressLabelText = std::to_wstring(watchedEpisodes) + L" / " +
+            (totalEpisodes > 0 ? std::to_wstring(totalEpisodes) : L"?") +
+            L" episodes watched";
+        if (totalEpisodes > 0)
+        {
+            progressLabelText += L"  |  " + std::to_wstring(watchedPercent) + L"%";
+        }
+        DrawTextLine(
+            hdc,
+            progressLabelText.c_str(),
+            progressLabel,
+            animeBodyFont_,
+            kTextPrimary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+        RECT detailTrack {
+            progressLabel.left,
+            progressLabel.bottom + Dips(2),
+            progressLabel.right,
+            progressLabel.bottom + Dips(8)
+        };
+        FillOpaqueRoundRect(hdc, detailTrack, Dips(3), kBorder);
+        if (totalEpisodes > 0 && watchedEpisodes > 0)
+        {
+            RECT fill = detailTrack;
+            fill.right = fill.left + MulDiv(
+                fill.right - fill.left,
+                std::min(watchedEpisodes, totalEpisodes),
+                totalEpisodes);
+            FillOpaqueRoundRect(hdc, fill, Dips(3), kAccent);
+        }
+
+        if (matchingSavedEntry)
+        {
+            RECT stepper {
+                animeEpisodeMinusButtonRect_.left,
+                animeEpisodeMinusButtonRect_.top,
+                animeEpisodePlusButtonRect_.right,
+                animeEpisodePlusButtonRect_.bottom
+            };
+            FillOpaqueRoundRect(hdc, stepper, Dips(8), kInputBackground);
+            StrokeRoundRect(hdc, stepper, Dips(8), kBorder);
+
+            const bool minusEnabled = watchedEpisodes > 0;
+            const bool plusEnabled = totalEpisodes <= 0 || watchedEpisodes < totalEpisodes;
+            const bool minusHovered =
+                minusEnabled && hasHoveredButton_ &&
+                EqualRect(&animeEpisodeMinusButtonRect_, &hoveredButtonRect_);
+            const bool plusHovered =
+                plusEnabled && hasHoveredButton_ &&
+                EqualRect(&animeEpisodePlusButtonRect_, &hoveredButtonRect_);
+
+            RECT leftDivider {
+                animeEpisodeMinusButtonRect_.right,
+                stepper.top + Dips(8),
+                animeEpisodeMinusButtonRect_.right + Dips(1),
+                stepper.bottom - Dips(8)
+            };
+            RECT rightDivider {
+                animeEpisodePlusButtonRect_.left - Dips(1),
+                stepper.top + Dips(8),
+                animeEpisodePlusButtonRect_.left,
+                stepper.bottom - Dips(8)
+            };
+            FillOpaqueRoundRect(hdc, leftDivider, 0, kBorder);
+            FillOpaqueRoundRect(hdc, rightDivider, 0, kBorder);
+
+            RECT episodeValue {
+                animeEpisodeMinusButtonRect_.right,
+                animeEpisodeMinusButtonRect_.top,
+                animeEpisodePlusButtonRect_.left,
+                animeEpisodePlusButtonRect_.bottom
+            };
+            DrawTextLine(
+                hdc,
+                L"-",
+                animeEpisodeMinusButtonRect_,
+                animeItemFont_,
+                minusEnabled ? (minusHovered ? kAccent : kTextPrimary) : kDisabledText,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+            DrawTextLine(
+                hdc,
+                std::to_wstring(watchedEpisodes).c_str(),
+                episodeValue,
+                animeItemFont_,
+                kTextPrimary,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+            DrawTextLine(
+                hdc,
+                L"+",
+                animeEpisodePlusButtonRect_,
+                animeItemFont_,
+                plusEnabled ? (plusHovered ? kAccent : kTextPrimary) : kDisabledText,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        }
+
+        const bool hasUpcomingAiring =
+            airing.hasValue && airing.airingAt > CurrentEpochSeconds();
+        if (hasUpcomingAiring)
+        {
+            FillOpaqueRoundRect(
+                hdc,
+                animeUpcomingRect_,
+                Dips(9),
+                BlendColor(kInputBackground, kAccent, 9));
+            StrokeRoundRect(
+                hdc,
+                animeUpcomingRect_,
+                Dips(9),
+                BlendColor(kBorder, kAccent, 48));
+
+            const int airingTextRight = animeReminderButtonRect_.left - Dips(14);
+            RECT airingIconSurface {
+                animeUpcomingRect_.left + Dips(16),
+                animeUpcomingRect_.top + Dips(22),
+                animeUpcomingRect_.left + Dips(80),
+                animeUpcomingRect_.bottom - Dips(22)
+            };
+            FillOpaqueRoundRect(
+                hdc,
+                airingIconSurface,
+                Dips(8),
+                BlendColor(kInputBackground, kAccent, 20));
+            StrokeRoundRect(hdc, airingIconSurface, Dips(8), BlendColor(kBorder, kAccent, 46));
+            PaintReminderIcon(hdc, ShrinkRect(airingIconSurface, Dips(10), Dips(10)));
+            RECT nextTitle {
+                airingIconSurface.right + Dips(16),
+                animeUpcomingRect_.top + Dips(12),
+                airingTextRight,
+                animeUpcomingRect_.top + Dips(36)
+            };
+            DrawTextLine(
+                hdc,
+                L"NEXT EPISODE",
+                nextTitle,
+                animeBodyFont_,
+                kAccent,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+
+            RECT episodeLabel {
+                nextTitle.left,
+                animeUpcomingRect_.top + Dips(36),
+                airingTextRight,
+                animeUpcomingRect_.top + Dips(66)
+            };
+            const std::wstring episodeText = L"Episode " + std::to_wstring(airing.episode);
+            DrawTextLine(
+                hdc,
+                episodeText.c_str(),
+                episodeLabel,
+                animeItemFont_,
+                kTextPrimary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+            RECT airingDate {
+                nextTitle.left,
+                episodeLabel.bottom,
+                airingTextRight,
+                animeUpcomingRect_.bottom - Dips(10)
+            };
+            const std::wstring airingDateText =
+                AnimeTrackerService::AiringDateLabel(airing.airingAt) + L" " +
+                LocalTimeZoneShortLabel();
+            DrawTextLine(
+                hdc,
+                airingDateText.c_str(),
+                airingDate,
+                animeBodyFont_,
+                kTextSecondary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+            std::wstring countdown = AnimeTrackerService::CountdownLabel(airing.airingAt);
+            if (countdown.rfind(L"airs ", 0) == 0)
+            {
+                countdown.erase(0, 5);
+            }
+            if (!countdown.empty())
+            {
+                countdown.front() = static_cast<wchar_t>(towupper(countdown.front()));
+            }
+            RECT countdownRect {
+                animeUpcomingRect_.right - Dips(178),
+                animeUpcomingRect_.top + Dips(4),
+                animeUpcomingRect_.right - Dips(16),
+                animeUpcomingRect_.top + Dips(49)
+            };
+            DrawTextLine(
+                hdc,
+                countdown.c_str(),
+                countdownRect,
+                headingFont_,
+                kAccent,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+            const bool inReminders = HasAnimeAiringReminder(title, airing);
+            PaintButton(
+                hdc,
+                animeReminderButtonRect_,
+                inReminders ? L"Reminder set" : L"Remind me",
+                !inReminders,
+                inReminders,
+                !inReminders);
+        }
+        else
+        {
+            paintEmptyState(
+                animeUpcomingRect_,
+                L"No upcoming episode scheduled",
+                L"We'll show the next airing information here when available.",
+                true);
+        }
+
+        RECT detailTabRail {
+            animeDetailTabRects_.front().left + Dips(12),
+            animeDetailTabRects_.front().bottom - Dips(1),
+            animeDetailTabRects_.back().right - Dips(12),
+            animeDetailTabRects_.front().bottom
+        };
+        FillOpaqueRoundRect(hdc, detailTabRail, 0, kBorder);
+        const wchar_t* detailLabels[] = { L"Overview", L"Episodes", L"Sequels", L"Notes" };
+        for (size_t index = 0; index < animeDetailTabRects_.size(); ++index)
+        {
+            const bool selected = static_cast<int>(animeDetailTab_) == static_cast<int>(index);
+            const bool enabled = !(showingSearchResult && !matchingSavedEntry && index == 3);
+            const RECT tab = animeDetailTabRects_[index];
+            const bool hovered = enabled && hasHoveredButton_ && EqualRect(&tab, &hoveredButtonRect_);
+            DrawTextLine(
+                hdc,
+                detailLabels[index],
+                tab,
+                animeItemFont_,
+                enabled
+                    ? (selected || hovered ? kTextPrimary : kTextSecondary)
+                    : kDisabledText,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            if (selected)
+            {
+                const int underlineWidth = std::max(
+                    Dips(54), static_cast<int>(tab.right - tab.left) - Dips(32));
+                const int underlineCenter = tab.left + (tab.right - tab.left) / 2;
+                RECT underline {
+                    underlineCenter - underlineWidth / 2,
+                    tab.bottom - Dips(3),
+                    underlineCenter + (underlineWidth + 1) / 2,
+                    tab.bottom
+                };
+                FillOpaqueRoundRect(hdc, underline, Dips(2), kAccent);
+            }
+        }
+
+        RECT detailContent = animeSequelsRect_;
+        if (animeDetailTab_ == AnimeDetailTab::Overview)
+        {
+            const int contentWidth = detailContent.right - detailContent.left;
+            const bool twoColumns = contentWidth >= Dips(680);
+            const int overviewTop = detailContent.top + Dips(10);
+            std::wstring description =
+                richDetails && !richDetails->description.empty()
+                ? richDetails->description
+                : L"Detailed overview information will appear after this entry is refreshed from AniList.";
+            std::wstring supplementalNote;
+            const size_t productionNote = description.find(L"Note:");
+            if (productionNote != std::wstring::npos)
+            {
+                supplementalNote = TrimWhitespace(description.substr(productionNote + 5));
+                description = TrimWhitespace(description.substr(0, productionNote));
+            }
+
+            const int descriptionWidth = twoColumns
+                ? contentWidth * 56 / 100
+                : contentWidth;
+            auto measureTextBlock = [&](const std::wstring& text, HFONT font, int width)
+            {
+                if (text.empty())
+                {
+                    return 0;
+                }
+                const HGDIOBJ oldFont = SelectObject(hdc, font);
+                RECT measured { 0, 0, std::max(1, width), 0 };
+                DrawTextW(
+                    hdc,
+                    text.c_str(),
+                    -1,
+                    &measured,
+                    DT_LEFT | DT_WORDBREAK | DT_CALCRECT | DT_NOPREFIX);
+                SelectObject(hdc, oldFont);
+                return std::max(
+                    Dips(24),
+                    static_cast<int>(measured.bottom - measured.top));
+            };
+            const int primaryHeight = measureTextBlock(
+                description,
+                animeBodyFont_,
+                descriptionWidth);
+            const int noteHeight = measureTextBlock(
+                supplementalNote,
+                bodyFont_,
+                descriptionWidth);
+            const int textColumnHeight = primaryHeight +
+                (noteHeight > 0 ? Dips(20) + noteHeight : 0);
+            RECT descriptionRect {
+                detailContent.left,
+                overviewTop,
+                twoColumns ? detailContent.left + descriptionWidth : detailContent.right,
+                twoColumns
+                    ? detailContent.bottom
+                    : std::min(
+                        static_cast<int>(detailContent.bottom),
+                        overviewTop + textColumnHeight)
+            };
+
+            RECT primaryDescriptionRect = descriptionRect;
+            primaryDescriptionRect.bottom = std::min(
+                static_cast<int>(descriptionRect.bottom),
+                static_cast<int>(descriptionRect.top) + primaryHeight);
+            DrawTextLine(
+                hdc,
+                description.c_str(),
+                primaryDescriptionRect,
+                animeBodyFont_,
+                kTextPrimary,
+                DT_LEFT | DT_WORDBREAK);
+            if (!supplementalNote.empty())
+            {
+                RECT noteDivider {
+                    descriptionRect.left,
+                    primaryDescriptionRect.bottom + Dips(9),
+                    descriptionRect.right - Dips(16),
+                    primaryDescriptionRect.bottom + Dips(10)
+                };
+                FillOpaqueRoundRect(hdc, noteDivider, 0, kBorder);
+                RECT noteRect {
+                    descriptionRect.left,
+                    noteDivider.bottom + Dips(10),
+                    descriptionRect.right,
+                    std::min(
+                        static_cast<int>(descriptionRect.bottom),
+                        static_cast<int>(noteDivider.bottom) + Dips(10) + noteHeight)
+                };
+                const std::wstring noteText = L"Note: " + supplementalNote;
+                DrawTextLine(
+                    hdc,
+                    noteText.c_str(),
+                    noteRect,
+                    bodyFont_,
+                    kTextSecondary,
+                    DT_LEFT | DT_WORDBREAK);
+            }
+
+            RECT metadataRect {
+                twoColumns ? descriptionRect.right + Dips(28) : detailContent.left,
+                twoColumns ? descriptionRect.top : descriptionRect.bottom + Dips(18),
+                detailContent.right,
+                detailContent.bottom
+            };
+            if (twoColumns)
+            {
+                RECT columnDivider {
+                    descriptionRect.right + Dips(14),
+                    descriptionRect.top,
+                    descriptionRect.right + Dips(15),
+                    descriptionRect.bottom
+                };
+                FillOpaqueRoundRect(
+                    hdc,
+                    columnDivider,
+                    0,
+                    BlendColor(kBorder, kTextSecondary, 18));
+            }
+
+            auto readableMetadataValue = [](std::wstring value)
+            {
+                const bool shortAcronym =
+                    value.find(L'_') == std::wstring::npos &&
+                    value.size() <= 4 &&
+                    std::all_of(value.begin(), value.end(), [](wchar_t character)
+                    {
+                        return !iswalpha(character) || iswupper(character);
+                    });
+                if (shortAcronym)
+                {
+                    return value;
+                }
+
+                bool capitalize = true;
+                for (wchar_t& character : value)
+                {
+                    if (character == L'_')
+                    {
+                        character = L' ';
+                        capitalize = true;
+                    }
+                    else if (iswalpha(character))
+                    {
+                        character = capitalize
+                            ? static_cast<wchar_t>(towupper(character))
+                            : static_cast<wchar_t>(towlower(character));
+                        capitalize = false;
+                    }
+                    else
+                    {
+                        capitalize = iswspace(character) != 0;
+                    }
+                }
+                return value;
+            };
+
+            std::vector<std::pair<std::wstring, std::wstring>> metadata;
+            if (richDetails)
+            {
+                if (!richDetails->format.empty())
+                {
+                    metadata.emplace_back(L"Format", readableMetadataValue(richDetails->format));
+                }
+                if (!richDetails->source.empty())
+                {
+                    metadata.emplace_back(L"Source", readableMetadataValue(richDetails->source));
+                }
+                if (!richDetails->status.empty())
+                {
+                    metadata.emplace_back(L"Status", readableMetadataValue(richDetails->status));
+                }
+
+                std::wstring season;
+                if (!richDetails->season.empty())
+                {
+                    season = readableMetadataValue(richDetails->season);
+                }
+                if (richDetails->seasonYear > 0)
+                {
+                    if (!season.empty()) season += L" ";
+                    season += std::to_wstring(richDetails->seasonYear);
+                }
+                if (!season.empty())
+                {
+                    metadata.emplace_back(L"Season", std::move(season));
+                }
+                if (!richDetails->studios.empty())
+                {
+                    metadata.emplace_back(L"Studio", richDetails->studios.front());
+                }
+                if (!richDetails->genres.empty())
+                {
+                    std::wstring genres;
+                    for (size_t i = 0; i < std::min<size_t>(4, richDetails->genres.size()); ++i)
+                    {
+                        if (i > 0) genres += L", ";
+                        genres += richDetails->genres[i];
+                    }
+                    metadata.emplace_back(L"Genres", std::move(genres));
+                }
+            }
+            else if (savedEntry)
+            {
+                if (!savedEntry->format.empty())
+                {
+                    metadata.emplace_back(L"Format", readableMetadataValue(savedEntry->format));
+                }
+                if (!savedEntry->airingStatus.empty())
+                {
+                    metadata.emplace_back(L"Status", readableMetadataValue(savedEntry->airingStatus));
+                }
+                if (!savedEntry->lastRefreshed.empty())
+                {
+                    metadata.emplace_back(L"Updated", FriendlyRefreshedLabel(savedEntry->lastRefreshed));
+                }
+            }
+
+            auto paintMetadataIcon = [&](const std::wstring& label, const RECT& bounds)
+            {
+                if (label == L"Season")
+                {
+                    paintCalendarIcon(bounds, kTextSecondary);
+                    return;
+                }
+
+                Gdiplus::Graphics graphics(hdc);
+                graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+                Gdiplus::Pen pen(
+                    AlphaColor(kTextSecondary, 255),
+                    static_cast<Gdiplus::REAL>(std::max(1, Dips(1))));
+                const Gdiplus::REAL left = static_cast<Gdiplus::REAL>(bounds.left + Dips(2));
+                const Gdiplus::REAL top = static_cast<Gdiplus::REAL>(bounds.top + Dips(2));
+                const Gdiplus::REAL right = static_cast<Gdiplus::REAL>(bounds.right - Dips(2));
+                const Gdiplus::REAL bottom = static_cast<Gdiplus::REAL>(bounds.bottom - Dips(2));
+                const Gdiplus::REAL width = std::max<Gdiplus::REAL>(1.0f, right - left);
+                const Gdiplus::REAL height = std::max<Gdiplus::REAL>(1.0f, bottom - top);
+                const Gdiplus::REAL centerX = left + width / 2.0f;
+                const Gdiplus::REAL centerY = top + height / 2.0f;
+
+                if (label == L"Format")
+                {
+                    graphics.DrawRectangle(&pen, left, top + height * 0.14f, width, height * 0.72f);
+                    graphics.DrawLine(&pen, left + width * 0.28f, bottom, left + width * 0.72f, bottom);
+                }
+                else if (label == L"Source")
+                {
+                    graphics.DrawEllipse(&pen, left, top, width, height);
+                    graphics.DrawLine(&pen, left + width * 0.28f, centerY, right - width * 0.28f, centerY);
+                }
+                else if (label == L"Status" || label == L"Updated")
+                {
+                    graphics.DrawEllipse(&pen, left, top, width, height);
+                    graphics.DrawLine(&pen, centerX, centerY, centerX, top + height * 0.24f);
+                    graphics.DrawLine(&pen, centerX, centerY, right - width * 0.22f, centerY);
+                }
+                else if (label == L"Studio")
+                {
+                    graphics.DrawLine(&pen, centerX, top, left, top + height * 0.34f);
+                    graphics.DrawLine(&pen, left, top + height * 0.34f, right, top + height * 0.34f);
+                    graphics.DrawLine(&pen, right, top + height * 0.34f, centerX, top);
+                    graphics.DrawRectangle(&pen, left + width * 0.12f, top + height * 0.34f, width * 0.76f, height * 0.56f);
+                }
+                else
+                {
+                    Gdiplus::GraphicsPath tag;
+                    tag.StartFigure();
+                    tag.AddLine(left, top + height * 0.18f, right - width * 0.30f, top + height * 0.18f);
+                    tag.AddLine(right - width * 0.30f, top + height * 0.18f, right, centerY);
+                    tag.AddLine(right, centerY, right - width * 0.30f, bottom - height * 0.18f);
+                    tag.AddLine(right - width * 0.30f, bottom - height * 0.18f, left, bottom - height * 0.18f);
+                    tag.CloseFigure();
+                    graphics.DrawPath(&pen, &tag);
+                }
+            };
+
+            int lineTop = metadataRect.top;
+            const int valueOffset = Dips(118);
+            for (const auto& [label, value] : metadata)
+            {
+                const int valueWidth = std::max(
+                    1,
+                    static_cast<int>(metadataRect.right - metadataRect.left) - valueOffset);
+                const bool wraps = label == L"Genres" &&
+                    MeasureTextWidth(hdc, value.c_str(), animeBodyFont_) > valueWidth;
+                const int lineHeight = wraps ? Dips(48) : Dips(30);
+                RECT lineRect {
+                    metadataRect.left,
+                    lineTop,
+                    metadataRect.right,
+                    lineTop + lineHeight
+                };
+                RECT iconRect {
+                    lineRect.left,
+                    lineRect.top + Dips(7),
+                    lineRect.left + Dips(18),
+                    lineRect.top + Dips(25)
+                };
+                paintMetadataIcon(label, iconRect);
+                RECT labelRect {
+                    iconRect.right + Dips(8),
+                    lineRect.top,
+                    std::min(lineRect.right, lineRect.left + valueOffset - Dips(10)),
+                    wraps ? lineRect.top + Dips(30) : lineRect.bottom
+                };
+                RECT valueRect = lineRect;
+                valueRect.left = std::min(lineRect.right, lineRect.left + valueOffset);
+                DrawTextLine(
+                    hdc,
+                    label.c_str(),
+                    labelRect,
+                    bodyFont_,
+                    kTextSecondary,
+                    DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                DrawTextLine(
+                    hdc,
+                    value.c_str(),
+                    valueRect,
+                    animeBodyFont_,
+                    kTextPrimary,
+                    wraps
+                        ? DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS
+                        : DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                lineTop += wraps ? Dips(50) : Dips(34);
+            }
+        }
+        else if (animeDetailTab_ == AnimeDetailTab::Episodes)
+        {
+            RECT sectionTitle {
+                detailContent.left,
+                detailContent.top,
+                detailContent.right,
+                detailContent.top + Dips(34)
+            };
+            DrawTextLine(
+                hdc,
+                L"Episodes",
+                sectionTitle,
+                navFont_,
+                kTextPrimary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+            if (totalEpisodes <= 0)
+            {
+                RECT empty = detailContent;
+                empty.top = sectionTitle.bottom + Dips(12);
+                empty.bottom = std::min(
+                    static_cast<int>(detailContent.bottom),
+                    static_cast<int>(empty.top) + Dips(104));
+                paintEmptyState(
+                    empty,
+                    L"Episode count unavailable",
+                    L"AniList has not published a total episode count for this title.",
+                    false);
+            }
+            else
+            {
+                const int gridWidth = std::max(
+                    1,
+                    static_cast<int>(animeSequelsRect_.right - animeSequelsRect_.left));
+                const int columns = std::max(4, gridWidth / Dips(62));
+                const int rows = (totalEpisodes + columns - 1) / columns;
+                const int rowStride = Dips(44);
+                const int gridTop = animeSequelsRect_.top + Dips(54);
+                const int firstVisibleRow = std::clamp(
+                    (std::max(static_cast<int>(contentRect_.top), gridTop) - gridTop) / rowStride - 1,
+                    0,
+                    rows - 1);
+                const int lastVisibleRow = std::clamp(
+                    (static_cast<int>(contentRect_.bottom) - gridTop) / rowStride + 1,
+                    0,
+                    rows - 1);
+                const int firstEpisode = firstVisibleRow * columns + 1;
+                const int lastEpisode =
+                    std::min(totalEpisodes, (lastVisibleRow + 1) * columns);
+                for (int episode = firstEpisode; episode <= lastEpisode; ++episode)
+                {
+                    const RECT episodeRect = AnimeEpisodeRect(static_cast<size_t>(episode));
+                    const bool watched = episode <= watchedEpisodes;
+                    FillOpaqueRoundRect(
+                        hdc,
+                        episodeRect,
+                        Dips(7),
+                        watched ? BlendColor(kInputBackground, kAccent, 24) : kInputBackground);
+                    StrokeRoundRect(
+                        hdc,
+                        episodeRect,
+                        Dips(7),
+                        watched ? BlendColor(kBorder, kAccent, 62) : kBorder);
+                    DrawTextLine(
+                        hdc,
+                        std::to_wstring(episode).c_str(),
+                        episodeRect,
+                        bodyFont_,
+                        watched ? kTextPrimary : kTextSecondary,
+                        DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+                }
+            }
+        }
+        else if (animeDetailTab_ == AnimeDetailTab::Sequels)
+        {
+            RECT sectionTitle {
+                detailContent.left,
+                detailContent.top,
+                detailContent.right,
+                detailContent.top + Dips(34)
+            };
+            DrawTextLine(
+                hdc,
+                L"Seasons & sequels",
+                sectionTitle,
+                navFont_,
+                kTextPrimary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+            const std::vector<AnimeRelation> relations = VisibleUpcomingSequels();
+            if (relations.empty())
+            {
+                RECT empty = detailContent;
+                empty.top = sectionTitle.bottom + Dips(12);
+                empty.bottom = std::min(
+                    static_cast<int>(detailContent.bottom),
+                    static_cast<int>(empty.top) + Dips(104));
+                paintEmptyState(
+                    empty,
+                    L"No related seasons or sequels",
+                    L"We'll show related entries here when AniList provides them.",
+                    false);
+            }
+            else
+            {
+                for (size_t index = 0; index < relations.size(); ++index)
+                {
+                    const AnimeRelation& relation = relations[index];
+                    RECT row {
+                        detailContent.left,
+                        detailContent.top + Dips(44) + static_cast<int>(index) * Dips(76),
+                        detailContent.right,
+                        detailContent.top + Dips(112) + static_cast<int>(index) * Dips(76)
+                    };
+                    FillOpaqueRoundRect(hdc, row, Dips(8), rowColor);
+                    StrokeRoundRect(hdc, row, Dips(8), kBorder);
+                    RECT coverRect {
+                        row.left + Dips(8),
+                        row.top + Dips(7),
+                        row.left + Dips(48),
+                        row.bottom - Dips(7)
+                    };
+                    paintCover(relation.coverImageUrl, coverRect, Dips(5));
+                    RECT addRect = AnimeSequelActionRect(index, 0);
+                    RECT openRect = AnimeSequelActionRect(index, 1);
+                    RECT relationTitle {
+                        coverRect.right + Dips(10),
+                        row.top + Dips(7),
+                        addRect.left - Dips(10),
+                        row.top + Dips(34)
+                    };
+                    DrawTextLine(
+                        hdc,
+                        relation.title.c_str(),
+                        relationTitle,
+                        navFont_,
+                        kTextPrimary,
+                        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                    RECT relationMeta = relationTitle;
+                    relationMeta.top = relationTitle.bottom;
+                    relationMeta.bottom = row.bottom - Dips(6);
+                    std::wstring meta = relation.format;
+                    if (relation.seasonYear > 0)
+                    {
+                        if (!meta.empty()) meta += L" / ";
+                        meta += std::to_wstring(relation.seasonYear);
+                    }
+                    DrawTextLine(
+                        hdc,
+                        meta.c_str(),
+                        relationMeta,
+                        bodyFont_,
+                        kTextSecondary,
+                        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                    PaintButton(
+                        hdc,
+                        addRect,
+                        AnimeTrackerService::ContainsAnime(animeWatchList_, relation.anilistId)
+                            ? L"Added"
+                            : L"Add",
+                        false,
+                        false,
+                        !AnimeTrackerService::ContainsAnime(animeWatchList_, relation.anilistId));
+                    PaintButton(hdc, openRect, L"AniList", false, false, !relation.siteUrl.empty());
+                }
+            }
+        }
+        else
+        {
+            RECT notesTitle {
+                detailContent.left,
+                detailContent.top,
+                detailContent.right,
+                detailContent.top + Dips(32)
+            };
+            DrawTextLine(
+                hdc,
+                L"Notes",
+                notesTitle,
+                navFont_,
+                kTextPrimary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+            RECT notesStatus = notesTitle;
+            const std::wstring status = animeNotesStatusText_.empty()
+                ? L"Autosaves after you stop typing."
+                : animeNotesStatusText_;
+            DrawTextLine(
+                hdc,
+                status.c_str(),
+                notesStatus,
+                bodyFont_,
+                kTextSecondary,
+                DT_RIGHT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            FillOpaqueRoundRect(hdc, animeNotesEditRect_, Dips(9), kInputBackground);
+            StrokeRoundRect(hdc, animeNotesEditRect_, Dips(9), EditBorderColor(animeNotesEdit_));
+        }
+    }
+
+    const std::wstring normalizedSearch = NormalizeAnimeSearchQuery(AnimeSearchText());
+    if (animeSearchDropdownOpen_ && normalizedSearch.size() >= 2)
+    {
+        FillOpaqueRoundRect(hdc, animeSearchDropdownRect_, Dips(11), kDropdownBackground);
+        StrokeRoundRect(hdc, animeSearchDropdownRect_, Dips(11), kBorder);
+
+        if (animeSearching_ && animeSearchResults_.empty())
+        {
+            DrawTextLine(
+                hdc,
+                L"Searching AniList...",
+                animeSearchDropdownRect_,
+                bodyFont_,
+                kTextSecondary,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        }
+        else if (animeSearchHasRun_ && animeSearchResults_.empty())
+        {
+            DrawTextLine(
+                hdc,
+                animeStatusMessage_.c_str(),
+                animeSearchDropdownRect_,
+                bodyFont_,
+                kTextSecondary,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        }
+        else
+        {
+            const size_t resultCount = std::min<size_t>(7, animeSearchResults_.size());
+            for (size_t index = 0; index < resultCount; ++index)
+            {
+                const AnimeSearchResult& result = animeSearchResults_[index];
+                const RECT row = AnimeSearchResultCardRect(index);
+                const bool hovered =
+                    hoverAnimeSearchResultIndex_ == static_cast<int>(index) ||
+                    animeSearchKeyboardIndex_ == static_cast<int>(index);
+                if (hovered)
+                {
+                    FillOpaqueRoundRect(hdc, row, Dips(8), kDropdownHover);
+                }
+
+                RECT cover {
+                    row.left + Dips(8),
+                    row.top + Dips(5),
+                    row.left + Dips(50),
+                    row.bottom - Dips(5)
+                };
+                paintCover(result.coverImageUrl, cover, Dips(5));
+
+                const AnimeEntry* existing = nullptr;
+                for (const AnimeEntry& entry : animeWatchList_.anime)
+                {
+                    if (entry.anilistId == result.anilistId)
+                    {
+                        existing = &entry;
+                        break;
+                    }
+                }
+                const RECT addRect = AnimeSearchResultAddRect(index);
+                RECT name {
+                    cover.right + Dips(10),
+                    row.top + Dips(7),
+                    addRect.left - Dips(10),
+                    row.top + Dips(36)
+                };
+                DrawTextLine(
+                    hdc,
+                    result.title.c_str(),
+                    name,
+                    navFont_,
+                    kTextPrimary,
+                    DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+                RECT meta = name;
+                meta.top = name.bottom;
+                meta.bottom = row.bottom - Dips(5);
+                std::wstring metaText = result.format;
+                if (result.seasonYear > 0)
+                {
+                    if (!metaText.empty()) metaText += L" / ";
+                    metaText += std::to_wstring(result.seasonYear);
+                }
+                DrawTextLine(
+                    hdc,
+                    metaText.c_str(),
+                    meta,
+                    bodyFont_,
+                    kTextSecondary,
+                    DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+                if (existing)
+                {
+                    paintChip(
+                        addRect,
+                        AnimeTrackerService::UserStatusLabel(existing->userStatus),
+                        statusColor(existing->userStatus));
+                }
+                else
+                {
+                    PaintButton(hdc, addRect, L"+ Add", false);
+                }
+            }
+        }
+    }
+
+    // Keep every edge inside the repaint region so the native edit cannot erase it.
+    const RECT animeSearchOutlineRect = ShrinkRect(animeSearchEditRect_, Dips(1), Dips(1));
+    StrokeRoundRect(hdc, animeSearchOutlineRect, Dips(10), EditBorderColor(animeSearchEdit_));
+
+    if (animeImportPanelOpen_)
+    {
+        FillOpaqueRoundRect(hdc, animeImportPanelRect_, Dips(12), kDropdownBackground);
+        StrokeRoundRect(hdc, animeImportPanelRect_, Dips(12), kBorder);
+        RECT importTitle {
+            animeImportPanelRect_.left + Dips(18),
+            animeImportPanelRect_.top + Dips(12),
+            animeImportPanelRect_.right - Dips(18),
+            animeImportPanelRect_.top + Dips(42)
+        };
+        DrawTextLine(
+            hdc,
+            L"Import a public anime list",
+            importTitle,
+            navFont_,
+            kTextPrimary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        FillOpaqueRoundRect(hdc, animeImportEditRect_, Dips(9), kInputBackground);
+        StrokeRoundRect(hdc, animeImportEditRect_, Dips(9), EditBorderColor(animeImportEdit_));
+        PaintButton(
+            hdc,
+            animeImportSubmitButtonRect_,
+            animeImporting_ ? L"Importing" : L"Import",
+            true,
+            animeImporting_,
+            !animeImporting_ && !animeRefreshing_);
+        PaintButton(hdc, animeImportCancelButtonRect_, L"Cancel", false);
+        RECT importHint {
+            animeImportPanelRect_.left + Dips(18),
+            animeImportPanelRect_.top + Dips(104),
+            animeImportCancelButtonRect_.left - Dips(12),
+            animeImportPanelRect_.bottom - Dips(12)
+        };
+        DrawTextLine(
+            hdc,
+            L"AniList or MyAnimeList username/profile URL",
+            importHint,
+            bodyFont_,
+            kTextSecondary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    }
+}
+
 void ToolkitApp::PaintAnimeImportChoiceOverlay(HDC hdc)
 {
     if (!animeImportSourceChoiceOpen_)
@@ -13349,6 +15650,59 @@ void ToolkitApp::PaintReminders(HDC hdc)
     }
     PaintDropdownButton(hdc, reminderFilterButtonRect_, ReminderFilterLabel().c_str(), true);
     PaintDropdownButton(hdc, reminderSortButtonRect_, ReminderSortLabel().c_str(), true);
+    const bool nativeReminderEditsHidden =
+        liveResize_ || smoothScrollActive_ || scrollBarDragging_;
+    if (nativeReminderEditsHidden)
+    {
+        PaintHiddenEditText(
+            hdc,
+            reminderTitleEdit_,
+            ReminderEditWindowRect(reminderTitleEdit_, reminderTitleEditRect_),
+            searchInputFont_,
+            kTextPrimary);
+        PaintHiddenEditText(
+            hdc,
+            reminderDateEdit_,
+            ReminderEditWindowRect(reminderDateEdit_, reminderDateEditRect_),
+            searchInputFont_,
+            kTextPrimary,
+            false,
+            L"YYYY/MM/DD");
+        PaintHiddenEditText(
+            hdc,
+            reminderTimeEdit_,
+            ReminderEditWindowRect(reminderTimeEdit_, reminderTimeEditRect_),
+            searchInputFont_,
+            kTextPrimary,
+            false,
+            L"9:00");
+        if (reminderMoreOptionsOpen_)
+        {
+            PaintHiddenEditText(
+                hdc,
+                reminderCategoryEdit_,
+                ReminderEditWindowRect(reminderCategoryEdit_, reminderCategoryEditRect_),
+                searchInputFont_,
+                kTextPrimary,
+                false,
+                L"Category");
+            PaintHiddenEditText(
+                hdc,
+                reminderNotesEdit_,
+                ReminderEditWindowRect(reminderNotesEdit_, reminderNotesEditRect_, true),
+                monospaceFont_,
+                kTextPrimary,
+                true,
+                L"Optional notes");
+        }
+        PaintHiddenEditText(
+            hdc,
+            reminderSearchEdit_,
+            ReminderEditWindowRect(reminderSearchEdit_, reminderSearchEditRect_),
+            searchInputFont_,
+            kTextPrimary);
+    }
+
 
     if (visibleReminders.empty())
     {
@@ -16824,6 +19178,10 @@ void ToolkitApp::OpenDropdown(
     {
         minimumDropdownWidth = Dips(180);
     }
+    else if (kind == DropdownKind::AnimeManagement)
+    {
+        minimumDropdownWidth = Dips(220);
+    }
     else if (kind == DropdownKind::MacroMouseMode ||
         kind == DropdownKind::MacroPlaybackSpeed ||
         kind == DropdownKind::MacroLoopMode)
@@ -17018,57 +19376,8 @@ void ToolkitApp::PaintDropdown(HDC hdc)
         return;
     }
 
-    Gdiplus::Graphics menuGraphics(hdc);
-    menuGraphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    menuGraphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
-
-    RECT outerShadowRect = dropdownRect_;
-    InflateRect(&outerShadowRect, Dips(5), Dips(4));
-    OffsetRect(&outerShadowRect, 0, Dips(5));
-    Gdiplus::GraphicsPath outerShadowPath;
-    BuildRoundedPath(outerShadowPath, outerShadowRect, Dips(15));
-    Gdiplus::SolidBrush outerShadowBrush(Gdiplus::Color(18, 0, 0, 0));
-    menuGraphics.FillPath(&outerShadowBrush, &outerShadowPath);
-
-    RECT innerShadowRect = dropdownRect_;
-    InflateRect(&innerShadowRect, Dips(2), Dips(2));
-    OffsetRect(&innerShadowRect, 0, Dips(3));
-    Gdiplus::GraphicsPath innerShadowPath;
-    BuildRoundedPath(innerShadowPath, innerShadowRect, Dips(13));
-    Gdiplus::SolidBrush innerShadowBrush(Gdiplus::Color(42, 0, 0, 0));
-    menuGraphics.FillPath(&innerShadowBrush, &innerShadowPath);
-
-    FillUiSurfaceRoundRect(
-        hdc,
-        dropdownRect_,
-        Dips(12),
-        kDropdownBackground,
-        UiSurfaceRole::None);
-    StrokeRoundRect(hdc, dropdownRect_, Dips(12), BlendColor(kBorder, kAccent, 18));
-
-    auto paintCheckmark = [&](const RECT& bounds, COLORREF color)
-    {
-        Gdiplus::Graphics checkGraphics(hdc);
-        checkGraphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        checkGraphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
-        Gdiplus::Pen checkPen(
-            Gdiplus::Color(255, GetRValue(color), GetGValue(color), GetBValue(color)),
-            static_cast<Gdiplus::REAL>(std::max(1, Dips(2))));
-        checkPen.SetStartCap(Gdiplus::LineCapRound);
-        checkPen.SetEndCap(Gdiplus::LineCapRound);
-        checkPen.SetLineJoin(Gdiplus::LineJoinRound);
-
-        const Gdiplus::REAL left = static_cast<Gdiplus::REAL>(bounds.left);
-        const Gdiplus::REAL top = static_cast<Gdiplus::REAL>(bounds.top);
-        const Gdiplus::REAL width = static_cast<Gdiplus::REAL>(bounds.right - bounds.left);
-        const Gdiplus::REAL height = static_cast<Gdiplus::REAL>(bounds.bottom - bounds.top);
-        Gdiplus::PointF points[3] {
-            { left + width * 0.22f, top + height * 0.52f },
-            { left + width * 0.43f, top + height * 0.73f },
-            { left + width * 0.80f, top + height * 0.29f }
-        };
-        checkGraphics.DrawLines(&checkPen, points, static_cast<INT>(std::size(points)));
-    };
+    const rex::ui::Palette& palette = ComponentPalette();
+    rex::ui::PaintDropdownMenuBackground(hdc, dropdownRect_, dpi_, palette);
 
     const int itemStride = Dips(kDropdownItemStrideDip);
     const int itemHeight = Dips(kDropdownItemHeightDip);
@@ -17085,108 +19394,34 @@ void ToolkitApp::PaintDropdown(HDC hdc)
         const bool enabled = index >= dropdownEnabled_.size() || dropdownEnabled_[index];
         const int itemValue = index < dropdownValues_.size() ? dropdownValues_[index] : 0;
         const bool selected = activeDropdown_ == DropdownKind::ReminderAlert
-            ? std::find(reminderFormAlertMinutesList_.begin(), reminderFormAlertMinutesList_.end(), itemValue) != reminderFormAlertMinutesList_.end()
+            ? std::find(
+                reminderFormAlertMinutesList_.begin(),
+                reminderFormAlertMinutesList_.end(),
+                itemValue) != reminderFormAlertMinutesList_.end()
             : itemValue == dropdownSelectedValue_;
-        const bool hovered = enabled && hoverDropdownIndex_ == static_cast<int>(index);
 
-        if (selected || hovered)
+        rex::ui::DropdownItemOptions options;
+        options.enabled = enabled;
+        options.selected = selected;
+        options.hovered = enabled && hoverDropdownIndex_ == static_cast<int>(index);
+        options.selectionStyle = activeDropdown_ == DropdownKind::ReminderAlert
+            ? rex::ui::DropdownSelectionStyle::Checkbox
+            : rex::ui::DropdownSelectionStyle::Checkmark;
+        if (activeDropdown_ == DropdownKind::MacroPlaybackBackend &&
+            itemValue == static_cast<int>(MacroPlaybackBackend::Interception))
         {
-            const COLORREF itemBackground = selected && hovered
-                ? BlendColor(kDropdownSelected, kAccent, 16)
-                : selected
-                ? kDropdownSelected
-                : kDropdownHover;
-            FillRoundRect(hdc, itemRect, Dips(8), itemBackground);
-            StrokeRoundRect(
-                hdc,
-                itemRect,
-                Dips(8),
-                selected
-                    ? BlendColor(kBorder, kAccent, 38)
-                    : BlendColor(kBorder, kAccent, 20));
+            options.badge = L"Recommended";
         }
 
-        RECT checkRect {
-            itemRect.left + Dips(9),
-            itemRect.top,
-            itemRect.left + Dips(31),
-            itemRect.bottom
-        };
-        if (activeDropdown_ == DropdownKind::ReminderAlert)
-        {
-            RECT box {
-                checkRect.left + Dips(4),
-                checkRect.top + ((checkRect.bottom - checkRect.top) - Dips(16)) / 2,
-                checkRect.left + Dips(20),
-                checkRect.top + ((checkRect.bottom - checkRect.top) + Dips(16)) / 2
-            };
-            FillRoundRect(hdc, box, Dips(4), selected ? kAccent : kInputBackground);
-            StrokeRoundRect(hdc, box, Dips(4), selected ? kAccent : kBorder);
-            if (selected)
-            {
-                paintCheckmark(box, RGB(255, 255, 255));
-            }
-        }
-        else if (selected)
-        {
-            const int markerSize = Dips(19);
-            const int markerTop = checkRect.top + ((checkRect.bottom - checkRect.top) - markerSize) / 2;
-            RECT markerRect {
-                checkRect.left + Dips(1),
-                markerTop,
-                checkRect.left + Dips(1) + markerSize,
-                markerTop + markerSize
-            };
-            Gdiplus::Graphics indicatorGraphics(hdc);
-            indicatorGraphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-            Gdiplus::SolidBrush indicatorBrush(AlphaColor(kAccent, 34));
-            indicatorGraphics.FillEllipse(
-                &indicatorBrush,
-                static_cast<INT>(markerRect.left),
-                static_cast<INT>(markerRect.top),
-                static_cast<INT>(markerRect.right - markerRect.left),
-                static_cast<INT>(markerRect.bottom - markerRect.top));
-            paintCheckmark(markerRect, kAccent);
-        }
-
-        RECT textRect = itemRect;
-        textRect.left += Dips(38);
-        textRect.right -= Dips(13);
-        RECT recommendedBadge {};
-        const bool showBackendRecommendedBadge =
-            activeDropdown_ == DropdownKind::MacroPlaybackBackend &&
-            itemValue == static_cast<int>(MacroPlaybackBackend::Interception);
-        if (showBackendRecommendedBadge)
-        {
-            recommendedBadge = {
-                itemRect.right - Dips(126),
-                itemRect.top + Dips(6),
-                itemRect.right - Dips(10),
-                itemRect.bottom - Dips(6)
-            };
-            textRect.right = recommendedBadge.left - Dips(10);
-        }
-        DrawTextLine(
+        rex::ui::PaintDropdownItem(
             hdc,
-            dropdownLabels_[index].c_str(),
-            textRect,
+            itemRect,
+            dropdownLabels_[index],
             navFont_,
-            enabled ? (selected || hovered ? kTextPrimary : kTextSecondary) : kDisabledText,
-            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
-
-        if (showBackendRecommendedBadge)
-        {
-            FillRoundRect(hdc, recommendedBadge, Dips(10), enabled ? kAccentSoft : kDisabledBackground);
-            StrokeRoundRect(hdc, recommendedBadge, Dips(10), enabled ? kAccent : kBorder);
-            DrawTextLine(
-                hdc,
-                L"Recommended",
-                recommendedBadge,
-                bodyFont_,
-                enabled ? kTextPrimary : kDisabledText,
-                DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
-        }
-
+            bodyFont_,
+            dpi_,
+            palette,
+            options);
         itemTop += itemStride;
     }
 }
@@ -17407,10 +19642,60 @@ bool ToolkitApp::HandleDropdownClick(POINT point)
         {
             animeFilter_ = static_cast<AnimeUserStatus>(value - 1);
         }
-        selectedAnimeIndex_ = -1;
+        const std::vector<size_t> visible = VisibleAnimeEntryIndexes();
+        selectedAnimeIndex_ = visible.empty() ? -1 : static_cast<int>(visible.front());
+        selectedAnimeSearchIndex_ = -1;
+        animeDetailTab_ = AnimeDetailTab::Overview;
         SetWindowTextW(animeNotesEdit_, L"");
+        RecalculateLayout();
         UpdateAnimeTrackerControls();
         InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+
+    if (kind == DropdownKind::AnimeManagement)
+    {
+        if (value == 1 &&
+            selectedAnimeIndex_ >= 0 &&
+            selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()) &&
+            !animeRefreshing_ &&
+            !animeImporting_)
+        {
+            RefreshAnimeEntry(static_cast<size_t>(selectedAnimeIndex_));
+            return true;
+        }
+
+        if (value == 2)
+        {
+            std::wstring siteUrl;
+            if (selectedAnimeSearchIndex_ >= 0 &&
+                selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size()))
+            {
+                siteUrl = animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)].siteUrl;
+            }
+            else if (selectedAnimeIndex_ >= 0 &&
+                selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()))
+            {
+                siteUrl = animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)].siteUrl;
+            }
+            if (!siteUrl.empty())
+            {
+                ShellExecuteW(hwnd_, L"open", siteUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            }
+            return true;
+        }
+
+        if (value == 3 &&
+            selectedAnimeIndex_ >= 0 &&
+            selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()) &&
+            !animeRefreshing_ &&
+            !animeImporting_)
+        {
+            RemoveAnimeEntry(static_cast<size_t>(selectedAnimeIndex_));
+            RecalculateLayout();
+            UpdateAnimeTrackerControls();
+            return true;
+        }
         return true;
     }
 
@@ -17988,70 +20273,120 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
     {
         std::vector<RECT> candidates {
             animeSearchTabRect_,
-            animeListTabRect_,
+            animeAiringTabRect_,
+            animeFavoritesTabRect_,
+            animeImportButtonRect_,
+            animeFilterButtonRect_,
+            animeRefreshAllButtonRect_
         };
 
-        if (animeTrackerTab_ == AnimeTrackerTab::Search)
+        if (animeImportPanelOpen_)
         {
-            const bool showingSearchDetails =
-                selectedAnimeSearchIndex_ >= 0 &&
-                selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size());
-            if (showingSearchDetails)
-            {
-                candidates.push_back(animeSearchDetailBackButtonRect_);
-                candidates.push_back(animeSearchDetailAddButtonRect_);
-                candidates.push_back(animeSearchDetailReminderButtonRect_);
-                candidates.push_back(animeSearchDetailOpenButtonRect_);
-            }
-            else
-            {
-                candidates.push_back(animeSearchButtonRect_);
-            }
+            candidates.insert(
+                candidates.begin(),
+                { animeImportSubmitButtonRect_, animeImportCancelButtonRect_ });
+        }
 
-            if (!showingSearchDetails && animeCanLoadMore_ && animeSearchHasRun_ && !animeSearchResults_.empty())
+        if (animeSearchDropdownOpen_)
+        {
+            const size_t resultCount = std::min<size_t>(7, animeSearchResults_.size());
+            for (size_t index = 0; index < resultCount; ++index)
             {
-                candidates.push_back(animeLoadMoreButtonRect_);
-            }
-
-            if (!showingSearchDetails)
-            {
-                const int resultRows = static_cast<int>(animeSearchResults_.size());
-                for (int index = 0; index < resultRows; ++index)
+                const AnimeSearchResult& result = animeSearchResults_[index];
+                candidates.insert(candidates.begin(), AnimeSearchResultCardRect(index));
+                if (!AnimeTrackerService::ContainsAnime(animeWatchList_, result.anilistId))
                 {
-                    candidates.push_back(AnimeSearchResultAddRect(static_cast<size_t>(index)));
+                    candidates.insert(candidates.begin(), AnimeSearchResultAddRect(index));
                 }
             }
         }
-        else
+
+        const std::vector<size_t> visibleEntries = VisibleAnimeEntryIndexes();
+        for (size_t visibleIndex = 0; visibleIndex < visibleEntries.size(); ++visibleIndex)
         {
-            candidates.push_back(animeFilterButtonRect_);
-            candidates.push_back(animeRefreshAllButtonRect_);
-            candidates.push_back(animeImportButtonRect_);
-            if (selectedAnimeIndex_ >= 0 && selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()))
+            candidates.push_back(AnimeListRowRect(visibleIndex));
+        }
+
+        const bool showingSearchDetails =
+            selectedAnimeSearchIndex_ >= 0 &&
+            selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size());
+        const bool hasSavedSelection =
+            selectedAnimeIndex_ >= 0 &&
+            selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size());
+
+        if (showingSearchDetails || hasSavedSelection)
+        {
+            for (size_t index = 0; index < animeDetailTabRects_.size(); ++index)
             {
+                if (!showingSearchDetails || index != static_cast<size_t>(AnimeDetailTab::Notes))
+                {
+                    candidates.push_back(animeDetailTabRects_[index]);
+                }
+            }
+
+            const std::wstring siteUrl = showingSearchDetails
+                ? animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)].siteUrl
+                : animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)].siteUrl;
+            if (!showingSearchDetails || !siteUrl.empty())
+            {
+                candidates.push_back(animeSearchDetailOpenButtonRect_);
+            }
+
+            if (showingSearchDetails)
+            {
+                const AnimeSearchResult& result =
+                    animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)];
+                if (!AnimeTrackerService::ContainsAnime(animeWatchList_, result.anilistId))
+                {
+                    candidates.push_back(animeSearchDetailAddButtonRect_);
+                }
+                if (result.nextAiringEpisode.hasValue &&
+                    result.nextAiringEpisode.airingAt > CurrentEpochSeconds() &&
+                    !HasAnimeAiringReminder(result.title, result.nextAiringEpisode))
+                {
+                    candidates.push_back(animeSearchDetailReminderButtonRect_);
+                }
+            }
+            else
+            {
+                const AnimeEntry& entry =
+                    animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)];
                 candidates.push_back(animeStatusButtonRect_);
                 candidates.push_back(animeEpisodeMinusButtonRect_);
                 candidates.push_back(animeEpisodePlusButtonRect_);
                 candidates.push_back(animeFavoriteButtonRect_);
-                candidates.push_back(animeReminderButtonRect_);
-            }
-
-            const std::vector<size_t> visibleEntries = VisibleAnimeEntryIndexes();
-            const int listRows = static_cast<int>(visibleEntries.size());
-            for (int visibleIndex = 0; visibleIndex < listRows; ++visibleIndex)
-            {
-                for (int action = 0; action < 3; ++action)
+                if (entry.nextAiringEpisode.hasValue &&
+                    entry.nextAiringEpisode.airingAt > CurrentEpochSeconds() &&
+                    !HasAnimeAiringReminder(entry.title, entry.nextAiringEpisode))
                 {
-                    candidates.push_back(AnimeListActionRect(static_cast<size_t>(visibleIndex), action));
+                    candidates.push_back(animeReminderButtonRect_);
+                }
+                if (animeDetailTab_ == AnimeDetailTab::Episodes &&
+                    entry.totalEpisodes > 0)
+                {
+                    const std::optional<int> episode =
+                        AnimeEpisodeAtPoint(point, entry.totalEpisodes);
+                    if (episode)
+                    {
+                        candidates.push_back(AnimeEpisodeRect(static_cast<size_t>(*episode)));
+                    }
                 }
             }
+        }
 
+        if (animeDetailTab_ == AnimeDetailTab::Sequels)
+        {
             const std::vector<AnimeRelation> sequels = VisibleUpcomingSequels();
-            const int sequelRows = std::min<int>(static_cast<int>(sequels.size()), 3);
-            for (int index = 0; index < sequelRows; ++index)
+            for (size_t index = 0; index < sequels.size(); ++index)
             {
-                candidates.push_back(AnimeSequelActionRect(static_cast<size_t>(index), 0));
-                candidates.push_back(AnimeSequelActionRect(static_cast<size_t>(index), 1));
+                if (!AnimeTrackerService::ContainsAnime(animeWatchList_, sequels[index].anilistId))
+                {
+                    candidates.push_back(AnimeSequelActionRect(index, 0));
+                }
+                if (!sequels[index].siteUrl.empty())
+                {
+                    candidates.push_back(AnimeSequelActionRect(index, 1));
+                }
             }
         }
 
@@ -18230,20 +20565,6 @@ bool ToolkitApp::IsPointOverInteractiveSurface(POINT point) const
         for (size_t index = 0; index < visibleTools.size(); ++index)
         {
             if (IsPointInRect(ToolCardRect(index), point))
-            {
-                return true;
-            }
-        }
-    }
-
-    if (currentPage_ == Page::Tool &&
-        currentTool_ == ToolKind::AnimeTracker &&
-        animeTrackerTab_ == AnimeTrackerTab::Search &&
-        selectedAnimeSearchIndex_ < 0)
-    {
-        for (size_t index = 0; index < animeSearchResults_.size(); ++index)
-        {
-            if (IsPointInRect(AnimeSearchResultCardRect(index), point))
             {
                 return true;
             }
@@ -18602,7 +20923,7 @@ void ToolkitApp::PaintToolCardBase(
         starRect,
         Dips(11),
         favoriteHovered ? BlendColor(kBorder, kAccent, 55) : kBorder);
-    PaintFavoriteStar(hdc, ShrinkRect(starRect, Dips(8), Dips(8)), tool.favorite);
+    PaintFavoriteStar(hdc, ShrinkRect(starRect, Dips(8), Dips(8)), tool.favorite, kTextPrimary);
 
     const int cardWidth = card.right - card.left;
     const int iconSize = std::clamp(cardWidth / 4, Dips(70), Dips(88));
@@ -18905,7 +21226,7 @@ void ToolkitApp::PaintVideoCompressorIcon(HDC hdc, const RECT& bounds)
     graphics.DrawLines(&pen, rightArrow, static_cast<INT>(std::size(rightArrow)));
 }
 
-void ToolkitApp::PaintFavoriteStar(HDC hdc, const RECT& bounds, bool favorite)
+void ToolkitApp::PaintFavoriteStar(HDC hdc, const RECT& bounds, bool favorite, COLORREF activeColor)
 {
     constexpr double pi = 3.14159265358979323846;
     const float centerX = (static_cast<float>(bounds.left) + static_cast<float>(bounds.right)) / 2.0f;
@@ -18941,10 +21262,10 @@ void ToolkitApp::PaintFavoriteStar(HDC hdc, const RECT& bounds, bool favorite)
             static_cast<BYTE>((color >> 16) & 0xFFu));
     };
 
-    const COLORREF strokeColor = favorite ? kGold : kTextSecondary;
+    const COLORREF strokeColor = favorite ? activeColor : kTextSecondary;
     if (favorite)
     {
-        Gdiplus::SolidBrush fillBrush(gdiplusColor(kGold));
+        Gdiplus::SolidBrush fillBrush(gdiplusColor(activeColor));
         graphics.FillPath(&fillBrush, &path);
     }
 
@@ -19045,12 +21366,11 @@ void ToolkitApp::OnMouseMove(POINT point)
     int newHoverAnimeResultIndex = -1;
     if (currentPage_ == Page::Tool &&
         currentTool_ == ToolKind::AnimeTracker &&
-        animeTrackerTab_ == AnimeTrackerTab::Search &&
-        selectedAnimeSearchIndex_ < 0 &&
+        animeSearchDropdownOpen_ &&
         !animeSearchResults_.empty())
     {
-        const int resultRows = static_cast<int>(animeSearchResults_.size());
-        for (int index = 0; index < resultRows; ++index)
+        const int resultCount = std::min(7, static_cast<int>(animeSearchResults_.size()));
+        for (int index = 0; index < resultCount; ++index)
         {
             const RECT addRect = AnimeSearchResultAddRect(static_cast<size_t>(index));
             const RECT cardRect = AnimeSearchResultCardRect(static_cast<size_t>(index));
@@ -20628,182 +22948,193 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             SelectPage(Page::AllTools);
             return;
         }
+
+        if (IsPointInRect(animeImportButtonRect_, point) &&
+            !animeImporting_ &&
+            !animeRefreshing_)
+        {
+            animeImportPanelOpen_ = !animeImportPanelOpen_;
+            animeSearchDropdownOpen_ = false;
+            animeSearchKeyboardIndex_ = -1;
+            if (animeImportPanelOpen_)
+            {
+                SetFocus(animeImportEdit_);
+                SendMessageW(animeImportEdit_, EM_SETSEL, 0, -1);
+            }
+            else
+            {
+                SetFocus(hwnd_);
+            }
+            RecalculateLayout();
+            UpdateAnimeTrackerControls();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+
+        if (animeImportPanelOpen_)
+        {
+            if (IsPointInRect(animeImportSubmitButtonRect_, point) &&
+                !animeImporting_ &&
+                !animeRefreshing_)
+            {
+                StartAnimeImport();
+                return;
+            }
+            if (IsPointInRect(animeImportCancelButtonRect_, point))
+            {
+                animeImportPanelOpen_ = false;
+                SetFocus(hwnd_);
+                UpdateAnimeTrackerControls();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return;
+            }
+            if (IsPointInRect(animeImportPanelRect_, point))
+            {
+                return;
+            }
+            animeImportPanelOpen_ = false;
+            UpdateAnimeTrackerControls();
+        }
+
+        if (animeSearchDropdownOpen_)
+        {
+            const size_t resultCount = std::min<size_t>(7, animeSearchResults_.size());
+            for (size_t index = 0; index < resultCount; ++index)
+            {
+                const AnimeSearchResult& result = animeSearchResults_[index];
+                const bool alreadySaved =
+                    AnimeTrackerService::ContainsAnime(animeWatchList_, result.anilistId);
+                if (!alreadySaved &&
+                    IsPointInRect(AnimeSearchResultAddRect(index), point))
+                {
+                    AddAnimeFromSearch(index);
+                    return;
+                }
+                if (IsPointInRect(AnimeSearchResultCardRect(index), point))
+                {
+                    OpenAnimeSearchResult(index);
+                    return;
+                }
+            }
+        }
+
+        auto selectTrackerView = [&](AnimeTrackerTab tab)
+        {
+            animeTrackerTab_ = tab;
+            selectedAnimeSearchIndex_ = -1;
+            animeSearchDropdownOpen_ = false;
+            animeSearchKeyboardIndex_ = -1;
+            hoverAnimeSearchResultIndex_ = -1;
+            CloseDropdown();
+            const std::vector<size_t> visible = VisibleAnimeEntryIndexes();
+            int nextSelection = selectedAnimeIndex_;
+            if (nextSelection < 0 ||
+                std::find(visible.begin(), visible.end(), static_cast<size_t>(nextSelection)) ==
+                    visible.end())
+            {
+                nextSelection = visible.empty() ? -1 : static_cast<int>(visible.front());
+            }
+            SelectAnimeEntry(nextSelection);
+        };
         if (IsPointInRect(animeSearchTabRect_, point))
         {
-            animeTrackerTab_ = AnimeTrackerTab::Search;
-            StopSmoothScroll();
-            scrollOffsetY_ = 0;
-            smoothScrollTargetOffsetY_ = 0;
-            hoverAnimeSearchResultIndex_ = -1;
-            CloseDropdown();
-            RecalculateLayout();
-            InvalidateRect(hwnd_, nullptr, FALSE);
+            selectTrackerView(AnimeTrackerTab::Watchlist);
             return;
         }
-        if (IsPointInRect(animeListTabRect_, point))
+        if (IsPointInRect(animeAiringTabRect_, point))
         {
-            animeTrackerTab_ = AnimeTrackerTab::Anime;
-            StopSmoothScroll();
-            scrollOffsetY_ = 0;
-            smoothScrollTargetOffsetY_ = 0;
-            hoverAnimeSearchResultIndex_ = -1;
-            CloseDropdown();
-            RecalculateLayout();
-            InvalidateRect(hwnd_, nullptr, FALSE);
+            selectTrackerView(AnimeTrackerTab::Airing);
             return;
         }
-
-        if (animeTrackerTab_ == AnimeTrackerTab::Search)
+        if (IsPointInRect(animeFavoritesTabRect_, point))
         {
-            const bool showingSearchDetails =
-                selectedAnimeSearchIndex_ >= 0 &&
-                selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size());
-            if (showingSearchDetails)
-            {
-                const AnimeSearchResult& selected = animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)];
-                if (IsPointInRect(animeSearchDetailBackButtonRect_, point))
-                {
-                    selectedAnimeSearchIndex_ = -1;
-                    hoverAnimeSearchResultIndex_ = -1;
-                    StopSmoothScroll();
-                    scrollOffsetY_ = 0;
-                    smoothScrollTargetOffsetY_ = 0;
-                    RecalculateLayout();
-                    scrollOffsetY_ = std::clamp(animeSearchResultsScrollOffset_, 0, std::max(0, maxScrollOffsetY_));
-                    smoothScrollTargetOffsetY_ = scrollOffsetY_;
-                    RecalculateLayout();
-                    InvalidateRect(hwnd_, nullptr, FALSE);
-                    return;
-                }
-                if (IsPointInRect(animeSearchDetailAddButtonRect_, point))
-                {
-                    AddAnimeFromSearch(static_cast<size_t>(selectedAnimeSearchIndex_));
-                    return;
-                }
-                if (IsPointInRect(animeSearchDetailReminderButtonRect_, point))
-                {
-                    AddAnimeAiringReminder(selected.title, selected.nextAiringEpisode);
-                    return;
-                }
-                if (IsPointInRect(animeSearchDetailOpenButtonRect_, point) && !selected.siteUrl.empty())
-                {
-                    ShellExecuteW(hwnd_, L"open", selected.siteUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-                    return;
-                }
-            }
-
-            if (!showingSearchDetails && IsPointInRect(animeSearchButtonRect_, point) && !animeSearching_ && !animeRefreshing_ && !animeImporting_)
-            {
-                StartAnimeSearch(false);
-                return;
-            }
-            if (!showingSearchDetails &&
-                IsPointInRect(animeLoadMoreButtonRect_, point) &&
-                animeCanLoadMore_ &&
-                !animeSearching_ &&
-                !animeRefreshing_ &&
-                !animeImporting_)
-            {
-                StartAnimeSearch(true);
-                return;
-            }
-
-            if (!showingSearchDetails)
-            {
-                const int resultRows = static_cast<int>(animeSearchResults_.size());
-                for (int index = 0; index < resultRows; ++index)
-                {
-                    if (IsPointInRect(AnimeSearchResultAddRect(static_cast<size_t>(index)), point))
-                    {
-                        AddAnimeFromSearch(static_cast<size_t>(index));
-                        return;
-                    }
-                    if (IsPointInRect(AnimeSearchResultCardRect(static_cast<size_t>(index)), point))
-                    {
-                        animeSearchResultsScrollOffset_ = scrollOffsetY_;
-                        selectedAnimeSearchIndex_ = index;
-                        hoverAnimeSearchResultIndex_ = -1;
-                        StopSmoothScroll();
-                        scrollOffsetY_ = 0;
-                        smoothScrollTargetOffsetY_ = 0;
-                        animeStatusMessage_ = L"Showing details for " + animeSearchResults_[static_cast<size_t>(index)].title + L".";
-                        RecalculateLayout();
-                        InvalidateRect(hwnd_, nullptr, FALSE);
-                        return;
-                    }
-                }
-            }
+            selectTrackerView(AnimeTrackerTab::Favorites);
             return;
         }
 
         if (IsPointInRect(animeFilterButtonRect_, point))
         {
+            animeSearchDropdownOpen_ = false;
             ShowAnimeFilterDropdown();
             return;
         }
-        if (IsPointInRect(animeRefreshAllButtonRect_, point) && !animeRefreshing_ && !animeImporting_ && !animeWatchList_.anime.empty())
+        if (IsPointInRect(animeRefreshAllButtonRect_, point) &&
+            !animeRefreshing_ &&
+            !animeImporting_ &&
+            !animeWatchList_.anime.empty())
         {
+            animeSearchDropdownOpen_ = false;
             RefreshAllAnime();
-            return;
-        }
-        if (IsPointInRect(animeImportButtonRect_, point) && !animeSearching_ && !animeRefreshing_ && !animeImporting_)
-        {
-            StartAnimeImport();
             return;
         }
 
         const std::vector<size_t> visibleEntries = VisibleAnimeEntryIndexes();
-        const int listRows = static_cast<int>(visibleEntries.size());
-        for (int visibleIndex = 0; visibleIndex < listRows; ++visibleIndex)
+        for (size_t visibleIndex = 0; visibleIndex < visibleEntries.size(); ++visibleIndex)
         {
-            const size_t entryIndex = visibleEntries[static_cast<size_t>(visibleIndex)];
-            if (IsPointInRect(AnimeListActionRect(static_cast<size_t>(visibleIndex), 0), point))
+            if (IsPointInRect(AnimeListRowRect(visibleIndex), point))
             {
-                if (entryIndex < animeWatchList_.anime.size() && !animeWatchList_.anime[entryIndex].siteUrl.empty())
-                {
-                    ShellExecuteW(hwnd_, L"open", animeWatchList_.anime[entryIndex].siteUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-                }
-                else
-                {
-                    SelectAnimeEntry(static_cast<int>(entryIndex));
-                }
-                return;
-            }
-            if (IsPointInRect(AnimeListActionRect(static_cast<size_t>(visibleIndex), 1), point) && !animeRefreshing_ && !animeImporting_)
-            {
-                RefreshAnimeEntry(entryIndex);
-                return;
-            }
-            if (IsPointInRect(AnimeListActionRect(static_cast<size_t>(visibleIndex), 2), point) && !animeRefreshing_ && !animeImporting_)
-            {
-                RemoveAnimeEntry(entryIndex);
-                return;
-            }
-            if (IsPointInRect(AnimeListRowRect(static_cast<size_t>(visibleIndex)), point))
-            {
-                SelectAnimeEntry(static_cast<int>(entryIndex));
+                animeSearchDropdownOpen_ = false;
+                SelectAnimeEntry(static_cast<int>(visibleEntries[visibleIndex]));
                 return;
             }
         }
 
-        const std::vector<AnimeRelation> sequels = VisibleUpcomingSequels();
-        const int sequelRows = std::min<int>(static_cast<int>(sequels.size()), 3);
-        for (int index = 0; index < sequelRows; ++index)
+        const bool showingSearchDetails =
+            selectedAnimeSearchIndex_ >= 0 &&
+            selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size());
+        const bool hasSavedSelection =
+            selectedAnimeIndex_ >= 0 &&
+            selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size());
+
+        if (showingSearchDetails || hasSavedSelection)
         {
-            if (IsPointInRect(AnimeSequelActionRect(static_cast<size_t>(index), 0), point))
+            for (size_t index = 0; index < animeDetailTabRects_.size(); ++index)
             {
-                AddAnimeFromRelation(static_cast<size_t>(index));
-                return;
-            }
-            if (IsPointInRect(AnimeSequelActionRect(static_cast<size_t>(index), 1), point) && !sequels[static_cast<size_t>(index)].siteUrl.empty())
-            {
-                ShellExecuteW(hwnd_, L"open", sequels[static_cast<size_t>(index)].siteUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-                return;
+                if (IsPointInRect(animeDetailTabRects_[index], point) &&
+                    (!showingSearchDetails || hasSavedSelection ||
+                        index != static_cast<size_t>(AnimeDetailTab::Notes)))
+                {
+                    animeDetailTab_ = static_cast<AnimeDetailTab>(index);
+                    RecalculateLayout();
+                    UpdateAnimeTrackerControls();
+                    InvalidateRect(hwnd_, nullptr, FALSE);
+                    return;
+                }
             }
         }
 
-        if (selectedAnimeIndex_ >= 0 && selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()))
+        if (showingSearchDetails)
         {
+            const AnimeSearchResult& selected =
+                animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)];
+            if (IsPointInRect(animeSearchDetailAddButtonRect_, point) &&
+                !AnimeTrackerService::ContainsAnime(animeWatchList_, selected.anilistId))
+            {
+                AddAnimeFromSearch(static_cast<size_t>(selectedAnimeSearchIndex_));
+                return;
+            }
+            if (IsPointInRect(animeSearchDetailReminderButtonRect_, point))
+            {
+                AddAnimeAiringReminder(selected.title, selected.nextAiringEpisode);
+                return;
+            }
+            if (IsPointInRect(animeSearchDetailOpenButtonRect_, point) &&
+                !selected.siteUrl.empty())
+            {
+                ShowAnimeManagementDropdown();
+                return;
+            }
+        }
+        if (hasSavedSelection)
+        {
+            const size_t selectedIndex = static_cast<size_t>(selectedAnimeIndex_);
+            AnimeEntry& selected = animeWatchList_.anime[selectedIndex];
+            if (!showingSearchDetails &&
+                IsPointInRect(animeSearchDetailOpenButtonRect_, point))
+            {
+                ShowAnimeManagementDropdown();
+                return;
+            }
             if (IsPointInRect(animeStatusButtonRect_, point))
             {
                 CycleSelectedAnimeStatus();
@@ -20816,7 +23147,7 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             }
             if (IsPointInRect(animeEpisodePlusButtonRect_, point))
             {
-                IncrementAnimeEpisode(static_cast<size_t>(selectedAnimeIndex_));
+                IncrementAnimeEpisode(selectedIndex);
                 return;
             }
             if (IsPointInRect(animeFavoriteButtonRect_, point))
@@ -20826,10 +23157,60 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             }
             if (IsPointInRect(animeReminderButtonRect_, point))
             {
-                const AnimeEntry& selectedEntry = animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)];
-                AddAnimeAiringReminder(selectedEntry.title, selectedEntry.nextAiringEpisode);
+                AddAnimeAiringReminder(selected.title, selected.nextAiringEpisode);
                 return;
             }
+            if (animeDetailTab_ == AnimeDetailTab::Episodes &&
+                selected.totalEpisodes > 0)
+            {
+                const std::optional<int> episode =
+                    AnimeEpisodeAtPoint(point, selected.totalEpisodes);
+                if (episode)
+                {
+                    selected.currentEpisode = *episode;
+                    if (*episode >= selected.totalEpisodes)
+                    {
+                        selected.userStatus = AnimeUserStatus::Completed;
+                    }
+                    else if (selected.userStatus == AnimeUserStatus::Completed)
+                    {
+                        selected.userStatus = AnimeUserStatus::Watching;
+                    }
+                    SaveAnimeTrackerData();
+                    animeStatusMessage_ = L"Progress updated.";
+                    InvalidateRect(hwnd_, nullptr, FALSE);
+                    return;
+                }
+            }
+        }
+
+        if (animeDetailTab_ == AnimeDetailTab::Sequels)
+        {
+            const std::vector<AnimeRelation> sequels = VisibleUpcomingSequels();
+            for (size_t index = 0; index < sequels.size(); ++index)
+            {
+                if (IsPointInRect(AnimeSequelActionRect(index, 0), point) &&
+                    !AnimeTrackerService::ContainsAnime(animeWatchList_, sequels[index].anilistId))
+                {
+                    AddAnimeFromRelation(index);
+                    return;
+                }
+                if (IsPointInRect(AnimeSequelActionRect(index, 1), point) &&
+                    !sequels[index].siteUrl.empty())
+                {
+                    ShellExecuteW(hwnd_, L"open", sequels[index].siteUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                    return;
+                }
+            }
+        }
+
+        if (animeSearchDropdownOpen_)
+        {
+            animeSearchDropdownOpen_ = false;
+            animeSearchKeyboardIndex_ = -1;
+            RecalculateLayout();
+            UpdateAnimeTrackerControls();
+            InvalidateRect(hwnd_, nullptr, FALSE);
         }
         return;
     }
@@ -21646,6 +24027,7 @@ void ToolkitApp::CreateAllToolsSearchControl()
 
     SendMessageW(allToolsSearchEdit_, WM_SETFONT, reinterpret_cast<WPARAM>(searchInputFont_), TRUE);
     SendMessageW(allToolsSearchEdit_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(Dips(2), Dips(2)));
+    allToolsSearchText_.clear();
     allToolsSearchPlaceholderActive_ = true;
     SetWindowTextW(allToolsSearchEdit_, L"Search");
 }
@@ -23866,7 +26248,9 @@ void ToolkitApp::CreateAnimeTrackerControls()
 
     if (animeSearchEdit_)
     {
-        SendMessageW(animeSearchEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Search anime titles"));
+        SendMessageW(animeSearchEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Search anime by title..."));
+        animeSearchPlaceholderActive_ = true;
+        SetWindowTextW(animeSearchEdit_, L"Search anime by title...");
     }
     if (animeImportEdit_)
     {
@@ -23882,7 +26266,8 @@ void ToolkitApp::UpdateAnimeTrackerControls()
 {
     const bool visible = currentPage_ == Page::Tool && currentTool_ == ToolKind::AnimeTracker &&
         !liveResize_ && !smoothScrollActive_ && !scrollBarDragging_ && !animeImportSourceChoiceOpen_;
-    const bool hideForDropdown = activeDropdown_ == DropdownKind::AnimeFilter;
+    const bool hideForDropdown = activeDropdown_ == DropdownKind::AnimeFilter ||
+        activeDropdown_ == DropdownKind::AnimeManagement;
 
     auto moveEdit = [&](HWND edit, const RECT& rect, bool enabled, bool shouldShow = true)
     {
@@ -23899,7 +26284,7 @@ void ToolkitApp::UpdateAnimeTrackerControls()
         if (edit == animeSearchEdit_)
         {
             editLeftInset = Dips(40);
-            editRightInset = Dips(12);
+            editRightInset = Dips(72);
         }
         const int editWidth = std::max(1, static_cast<int>(rect.right - rect.left) - editLeftInset - editRightInset);
         const int editHeight = edit == animeNotesEdit_
@@ -23927,24 +26312,22 @@ void ToolkitApp::UpdateAnimeTrackerControls()
     const bool hasSelection =
         selectedAnimeIndex_ >= 0 &&
         selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size());
-    const bool showingSearchDetails =
-        selectedAnimeSearchIndex_ >= 0 &&
-        selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size());
     moveEdit(
         animeSearchEdit_,
         animeSearchEditRect_,
-        !animeSearching_ && !animeRefreshing_ && !animeImporting_,
-        animeTrackerTab_ == AnimeTrackerTab::Search && !showingSearchDetails);
+        true,
+        true);
     moveEdit(
         animeImportEdit_,
         animeImportEditRect_,
         !animeSearching_ && !animeRefreshing_ && !animeImporting_,
-        animeTrackerTab_ == AnimeTrackerTab::Anime);
+        animeImportPanelOpen_);
     moveEdit(
         animeNotesEdit_,
         animeNotesEditRect_,
         true,
-        animeTrackerTab_ == AnimeTrackerTab::Anime && hasSelection);
+        animeDetailTab_ == AnimeDetailTab::Notes &&
+            hasSelection);
 
     static int lastNotesIndex = -2;
     if (hasSelection)
@@ -24070,6 +26453,30 @@ void ToolkitApp::CreateReminderControls()
     SetReminderFormDefaults();
 }
 
+RECT ToolkitApp::ReminderEditWindowRect(HWND edit, const RECT& rect, bool multiline) const
+{
+    const int editLeftInset = edit == reminderSearchEdit_ ? Dips(39) : Dips(10);
+    const int editRightInset = edit == reminderDateEdit_ ? Dips(52) : Dips(10);
+    const int editTopInset = multiline ? Dips(8) : 0;
+    const int editWidth = std::max(
+        1,
+        static_cast<int>(rect.right - rect.left) - editLeftInset - editRightInset);
+    const int editHeight = multiline
+        ? std::max(1, static_cast<int>(rect.bottom - rect.top) - Dips(16))
+        : std::max(1, Dips(24));
+    const int editTop = multiline
+        ? static_cast<int>(rect.top) + editTopInset
+        : static_cast<int>(rect.top) +
+            ((rect.bottom - rect.top) - editHeight) / 2 +
+            Dips(2);
+    return {
+        static_cast<int>(rect.left) + editLeftInset,
+        editTop,
+        static_cast<int>(rect.left) + editLeftInset + editWidth,
+        editTop + editHeight
+    };
+}
+
 void ToolkitApp::UpdateReminderControls()
 {
     const bool visible = currentPage_ == Page::Tool && currentTool_ == ToolKind::Reminders &&
@@ -24098,23 +26505,13 @@ void ToolkitApp::UpdateReminderControls()
         const bool shouldDisplay = shouldShow && visible && !hideForDropdown && !coveredByCalendar &&
             RectsOverlap(rect, contentRect_);
 
-        const int editLeftInset = edit == reminderSearchEdit_ ? Dips(39) : Dips(10);
-        const int editRightInset = edit == reminderDateEdit_ ? Dips(52) : Dips(10);
-        const int editTopInset = multiline ? Dips(8) : 0;
-        const int editWidth = std::max(1, static_cast<int>(rect.right - rect.left) - editLeftInset - editRightInset);
-        const int editHeight = multiline
-            ? std::max(1, static_cast<int>(rect.bottom - rect.top) - Dips(16))
-            : std::max(1, Dips(24));
-        const int editTop = multiline
-            ? static_cast<int>(rect.top) + editTopInset
-            : static_cast<int>(rect.top) + ((rect.bottom - rect.top) - editHeight) / 2 + Dips(2);
-
+        const RECT editWindowRect = ReminderEditWindowRect(edit, rect, multiline);
         SetChildWindowViewportLayout(
             edit,
-            static_cast<int>(rect.left) + editLeftInset,
-            editTop,
-            editWidth,
-            editHeight,
+            editWindowRect.left,
+            editWindowRect.top,
+            std::max(1, static_cast<int>(editWindowRect.right - editWindowRect.left)),
+            std::max(1, static_cast<int>(editWindowRect.bottom - editWindowRect.top)),
             contentRect_,
             shouldDisplay,
             true);
@@ -25015,84 +27412,76 @@ bool ToolkitApp::HandleReminderCalendarClick(POINT point)
 
 std::wstring ToolkitApp::AnimeSearchText() const
 {
+    if (animeSearchPlaceholderActive_)
+    {
+        return {};
+    }
     return GetWindowTextString(animeSearchEdit_);
 }
 
 void ToolkitApp::StartAnimeSearch(bool appendResults)
 {
-    if (animeSearching_ || animeRefreshing_ || animeImporting_)
-    {
-        return;
-    }
-
+    (void)appendResults;
     const std::wstring searchText = NormalizeAnimeSearchQuery(AnimeSearchText());
-    if (searchText.empty())
+    if (searchText.size() < 2)
     {
-        animeStatusMessage_ = L"Enter a title to search AniList.";
+        animeStatusMessage_ = L"Type at least two characters to search AniList.";
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
 
+    if (animeSearching_ || animeRefreshing_ || animeImporting_)
+    {
+        animeSearchPending_ = true;
+        return;
+    }
+
+    KillTimer(hwnd_, kAnimeSearchDebounceTimerId);
     FinishAnimeThread();
     animeSearching_ = true;
-    animeAppendSearch_ = appendResults;
-    if (!appendResults)
-    {
-        selectedAnimeSearchIndex_ = -1;
-        hoverAnimeSearchResultIndex_ = -1;
-    }
-    const int nextPage = appendResults ? animeCurrentPage_ + 1 : 1;
-    animeStatusMessage_ = appendResults ? L"Loading more AniList results..." : L"Searching AniList...";
+    animeSearchPending_ = false;
+    animeAppendSearch_ = false;
+    animeSearchRequestText_ = searchText;
+    animeSearchDropdownOpen_ = true;
+    animeSearchKeyboardIndex_ = -1;
+    selectedAnimeSearchIndex_ = -1;
+    hoverAnimeSearchResultIndex_ = -1;
+    animeStatusMessage_ = L"Searching AniList...";
     RecalculateLayout();
     UpdateAnimeTrackerControls();
     InvalidateRect(hwnd_, nullptr, FALSE);
 
     HWND hwnd = hwnd_;
     animeThread_ = std::thread(
-        [this, hwnd, searchText, nextPage, appendResults]()
+        [this, hwnd, searchText]()
         {
             auto* result = new AnimeSearchThreadResult();
-            result->append = appendResults;
+            result->query = searchText;
+            result->append = false;
             std::wstring errorMessage;
-            result->response = animeTrackerService_.SearchAnime(searchText, nextPage, 8, errorMessage);
+            result->response = animeTrackerService_.SearchAnime(searchText, 1, 7, errorMessage);
             if (!errorMessage.empty())
             {
                 result->message = errorMessage;
             }
             else if (result->response.results.empty())
             {
-                result->message = L"No AniList matches found.";
+                result->message = L"No AniList matches found for \"" + searchText + L"\".";
             }
             else
             {
-                result->message = L"Found " + std::to_wstring(result->response.results.size()) + L" result(s).";
+                result->message = L"Found " + std::to_wstring(result->response.results.size()) + L" match(es).";
             }
 
             for (const AnimeSearchResult& anime : result->response.results)
             {
-                std::vector<std::wstring> imageUrls;
-                if (!anime.coverImageUrl.empty())
+                if (anime.coverImageUrl.empty())
                 {
-                    imageUrls.push_back(anime.coverImageUrl);
+                    continue;
                 }
-                for (const AnimeCharacterInfo& character : anime.characters)
+                if (auto coverPath = DownloadAnimeCoverToCache(anime.coverImageUrl))
                 {
-                    if (!character.character.imageUrl.empty())
-                    {
-                        imageUrls.push_back(character.character.imageUrl);
-                    }
-                    if (!character.voiceActor.imageUrl.empty())
-                    {
-                        imageUrls.push_back(character.voiceActor.imageUrl);
-                    }
-                }
-
-                for (const std::wstring& imageUrl : imageUrls)
-                {
-                    if (auto coverPath = DownloadAnimeCoverToCache(imageUrl))
-                    {
-                        result->coverFiles.emplace_back(imageUrl, coverPath->wstring());
-                    }
+                    result->coverFiles.emplace_back(anime.coverImageUrl, coverPath->wstring());
                 }
             }
 
@@ -25107,27 +27496,278 @@ void ToolkitApp::FinishAnimeThread()
         animeThread_.join();
     }
 }
+Gdiplus::Bitmap* ToolkitApp::FindAnimeBitmap(const std::wstring& imageUrl)
+{
+    auto found = animeCoverCache_.find(imageUrl);
+    if (found == animeCoverCache_.end() || !found->second.bitmap)
+    {
+        if (imageUrl.empty())
+        {
+            return nullptr;
+        }
+        if (animeCoverCacheMisses_.find(imageUrl) != animeCoverCacheMisses_.end())
+        {
+            return nullptr;
+        }
+        const auto rememberMiss = [&]()
+        {
+            constexpr std::size_t maxRememberedMisses = 512;
+            if (animeCoverCacheMisses_.size() >= maxRememberedMisses)
+            {
+                animeCoverCacheMisses_.clear();
+            }
+            animeCoverCacheMisses_.insert(imageUrl);
+        };
+
+        const std::filesystem::path path =
+            CacheManager::AnimeArtworkDirectory() /
+            CacheManager::VersionedFileName(1, imageUrl, L"img");
+        std::error_code fileError;
+        if (!std::filesystem::is_regular_file(path, fileError))
+        {
+            rememberMiss();
+            return nullptr;
+        }
+
+        auto bitmap = std::make_unique<Gdiplus::Bitmap>(path.wstring().c_str());
+        if (!bitmap || bitmap->GetLastStatus() != Gdiplus::Ok)
+        {
+            std::filesystem::remove(path, fileError);
+            rememberMiss();
+            return nullptr;
+        }
+        CacheManager::Touch(path);
+        StoreAnimeBitmap(imageUrl, std::move(bitmap));
+        found = animeCoverCache_.find(imageUrl);
+        if (found == animeCoverCache_.end() || !found->second.bitmap)
+        {
+            return nullptr;
+        }
+    }
+
+    found->second.lastUse = ++animeCoverCacheUseCounter_;
+    return found->second.bitmap.get();
+}
+
+Gdiplus::Bitmap* ToolkitApp::FindAnimeSearchCoverBitmap(
+    const std::wstring& imageUrl,
+    int width,
+    int height,
+    int radius)
+{
+    if (imageUrl.empty() || width <= 0 || height <= 0)
+    {
+        return nullptr;
+    }
+
+    const int roundedRadius = std::clamp(radius, 0, std::min(width, height) / 2);
+    auto cached = animeSearchCoverCache_.find(imageUrl);
+    if (cached != animeSearchCoverCache_.end() &&
+        cached->second.bitmap &&
+        cached->second.width == width &&
+        cached->second.height == height &&
+        cached->second.radius == roundedRadius)
+    {
+        cached->second.lastUse = ++animeSearchCoverCacheUseCounter_;
+        return cached->second.bitmap.get();
+    }
+
+    Gdiplus::Bitmap* source = FindAnimeBitmap(imageUrl);
+    if (!source || source->GetWidth() == 0 || source->GetHeight() == 0)
+    {
+        return nullptr;
+    }
+
+    auto rendered = std::make_unique<Gdiplus::Bitmap>(
+        width,
+        height,
+        PixelFormat32bppPARGB);
+    if (!rendered || rendered->GetLastStatus() != Gdiplus::Ok)
+    {
+        return nullptr;
+    }
+
+    const double imageWidth = static_cast<double>(source->GetWidth());
+    const double imageHeight = static_cast<double>(source->GetHeight());
+    const double scale = std::max(
+        static_cast<double>(width) / imageWidth,
+        static_cast<double>(height) / imageHeight);
+    const double sourceWidth = static_cast<double>(width) / scale;
+    const double sourceHeight = static_cast<double>(height) / scale;
+    const double sourceX = (imageWidth - sourceWidth) / 2.0;
+    const double sourceY = (imageHeight - sourceHeight) / 2.0;
+
+    Gdiplus::Graphics graphics(rendered.get());
+    graphics.SetCompositingMode(Gdiplus::CompositingModeSourceCopy);
+    graphics.Clear(Gdiplus::Color(0, 0, 0, 0));
+    graphics.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
+    graphics.SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
+    graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+
+    Gdiplus::GraphicsPath clipPath;
+    if (roundedRadius > 0)
+    {
+        const int diameter = std::max(1, roundedRadius * 2);
+        clipPath.AddArc(0, 0, diameter, diameter, 180.0f, 90.0f);
+        clipPath.AddArc(width - diameter, 0, diameter, diameter, 270.0f, 90.0f);
+        clipPath.AddArc(width - diameter, height - diameter, diameter, diameter, 0.0f, 90.0f);
+        clipPath.AddArc(0, height - diameter, diameter, diameter, 90.0f, 90.0f);
+        clipPath.CloseFigure();
+        graphics.SetClip(&clipPath);
+    }
+
+    graphics.DrawImage(
+        source,
+        Gdiplus::RectF(
+            0.0f,
+            0.0f,
+            static_cast<Gdiplus::REAL>(width),
+            static_cast<Gdiplus::REAL>(height)),
+        static_cast<Gdiplus::REAL>(sourceX),
+        static_cast<Gdiplus::REAL>(sourceY),
+        static_cast<Gdiplus::REAL>(sourceWidth),
+        static_cast<Gdiplus::REAL>(sourceHeight),
+        Gdiplus::UnitPixel);
+    graphics.ResetClip();
+
+    AnimeSearchCoverCacheEntry entry;
+    entry.bitmap = std::move(rendered);
+    entry.width = width;
+    entry.height = height;
+    entry.radius = roundedRadius;
+    entry.lastUse = ++animeSearchCoverCacheUseCounter_;
+    animeSearchCoverCache_.insert_or_assign(imageUrl, std::move(entry));
+    TrimAnimeSearchCoverCache();
+
+    cached = animeSearchCoverCache_.find(imageUrl);
+    return cached != animeSearchCoverCache_.end() && cached->second.bitmap
+        ? cached->second.bitmap.get()
+        : nullptr;
+}
+
+void ToolkitApp::TrimAnimeSearchCoverCache()
+{
+    while (animeSearchCoverCache_.size() > kMaxAnimeSearchCoverCacheEntries)
+    {
+        const auto oldest = std::min_element(
+            animeSearchCoverCache_.begin(),
+            animeSearchCoverCache_.end(),
+            [](const auto& left, const auto& right)
+            {
+                return left.second.lastUse < right.second.lastUse;
+            });
+        animeSearchCoverCache_.erase(oldest);
+    }
+}
+
+void ToolkitApp::StoreAnimeBitmap(
+    const std::wstring& imageUrl,
+    std::unique_ptr<Gdiplus::Bitmap> bitmap)
+{
+    if (imageUrl.empty() || !bitmap || bitmap->GetLastStatus() != Gdiplus::Ok)
+    {
+        return;
+    }
+    animeCoverCacheMisses_.erase(imageUrl);
+    animeSearchCoverCache_.erase(imageUrl);
+
+    const std::uintmax_t width = bitmap->GetWidth();
+    const std::uintmax_t height = bitmap->GetHeight();
+    std::uintmax_t bytes = std::numeric_limits<std::uintmax_t>::max();
+    if (width == 0 || height <= std::numeric_limits<std::uintmax_t>::max() / width)
+    {
+        const std::uintmax_t pixels = width * height;
+        if (pixels <= std::numeric_limits<std::uintmax_t>::max() / 4)
+        {
+            bytes = pixels * 4;
+        }
+    }
+
+    const auto existing = animeCoverCache_.find(imageUrl);
+    if (existing != animeCoverCache_.end())
+    {
+        animeCoverCacheBytes_ = existing->second.bytes <= animeCoverCacheBytes_
+            ? animeCoverCacheBytes_ - existing->second.bytes
+            : 0;
+        animeCoverCache_.erase(existing);
+    }
+
+    AnimeBitmapCacheEntry entry;
+    entry.bitmap = std::move(bitmap);
+    entry.bytes = bytes;
+    entry.lastUse = ++animeCoverCacheUseCounter_;
+    animeCoverCache_[imageUrl] = std::move(entry);
+    animeCoverCacheBytes_ = bytes <= std::numeric_limits<std::uintmax_t>::max() - animeCoverCacheBytes_
+        ? animeCoverCacheBytes_ + bytes
+        : std::numeric_limits<std::uintmax_t>::max();
+    TrimAnimeBitmapCache();
+}
+
+void ToolkitApp::TrimAnimeBitmapCache()
+{
+    while (!animeCoverCache_.empty() &&
+        (animeCoverCache_.size() > kMaxAnimeBitmapCacheEntries ||
+            animeCoverCacheBytes_ > kMaxAnimeBitmapCacheBytes))
+    {
+        const auto oldest = std::min_element(
+            animeCoverCache_.begin(),
+            animeCoverCache_.end(),
+            [](const auto& left, const auto& right)
+            {
+                return left.second.lastUse < right.second.lastUse;
+            });
+        animeCoverCacheBytes_ = oldest->second.bytes <= animeCoverCacheBytes_
+            ? animeCoverCacheBytes_ - oldest->second.bytes
+            : 0;
+        animeCoverCache_.erase(oldest);
+    }
+}
+
 
 void ToolkitApp::ApplyAnimeSearchResponse(const AnimeSearchResponse& response, const std::wstring& message, bool appendResults)
 {
+    (void)appendResults;
     animeSearchResponse_ = response;
     animeSearchHasRun_ = true;
-    animeCanLoadMore_ = response.hasNextPage;
-    animeCurrentPage_ = std::max(1, response.currentPage);
-    if (appendResults)
+    animeCanLoadMore_ = false;
+    animeCurrentPage_ = 1;
+
+    std::set<int> retainedDetails;
+    for (const AnimeEntry& entry : animeWatchList_.anime)
     {
-        animeSearchResults_.insert(animeSearchResults_.end(), response.results.begin(), response.results.end());
+        if (entry.anilistId != 0)
+        {
+            retainedDetails.insert(entry.anilistId);
+        }
     }
-    else
+    for (const AnimeSearchResult& result : response.results)
     {
-        animeSearchResults_ = response.results;
-        selectedAnimeSearchIndex_ = -1;
-        hoverAnimeSearchResultIndex_ = -1;
+        if (result.anilistId != 0)
+        {
+            retainedDetails.insert(result.anilistId);
+        }
     }
-    if (selectedAnimeSearchIndex_ >= static_cast<int>(animeSearchResults_.size()))
+    for (auto iterator = animeDetailsCache_.begin(); iterator != animeDetailsCache_.end();)
     {
-        selectedAnimeSearchIndex_ = -1;
-        hoverAnimeSearchResultIndex_ = -1;
+        iterator = retainedDetails.find(iterator->first) == retainedDetails.end()
+            ? animeDetailsCache_.erase(iterator)
+            : std::next(iterator);
+    }
+
+    animeSearchResults_ = response.results;
+    selectedAnimeSearchIndex_ = -1;
+    hoverAnimeSearchResultIndex_ = -1;
+    animeSearchKeyboardIndex_ = -1;
+    animeSearchDropdownOpen_ = NormalizeAnimeSearchQuery(AnimeSearchText()).size() >= 2;
+    animeSearchPending_ = false;
+    for (const AnimeSearchResult& result : animeSearchResults_)
+    {
+        if (result.anilistId != 0)
+        {
+            animeDetailsCache_[result.anilistId] = result;
+        }
     }
     animeStatusMessage_ = message.empty() ? L"Ready." : message;
 }
@@ -25361,6 +28001,7 @@ void ToolkitApp::ApplyAnimeImportResult(
     }
 
     SaveAnimeTrackerData();
+    animeImportPanelOpen_ = false;
     animeStatusMessage_ = L"Imported " + std::to_wstring(added) + L" new and updated " +
         std::to_wstring(updated) + L" from " + AnimeImportSourceLabel(source) + L" profile " + userName + L".";
 }
@@ -25380,11 +28021,15 @@ void ToolkitApp::AddAnimeFromSearch(size_t index)
         return;
     }
 
+    animeDetailsCache_[result.anilistId] = result;
     animeWatchList_.anime.push_back(AnimeTrackerService::EntryFromSearchResult(result));
     selectedAnimeIndex_ = static_cast<int>(animeWatchList_.anime.size() - 1);
+    selectedAnimeSearchIndex_ = -1;
+    animeDetailTab_ = AnimeDetailTab::Overview;
     SaveAnimeTrackerData();
+    RecalculateLayout();
     UpdateAnimeTrackerControls();
-    animeStatusMessage_ = L"Added " + result.title + L" to the Anime tab.";
+    animeStatusMessage_ = L"Added " + result.title + L" to your watchlist.";
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -25491,9 +28136,13 @@ void ToolkitApp::AddAnimeFromRelation(size_t index)
     result.startDate = relation.startDate;
     result.siteUrl = relation.siteUrl;
     result.nextAiringEpisode = relation.nextAiringEpisode;
+    animeDetailsCache_[result.anilistId] = result;
     animeWatchList_.anime.push_back(AnimeTrackerService::EntryFromSearchResult(result));
     selectedAnimeIndex_ = static_cast<int>(animeWatchList_.anime.size() - 1);
+    selectedAnimeSearchIndex_ = -1;
+    animeDetailTab_ = AnimeDetailTab::Overview;
     SaveAnimeTrackerData();
+    RecalculateLayout();
     UpdateAnimeTrackerControls();
     animeStatusMessage_ = L"Added " + relation.title + L".";
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -25513,6 +28162,7 @@ void ToolkitApp::RefreshAnimeEntry(size_t index)
     InvalidateRect(hwnd_, nullptr, FALSE);
 
     const int anilistId = animeWatchList_.anime[index].anilistId;
+    animeDetailsRequested_.insert(anilistId);
     HWND hwnd = hwnd_;
     animeThread_ = std::thread(
         [this, hwnd, anilistId, index]()
@@ -25591,6 +28241,8 @@ void ToolkitApp::ApplyAnimeRefreshResult(const AnimeSearchResult& result, int li
         return;
     }
 
+    animeDetailsCache_[result.anilistId] = result;
+    animeDetailsRequested_.erase(result.anilistId);
     AnimeTrackerService::ApplyMetadata(animeWatchList_.anime[static_cast<size_t>(listIndex)], result);
     if (!message.empty())
     {
@@ -25601,6 +28253,7 @@ void ToolkitApp::ApplyAnimeRefreshResult(const AnimeSearchResult& result, int li
 
 void ToolkitApp::SelectAnimeEntry(int index)
 {
+    bool shouldLoadDetails = false;
     if (index < 0 || index >= static_cast<int>(animeWatchList_.anime.size()))
     {
         selectedAnimeIndex_ = -1;
@@ -25608,7 +28261,50 @@ void ToolkitApp::SelectAnimeEntry(int index)
     else
     {
         selectedAnimeIndex_ = index;
+        selectedAnimeSearchIndex_ = -1;
+        animeDetailTab_ = AnimeDetailTab::Overview;
+        const int anilistId = animeWatchList_.anime[static_cast<size_t>(index)].anilistId;
+        shouldLoadDetails =
+            anilistId != 0 &&
+            animeDetailsCache_.find(anilistId) == animeDetailsCache_.end() &&
+            animeDetailsRequested_.find(anilistId) == animeDetailsRequested_.end() &&
+            !animeSearching_ &&
+            !animeRefreshing_ &&
+            !animeImporting_;
     }
+    RecalculateLayout();
+    UpdateAnimeTrackerControls();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    if (shouldLoadDetails)
+    {
+        RefreshAnimeEntry(static_cast<size_t>(index));
+    }
+}
+
+void ToolkitApp::OpenAnimeSearchResult(size_t index)
+{
+    if (index >= animeSearchResults_.size())
+    {
+        return;
+    }
+
+    selectedAnimeSearchIndex_ = static_cast<int>(index);
+    selectedAnimeIndex_ = -1;
+    const int anilistId = animeSearchResults_[index].anilistId;
+    for (size_t savedIndex = 0; savedIndex < animeWatchList_.anime.size(); ++savedIndex)
+    {
+        if (animeWatchList_.anime[savedIndex].anilistId == anilistId)
+        {
+            selectedAnimeIndex_ = static_cast<int>(savedIndex);
+            break;
+        }
+    }
+    animeDetailTab_ = AnimeDetailTab::Overview;
+    animeSearchDropdownOpen_ = false;
+    animeSearchKeyboardIndex_ = -1;
+    hoverAnimeSearchResultIndex_ = -1;
+    SetFocus(hwnd_);
+    RecalculateLayout();
     UpdateAnimeTrackerControls();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -25621,16 +28317,22 @@ void ToolkitApp::RemoveAnimeEntry(size_t index)
     }
 
     const std::wstring title = animeWatchList_.anime[index].title;
+    const int anilistId = animeWatchList_.anime[index].anilistId;
     animeWatchList_.anime.erase(animeWatchList_.anime.begin() + static_cast<std::ptrdiff_t>(index));
+    animeDetailsCache_.erase(anilistId);
+    animeDetailsRequested_.erase(anilistId);
     if (selectedAnimeIndex_ == static_cast<int>(index))
     {
-        selectedAnimeIndex_ = -1;
+        selectedAnimeIndex_ = animeWatchList_.anime.empty()
+            ? -1
+            : static_cast<int>(std::min(index, animeWatchList_.anime.size() - 1));
     }
     else if (selectedAnimeIndex_ > static_cast<int>(index))
     {
         --selectedAnimeIndex_;
     }
     SaveAnimeTrackerData();
+    RecalculateLayout();
     UpdateAnimeTrackerControls();
     animeStatusMessage_ = L"Removed " + title + L".";
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -25685,6 +28387,7 @@ void ToolkitApp::CycleSelectedAnimeStatus()
     AnimeEntry& entry = animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)];
     entry.userStatus = AnimeTrackerService::NextUserStatus(entry.userStatus);
     SaveAnimeTrackerData();
+    RecalculateLayout();
     animeStatusMessage_ = L"Status changed to " + AnimeTrackerService::UserStatusLabel(entry.userStatus) + L".";
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -25698,8 +28401,16 @@ void ToolkitApp::ToggleSelectedAnimeFavorite()
 
     AnimeEntry& entry = animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)];
     entry.favorite = !entry.favorite;
+    const bool favorite = entry.favorite;
     SaveAnimeTrackerData();
-    animeStatusMessage_ = entry.favorite ? L"Marked as a favorite." : L"Removed from Anime Tracker favorites.";
+    if (animeTrackerTab_ == AnimeTrackerTab::Favorites && !favorite)
+    {
+        const std::vector<size_t> visible = VisibleAnimeEntryIndexes();
+        selectedAnimeIndex_ = visible.empty() ? -1 : static_cast<int>(visible.front());
+    }
+    RecalculateLayout();
+    UpdateAnimeTrackerControls();
+    animeStatusMessage_ = favorite ? L"Marked as a favorite." : L"Removed from Anime Tracker favorites.";
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -25734,22 +28445,104 @@ void ToolkitApp::ShowAnimeFilterDropdown()
         animeFilterAll_ ? 0 : 1 + static_cast<int>(animeFilter_));
 }
 
+void ToolkitApp::ShowAnimeManagementDropdown()
+{
+    const bool showingSearchResult =
+        selectedAnimeSearchIndex_ >= 0 &&
+        selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size());
+    if (showingSearchResult)
+    {
+        const AnimeSearchResult& selected =
+            animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)];
+        if (selected.siteUrl.empty())
+        {
+            return;
+        }
+        OpenDropdown(
+            DropdownKind::AnimeManagement,
+            animeSearchDetailOpenButtonRect_,
+            { L"Open in AniList" },
+            { 2 },
+            { true },
+            -1);
+        return;
+    }
+
+    if (selectedAnimeIndex_ < 0 ||
+        selectedAnimeIndex_ >= static_cast<int>(animeWatchList_.anime.size()))
+    {
+        return;
+    }
+
+    const AnimeEntry& selected =
+        animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)];
+    const bool managementEnabled = !animeRefreshing_ && !animeImporting_;
+    OpenDropdown(
+        DropdownKind::AnimeManagement,
+        animeSearchDetailOpenButtonRect_,
+        { L"Refresh data", L"Open in AniList", L"Remove from watchlist" },
+        { 1, 2, 3 },
+        { managementEnabled, !selected.siteUrl.empty(), managementEnabled },
+        -1);
+}
+
 std::vector<size_t> ToolkitApp::VisibleAnimeEntryIndexes() const
 {
     std::vector<size_t> indexes;
+    const long long now = CurrentEpochSeconds();
     for (size_t index = 0; index < animeWatchList_.anime.size(); ++index)
     {
-        if (animeFilterAll_ || animeWatchList_.anime[index].userStatus == animeFilter_)
+        const AnimeEntry& entry = animeWatchList_.anime[index];
+        const bool matchesStatus = animeFilterAll_ || entry.userStatus == animeFilter_;
+        const bool matchesView =
+            animeTrackerTab_ == AnimeTrackerTab::Watchlist ||
+            (animeTrackerTab_ == AnimeTrackerTab::Airing &&
+                entry.nextAiringEpisode.hasValue &&
+                entry.nextAiringEpisode.airingAt > now) ||
+            (animeTrackerTab_ == AnimeTrackerTab::Favorites && entry.favorite);
+        if (matchesStatus && matchesView)
         {
             indexes.push_back(index);
         }
+    }
+    if (animeTrackerTab_ == AnimeTrackerTab::Airing)
+    {
+        std::stable_sort(indexes.begin(), indexes.end(), [&](size_t left, size_t right)
+        {
+            return animeWatchList_.anime[left].nextAiringEpisode.airingAt <
+                animeWatchList_.anime[right].nextAiringEpisode.airingAt;
+        });
     }
     return indexes;
 }
 
 std::vector<AnimeRelation> ToolkitApp::VisibleUpcomingSequels() const
 {
-    return AnimeRelationTracker::UpcomingSequels(animeWatchList_);
+    const std::vector<AnimeRelation>* source = nullptr;
+    if (selectedAnimeSearchIndex_ >= 0 &&
+        selectedAnimeSearchIndex_ < static_cast<int>(animeSearchResults_.size()))
+    {
+        source = &animeSearchResults_[static_cast<size_t>(selectedAnimeSearchIndex_)].relations;
+    }
+    else if (selectedAnimeIndex_ >= 0 &&
+        selectedAnimeIndex_ < static_cast<int>(animeWatchList_.anime.size()))
+    {
+        source = &animeWatchList_.anime[static_cast<size_t>(selectedAnimeIndex_)].relations;
+    }
+    if (!source)
+    {
+        return {};
+    }
+
+    std::vector<AnimeRelation> relations;
+    for (const AnimeRelation& relation : *source)
+    {
+        if (AnimeRelationTracker::IsUpcomingSequelCandidate(relation))
+        {
+            relations.push_back(relation);
+        }
+    }
+    return relations;
 }
 
 std::wstring ToolkitApp::AnimeStatusText(const AnimeEntry& entry) const
@@ -25768,23 +28561,13 @@ std::wstring ToolkitApp::AnimeProgressText(const AnimeEntry& entry) const
 
 RECT ToolkitApp::AnimeSearchResultCardRect(size_t index) const
 {
-    const int gap = Dips(kAnimeSearchResultGridGapDip);
-    const int gridLeft = animeResultsRect_.left + Dips(22);
-    const int gridRight = animeResultsRect_.right - Dips(22);
-    const int gridTop = animeSearchEditRect_.bottom + Dips(84);
-    const int gridWidth = std::max(1, gridRight - gridLeft);
-    const int preferredCardWidth = Dips(kAnimeSearchResultCardWidthDip);
-    const int columns = std::max(1, std::min(kAnimeSearchResultMaxColumns, (gridWidth + gap) / (preferredCardWidth + gap)));
-    const int cardWidth = columns == 1 ? std::min(preferredCardWidth, gridWidth) : preferredCardWidth;
-    const int row = static_cast<int>(index) / columns;
-    const int column = static_cast<int>(index) % columns;
-    const int left = gridLeft + column * (cardWidth + gap);
-    const int top = gridTop + row * (Dips(kAnimeSearchResultCardHeightDip) + gap);
+    const int top = animeSearchDropdownRect_.top + Dips(6) +
+        static_cast<int>(index) * Dips(72);
     return {
-        left,
+        animeSearchDropdownRect_.left + Dips(6),
         top,
-        left + cardWidth,
-        top + Dips(kAnimeSearchResultCardHeightDip)
+        animeSearchDropdownRect_.right - Dips(6),
+        top + Dips(68)
     };
 }
 
@@ -25792,63 +28575,103 @@ RECT ToolkitApp::AnimeSearchResultAddRect(size_t index) const
 {
     const RECT card = AnimeSearchResultCardRect(index);
     return {
-        card.left + Dips(4),
-        card.bottom - Dips(48),
-        card.right - Dips(4),
-        card.bottom - Dips(12)
+        card.right - Dips(116),
+        card.top + Dips(16),
+        card.right - Dips(10),
+        card.bottom - Dips(16)
     };
 }
 
 RECT ToolkitApp::AnimeListRowRect(size_t visibleIndex) const
 {
-    const int rowHeight = Dips(68);
-    const int rowTop = animeListRect_.top + Dips(248) + static_cast<int>(visibleIndex) * rowHeight;
+    const int rowTop = animeListRect_.top + Dips(80) +
+        static_cast<int>(visibleIndex) * Dips(150);
     return {
-        animeListRect_.left + Dips(14),
+        animeListRect_.left + Dips(12),
         rowTop,
-        animeListRect_.right - Dips(14),
-        rowTop + rowHeight - Dips(6)
+        animeListRect_.right - Dips(12),
+        rowTop + Dips(140)
     };
 }
 
 RECT ToolkitApp::AnimeListActionRect(size_t visibleIndex, int actionIndex) const
 {
-    const RECT row = AnimeListRowRect(visibleIndex);
-    const int gap = Dips(6);
-    const int widths[] = { Dips(74), Dips(78), Dips(74) };
-    int right = row.right - Dips(10);
-    for (int index = 2; index > actionIndex; --index)
-    {
-        right -= widths[index] + gap;
-    }
-    return {
-        right - widths[actionIndex],
-        row.top + Dips(14),
-        right,
-        row.bottom - Dips(14)
-    };
+    (void)visibleIndex;
+    (void)actionIndex;
+    return {};
 }
 
 RECT ToolkitApp::AnimeSequelActionRect(size_t index, int actionIndex) const
 {
-    const int rowHeight = Dips(46);
-    const int rowTop = animeSequelsRect_.top + Dips(48) + static_cast<int>(index) * rowHeight;
+    const int rowTop = animeSequelsRect_.top + Dips(44) +
+        static_cast<int>(index) * Dips(76);
     const RECT row {
-        animeSequelsRect_.left + Dips(14),
+        animeSequelsRect_.left,
         rowTop,
-        animeSequelsRect_.right - Dips(14),
-        rowTop + rowHeight - Dips(6)
+        animeSequelsRect_.right,
+        rowTop + Dips(68)
     };
 
-    const int width = actionIndex == 0 ? Dips(54) : Dips(62);
-    const int right = actionIndex == 0 ? row.right - Dips(76) : row.right - Dips(8);
+    const int width = actionIndex == 0 ? Dips(72) : Dips(82);
+    const int right = actionIndex == 0 ? row.right - Dips(92) : row.right;
     return {
         right - width,
-        row.top + Dips(7),
+        row.top + Dips(15),
         right,
-        row.bottom - Dips(7)
+        row.bottom - Dips(15)
     };
 }
+
+RECT ToolkitApp::AnimeEpisodeRect(size_t episode) const
+{
+    const int width = std::max(1, static_cast<int>(animeSequelsRect_.right - animeSequelsRect_.left));
+    const int columns = std::max(4, width / Dips(62));
+    const int zeroBased = static_cast<int>(episode) - 1;
+    const int column = std::max(0, zeroBased) % columns;
+    const int row = std::max(0, zeroBased) / columns;
+    const int left = animeSequelsRect_.left + column * Dips(62);
+    const int top = animeSequelsRect_.top + Dips(54) + row * Dips(44);
+    return { left, top, left + Dips(52), top + Dips(34) };
+}
+std::optional<int> ToolkitApp::AnimeEpisodeAtPoint(POINT point, int totalEpisodes) const
+{
+    if (totalEpisodes <= 0)
+    {
+        return std::nullopt;
+    }
+
+    const int width = std::max(
+        1,
+        static_cast<int>(animeSequelsRect_.right - animeSequelsRect_.left));
+    const int columns = std::max(4, width / Dips(62));
+    const int gridLeft = animeSequelsRect_.left;
+    const int gridTop = animeSequelsRect_.top + Dips(54);
+    const int localX = point.x - gridLeft;
+    const int localY = point.y - gridTop;
+    const int columnStride = Dips(62);
+    const int rowStride = Dips(44);
+    if (localX < 0 || localY < 0 ||
+        localX % columnStride >= Dips(52) ||
+        localY % rowStride >= Dips(34))
+    {
+        return std::nullopt;
+    }
+
+    const int column = localX / columnStride;
+    if (column >= columns)
+    {
+        return std::nullopt;
+    }
+
+    const int row = localY / rowStride;
+    const int episode = row * columns + column + 1;
+    if (episode < 1 || episode > totalEpisodes)
+    {
+        return std::nullopt;
+    }
+    return episode;
+}
+
 
 std::optional<std::filesystem::path> ToolkitApp::PromptForSingleConverterOutputPath(const ConversionJob& job) const
 {
@@ -27340,27 +30163,37 @@ void ToolkitApp::PerformAutoClick()
         autoClickerUseAlternateNext_.store(!useAlternate);
     }
 
-    INPUT inputs[2] {};
     if (outputKind == OutputInputKind::Keyboard)
     {
-        inputs[0].type = INPUT_KEYBOARD;
-        inputs[0].ki.wVk = static_cast<WORD>(outputKey);
-        inputs[0].ki.dwExtraInfo = kAutoClickExtraInfo;
-        inputs[1].type = INPUT_KEYBOARD;
-        inputs[1].ki.wVk = static_cast<WORD>(outputKey);
-        inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
-        inputs[1].ki.dwExtraInfo = kAutoClickExtraInfo;
-    }
-    else
-    {
-        inputs[0].type = INPUT_MOUSE;
-        inputs[0].mi.dwFlags = MouseDownFlag(outputButton);
-        inputs[0].mi.dwExtraInfo = kAutoClickExtraInfo;
-        inputs[1].type = INPUT_MOUSE;
-        inputs[1].mi.dwFlags = MouseUpFlag(outputButton);
-        inputs[1].mi.dwExtraInfo = kAutoClickExtraInfo;
+        if (outputKey == 0)
+        {
+            return;
+        }
+
+        INPUT keyDown = AutoClickKeyboardInput(outputKey, false);
+        INPUT keyUp = AutoClickKeyboardInput(outputKey, true);
+        if (SendInput(1, &keyDown, sizeof(INPUT)) != 1)
+        {
+            return;
+        }
+
+        const int clicksPerSecond = std::clamp(
+            autoClickerCps_.load(), kMinClicksPerSecond, kMaxClicksPerSecond);
+        const long long intervalMicroseconds = 1000000LL / clicksPerSecond;
+        const long long holdMicroseconds = std::clamp(
+            intervalMicroseconds * 3LL / 4LL, 4000LL, 12000LL);
+        std::this_thread::sleep_for(std::chrono::microseconds(holdMicroseconds));
+        SendInput(1, &keyUp, sizeof(INPUT));
+        return;
     }
 
+    INPUT inputs[2] {};
+    inputs[0].type = INPUT_MOUSE;
+    inputs[0].mi.dwFlags = MouseDownFlag(outputButton);
+    inputs[0].mi.dwExtraInfo = kAutoClickExtraInfo;
+    inputs[1].type = INPUT_MOUSE;
+    inputs[1].mi.dwFlags = MouseUpFlag(outputButton);
+    inputs[1].mi.dwExtraInfo = kAutoClickExtraInfo;
     SendInput(static_cast<UINT>(std::size(inputs)), inputs, sizeof(INPUT));
 }
 
@@ -27656,9 +30489,8 @@ void ToolkitApp::RebuildVisibleToolsCache()
 
     if (currentPage_ == Page::AllTools)
     {
-        const std::wstring query = allToolsSearchPlaceholderActive_
-            ? L""
-            : LowercaseText(TrimWhitespace(GetWindowTextString(allToolsSearchEdit_)));
+        const std::wstring query =
+            LowercaseText(TrimWhitespace(allToolsSearchText_));
         if (query.empty())
         {
             for (const ToolDefinition& tool : tools_)

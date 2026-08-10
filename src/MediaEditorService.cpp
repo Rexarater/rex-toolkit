@@ -1,3 +1,4 @@
+#include "CacheManager.h"
 #include "MediaEditorService.h"
 
 #include <gdiplus.h>
@@ -2370,13 +2371,8 @@ std::filesystem::path ResolveMediaOutputConflict(std::filesystem::path requested
 
 std::filesystem::path CreateMediaEditorTempDirectory()
 {
-    wchar_t tempPath[MAX_PATH] {};
-    const DWORD length = GetTempPathW(static_cast<DWORD>(std::size(tempPath)), tempPath);
-    if (length == 0 || length >= std::size(tempPath))
-    {
-        return {};
-    }
-    const std::filesystem::path root = std::filesystem::path(tempPath) / L"RexToolkit" / L"MediaEditor";
+    const std::filesystem::path root = CacheManager::MediaEditorTemporaryRoot();
+    if (root.empty()) return {};
     std::error_code error;
     std::filesystem::create_directories(root, error);
     if (error)

@@ -1,4 +1,6 @@
+#include "CacheManager.h"
 #include "MediaEditorPage.h"
+#include "UiComponents.h"
 #include "resource.h"
 
 #include <commdlg.h>
@@ -201,6 +203,33 @@ COLORREF Blend(COLORREF first, COLORREF second, int secondPercent)
         (GetBValue(first) * inverse + GetBValue(second) * percent) / 100);
 }
 
+rex::ui::Palette EditorComponentPalette(const MediaEditorTheme& theme)
+{
+    rex::ui::Palette palette;
+    palette.pageBackground = theme.pageBackground;
+    palette.inputBackground = theme.inputBackground;
+    palette.buttonBackground = theme.buttonBackground;
+    palette.buttonHover = Blend(theme.buttonBackground, theme.textPrimary, 7);
+    palette.buttonPressed = Blend(theme.buttonBackground, theme.pageBackground, 18);
+    palette.disabledBackground = Blend(theme.buttonBackground, theme.pageBackground, 52);
+    palette.disabledText = Blend(theme.textSecondary, theme.pageBackground, 45);
+    palette.dropdownBackground = theme.panelBackground;
+    palette.dropdownHover = theme.panelHover;
+    palette.dropdownSelected = Blend(theme.accentSoft, theme.accent, 14);
+    palette.border = theme.border;
+    palette.textPrimary = theme.textPrimary;
+    palette.textSecondary = theme.textSecondary;
+    palette.accent = theme.accent;
+    palette.accentSoft = theme.accentSoft;
+    palette.danger = theme.danger;
+    palette.dangerAccent = Blend(theme.danger, theme.textPrimary, 18);
+    palette.light =
+        (GetRValue(theme.pageBackground) * 299 +
+         GetGValue(theme.pageBackground) * 587 +
+         GetBValue(theme.pageBackground) * 114) / 1000 >= 145;
+    return palette;
+}
+
 bool Contains(const RECT& rect, POINT point)
 {
     return point.x >= rect.left && point.x < rect.right &&
@@ -267,19 +296,34 @@ std::wstring PreviewCacheKey(const std::filesystem::path& path)
 {
     std::error_code error;
     const std::filesystem::path absolute = std::filesystem::absolute(path, error);
-    return Lower((error ? path : absolute).lexically_normal().wstring());
+    const std::wstring normalized = Lower((error ? path : absolute).lexically_normal().wstring());
+
+    std::wostringstream key;
+    key << L"preview-v2|" << normalized;
+    error.clear();
+    const std::uintmax_t size = std::filesystem::file_size(path, error);
+    if (!error)
+    {
+        key << L"|size=" << size;
+    }
+    else
+    {
+        key << L"|size=unknown";
+    }
+
+    error.clear();
+    const std::filesystem::file_time_type modified = std::filesystem::last_write_time(path, error);
+    if (!error)
+    {
+        key << L"|modified=" << modified.time_since_epoch().count();
+    }
+    return key.str();
 }
 
 std::filesystem::path CreatePreviewProxyDirectory()
 {
-    wchar_t tempPath[MAX_PATH] {};
-    const DWORD length = GetTempPathW(static_cast<DWORD>(std::size(tempPath)), tempPath);
-    if (length == 0 || length >= std::size(tempPath))
-    {
-        return {};
-    }
-    const std::filesystem::path root =
-        std::filesystem::path(tempPath) / L"RexToolkit" / L"MediaEditor";
+    const std::filesystem::path root = CacheManager::MediaEditorTemporaryRoot();
+    if (root.empty()) return {};
     std::error_code error;
     std::filesystem::create_directories(root, error);
     if (error)
@@ -400,150 +444,6 @@ void StrokeRounded(HDC hdc, const RECT& rect, int radius, COLORREF color, float 
         GetGValue(color),
         GetBValue(color)), width);
     graphics.DrawPath(&pen, &path);
-}
-
-void PaintModernToggle(
-    HDC hdc,
-    const RECT& bounds,
-    const MediaEditorTheme& theme,
-    float position,
-    bool hovered,
-    bool pressed,
-    UINT dpi)
-{
-    if (!HasArea(bounds))
-    {
-        return;
-    }
-
-    const auto dip = [dpi](int value)
-    {
-        return MulDiv(value, static_cast<int>(dpi), 96);
-    };
-    const auto color = [](COLORREF value, BYTE alpha = 255)
-    {
-        return Gdiplus::Color(
-            alpha,
-            GetRValue(value),
-            GetGValue(value),
-            GetBValue(value));
-    };
-
-    const int width = bounds.right - bounds.left;
-    const int height = bounds.bottom - bounds.top;
-    const float clampedPosition = std::clamp(position, 0.0f, 1.0f);
-    const int activePercent = static_cast<int>(std::lround(clampedPosition * 100.0f));
-    const COLORREF offTrack = Blend(theme.buttonBackground, theme.inputBackground, 24);
-    const COLORREF onTrack = Blend(theme.accentSoft, theme.accent, 64);
-    COLORREF trackColor = Blend(offTrack, onTrack, activePercent);
-    if (hovered)
-    {
-        trackColor = Blend(trackColor, theme.accent, 10);
-    }
-    if (pressed)
-    {
-        trackColor = Blend(trackColor, theme.pageBackground, 9);
-    }
-
-    const int luminance =
-        (GetRValue(theme.pageBackground) * 299 +
-         GetGValue(theme.pageBackground) * 587 +
-         GetBValue(theme.pageBackground) * 114) / 1000;
-    const bool lightPalette = luminance >= 145;
-    const COLORREF trackTop = Blend(
-        trackColor,
-        RGB(255, 255, 255),
-        lightPalette ? 5 : 10);
-    const COLORREF trackBottom = Blend(
-        trackColor,
-        theme.pageBackground,
-        lightPalette ? 3 : 12);
-    const int borderBlend = std::clamp(
-        static_cast<int>(std::lround(clampedPosition * 60.0f)) +
-            (hovered ? 20 : 0),
-        0,
-        82);
-    const COLORREF trackBorder = Blend(theme.border, theme.accent, borderBlend);
-
-    Gdiplus::Graphics graphics(hdc);
-    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
-
-    Gdiplus::GraphicsPath trackPath;
-    BuildRoundedPath(trackPath, bounds, height / 2);
-    if (hovered || clampedPosition > 0.01f)
-    {
-        const BYTE glowAlpha = static_cast<BYTE>(
-            std::clamp(
-                34 + static_cast<int>(std::lround(clampedPosition * 42.0f)) +
-                    (hovered ? 28 : 0),
-                0,
-                112));
-        Gdiplus::Pen glowPen(
-            color(theme.accent, glowAlpha),
-            static_cast<Gdiplus::REAL>(std::max(1, dip(2))));
-        graphics.DrawPath(&glowPen, &trackPath);
-    }
-
-    Gdiplus::RectF trackRect(
-        static_cast<Gdiplus::REAL>(bounds.left),
-        static_cast<Gdiplus::REAL>(bounds.top),
-        static_cast<Gdiplus::REAL>(width),
-        static_cast<Gdiplus::REAL>(height));
-    Gdiplus::LinearGradientBrush trackBrush(
-        trackRect,
-        color(trackTop),
-        color(trackBottom),
-        Gdiplus::LinearGradientModeVertical);
-    graphics.FillPath(&trackBrush, &trackPath);
-    Gdiplus::Pen borderPen(
-        color(trackBorder),
-        static_cast<Gdiplus::REAL>(std::max(1, dip(1))));
-    graphics.DrawPath(&borderPen, &trackPath);
-
-    const Gdiplus::REAL inset = static_cast<Gdiplus::REAL>(dip(3));
-    const Gdiplus::REAL baseThumbSize = std::max<Gdiplus::REAL>(
-        1.0f,
-        static_cast<Gdiplus::REAL>(height) - inset * 2.0f);
-    const Gdiplus::REAL pressInset = pressed
-        ? static_cast<Gdiplus::REAL>(dip(1))
-        : 0.0f;
-    const Gdiplus::REAL travel = std::max<Gdiplus::REAL>(
-        0.0f,
-        static_cast<Gdiplus::REAL>(width) - inset * 2.0f - baseThumbSize);
-    const Gdiplus::REAL thumbSize = std::max<Gdiplus::REAL>(
-        1.0f,
-        baseThumbSize - pressInset * 2.0f);
-    const Gdiplus::REAL thumbLeft =
-        static_cast<Gdiplus::REAL>(bounds.left) +
-        inset +
-        travel * clampedPosition +
-        pressInset;
-    const Gdiplus::REAL thumbTop =
-        static_cast<Gdiplus::REAL>(bounds.top) + inset + pressInset;
-
-    Gdiplus::RectF shadowRect(
-        thumbLeft,
-        thumbTop + static_cast<Gdiplus::REAL>(dip(1)),
-        thumbSize,
-        thumbSize);
-    Gdiplus::SolidBrush shadowBrush(Gdiplus::Color(62, 0, 0, 0));
-    graphics.FillEllipse(&shadowBrush, shadowRect);
-
-    Gdiplus::RectF thumbRect(thumbLeft, thumbTop, thumbSize, thumbSize);
-    const COLORREF thumbBottom = lightPalette
-        ? RGB(235, 239, 246)
-        : RGB(226, 232, 242);
-    Gdiplus::LinearGradientBrush thumbBrush(
-        thumbRect,
-        color(RGB(255, 255, 255)),
-        color(thumbBottom),
-        Gdiplus::LinearGradientModeVertical);
-    graphics.FillEllipse(&thumbBrush, thumbRect);
-    Gdiplus::Pen thumbBorder(
-        color(theme.border, 72),
-        static_cast<Gdiplus::REAL>(std::max(1, dip(1))));
-    graphics.DrawEllipse(&thumbBorder, thumbRect);
 }
 
 void FillRectColor(HDC hdc, const RECT& rect, COLORREF color)
@@ -919,9 +819,7 @@ private:
     ULONGLONG exportStartedAt_ = 0;
     ULONGLONG exportLastClockPaintAt_ = 0;
     bool exportGpuEnabled_ = true;
-    float exportGpuTogglePosition_ = 1.0f;
-    float exportGpuToggleTarget_ = 1.0f;
-    bool exportGpuToggleAnimating_ = false;
+    rex::ui::SwitchAnimationState exportGpuToggleAnimation_ = rex::ui::MakeSwitchAnimationState(true);
 
     ClipboardMediaService clipboardService_;
     ImageEditingSession imageSession_;
@@ -1159,6 +1057,12 @@ void MediaEditorPage::Impl::Shutdown()
     preview_.Shutdown();
     if (importThread_.joinable()) importThread_.join();
     if (exportThread_.joinable()) exportThread_.join();
+    imagePreviewCache_.reset();
+    eraserIcon_.reset();
+    textIcon_.reset();
+    textIconTinted_.reset();
+    galleryIcon_.reset();
+    galleryIconTinted_.reset();
     importBusy_ = false;
     exportBusy_ = false;
 }
@@ -1251,20 +1155,13 @@ void MediaEditorPage::Impl::SetDefaultOutputFolder(const std::filesystem::path& 
 void MediaEditorPage::Impl::SetExportGpuEnabled(bool enabled)
 {
     exportGpuEnabled_ = enabled;
-    exportGpuToggleTarget_ = enabled ? 1.0f : 0.0f;
-    if (std::abs(exportGpuToggleTarget_ - exportGpuTogglePosition_) <= 0.001f)
+    const bool started = rex::ui::SetSwitchTarget(
+        exportGpuToggleAnimation_,
+        enabled,
+        exportGpuToggleRect_);
+    if (hwnd_)
     {
-        exportGpuTogglePosition_ = exportGpuToggleTarget_;
-        exportGpuToggleAnimating_ = false;
-        if (hwnd_)
-        {
-            KillTimer(hwnd_, kControlAnimationTimerId);
-        }
-    }
-    else
-    {
-        exportGpuToggleAnimating_ = true;
-        if (hwnd_)
+        if (started || exportGpuToggleAnimation_.animating)
         {
             SetTimer(
                 hwnd_,
@@ -1272,10 +1169,11 @@ void MediaEditorPage::Impl::SetExportGpuEnabled(bool enabled)
                 kControlAnimationTimerMs,
                 nullptr);
         }
-    }
+        else
+        {
+            KillTimer(hwnd_, kControlAnimationTimerId);
+        }
 
-    if (hwnd_)
-    {
         RECT dirty = exportGpuRowRect_;
         InflateRect(&dirty, Dips(3), Dips(3));
         InvalidateRect(hwnd_, &dirty, FALSE);
@@ -1284,26 +1182,12 @@ void MediaEditorPage::Impl::SetExportGpuEnabled(bool enabled)
 
 bool MediaEditorPage::Impl::StepExportGpuToggleAnimation()
 {
-    if (!exportGpuToggleAnimating_)
-    {
-        return false;
-    }
-
-    const float delta = exportGpuToggleTarget_ - exportGpuTogglePosition_;
-    if (std::abs(delta) <= 0.006f)
-    {
-        exportGpuTogglePosition_ = exportGpuToggleTarget_;
-        exportGpuToggleAnimating_ = false;
-    }
-    else
-    {
-        exportGpuTogglePosition_ += delta * 0.34f;
-    }
-
+    const bool keepAnimating = rex::ui::StepSwitchAnimation(
+        exportGpuToggleAnimation_);
     RECT dirty = exportGpuRowRect_;
     InflateRect(&dirty, Dips(3), Dips(3));
     InvalidateRect(hwnd_, &dirty, FALSE);
-    return exportGpuToggleAnimating_;
+    return keepAnimating;
 }
 
 bool MediaEditorPage::Impl::IsBusy() const
@@ -2797,31 +2681,30 @@ void MediaEditorPage::Impl::PaintButton(
     bool primary,
     bool selected)
 {
-    if (!HasArea(rect)) return;
-    const bool hovered = enabled && EqualRect(&rect, &hoveredRect_);
-    const bool pressed = enabled && EqualRect(&rect, &pressedRect_);
-    COLORREF background = primary
-        ? theme_.accent
-        : selected
-            ? Blend(theme_.accentSoft, theme_.accent, 22)
-            : theme_.buttonBackground;
-    if (hovered) background = Blend(background, theme_.textPrimary, primary ? 10 : 7);
-    if (pressed) background = Blend(background, theme_.pageBackground, 18);
-    if (!enabled) background = Blend(background, theme_.pageBackground, 52);
-    FillRounded(hdc, rect, Dips(10), background);
-    StrokeRounded(
+    if (!HasArea(rect))
+    {
+        return;
+    }
+
+    rex::ui::ControlState state;
+    state.hovered = enabled && EqualRect(&rect, &hoveredRect_);
+    state.pressed = enabled && EqualRect(&rect, &pressedRect_);
+    state.active = selected;
+    state.enabled = enabled;
+
+    rex::ui::ButtonOptions options;
+    options.role = primary
+        ? rex::ui::ButtonRole::Primary
+        : rex::ui::ButtonRole::Neutral;
+    rex::ui::PaintButton(
         hdc,
         rect,
-        Dips(10),
-        selected || primary ? Blend(theme_.accent, theme_.textPrimary, 18) : theme_.border,
-        1.0f);
-    DrawLabel(
-        hdc,
         label,
-        rect,
         bodyFont_,
-        enabled ? theme_.textPrimary : Blend(theme_.textSecondary, theme_.pageBackground, 45),
-        DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        dpi_,
+        EditorComponentPalette(theme_),
+        state,
+        options);
 }
 
 void MediaEditorPage::Impl::PaintIconButton(
@@ -3976,21 +3859,20 @@ void MediaEditorPage::Impl::PaintImage(HDC hdc)
             smallFont_,
             theme_.textSecondary,
             DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-        FillRounded(hdc, thicknessSliderRect_, Dips(5), theme_.inputBackground);
-        RECT thicknessFill = thicknessSliderRect_;
-        const float thicknessAmount = std::clamp((drawingThickness_ - 1.0f) / 29.0f, 0.0f, 1.0f);
-        thicknessFill.right = thicknessFill.left +
-            static_cast<int>((thicknessFill.right - thicknessFill.left) * thicknessAmount);
-        FillRounded(hdc, thicknessFill, Dips(5), theme_.accent);
-        const int thicknessX = thicknessSliderRect_.left +
-            static_cast<int>((thicknessSliderRect_.right - thicknessSliderRect_.left) * thicknessAmount);
-        Gdiplus::SolidBrush thicknessThumb(gdiColor(theme_.textPrimary));
-        graphics.FillEllipse(
-            &thicknessThumb,
-            static_cast<Gdiplus::REAL>(thicknessX - Dips(5)),
-            static_cast<Gdiplus::REAL>((thicknessSliderRect_.top + thicknessSliderRect_.bottom) / 2 - Dips(5)),
-            static_cast<Gdiplus::REAL>(Dips(10)),
-            static_cast<Gdiplus::REAL>(Dips(10)));
+        const float thicknessAmount = std::clamp(
+            (drawingThickness_ - 1.0f) / 29.0f,
+            0.0f,
+            1.0f);
+        const RECT thicknessThumb = rex::ui::SliderThumbRectForValue(
+            thicknessSliderRect_,
+            thicknessAmount,
+            dpi_);
+        rex::ui::PaintSlider(
+            hdc,
+            thicknessSliderRect_,
+            thicknessThumb,
+            dpi_,
+            EditorComponentPalette(theme_));
     }
     else if (imageToolbarPopup_ == ImageToolbarPopup::Zoom && HasArea(zoomPopupRect_))
     {
@@ -4557,17 +4439,22 @@ void MediaEditorPage::Impl::PaintExportOverlay(HDC hdc)
 
     const bool gpuPressed = EqualRect(&pressedRect_, &exportGpuRowRect_) ||
         EqualRect(&pressedRect_, &exportGpuToggleRect_);
-    PaintModernToggle(
+    rex::ui::SetSwitchTarget(
+        exportGpuToggleAnimation_,
+        exportGpuEnabled_,
+        exportGpuToggleRect_);
+    rex::ui::PaintSwitch(
         hdc,
         exportGpuToggleRect_,
-        theme_,
-        exportGpuTogglePosition_,
+        exportGpuToggleAnimation_.position,
+        dpi_,
+        EditorComponentPalette(theme_),
         gpuHovered,
-        gpuPressed,
-        dpi_);
+        gpuPressed);
     PaintButton(hdc, exportCancelRect_, L"Back");
     PaintButton(hdc, exportStartRect_, L"Export", true, true);
 }
+
 void MediaEditorPage::Impl::PaintKeybindsOverlay(HDC hdc)
 {
     Gdiplus::Graphics graphics(hdc);
