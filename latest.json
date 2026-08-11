@@ -1,11 +1,8 @@
 {
-  "latestVersion": "0.8.5",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.8.5/RexsToolkit_v0.8.5.zip",
+  "latestVersion": "0.8.6",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.8.6/RexsToolkit_v0.8.6.zip",
   "releaseNotes": [
-    "Redesigned Anime Tracker around a media-focused watchlist and detailed anime workspace.",
-    "Added integrated AniList search, richer cover artwork, airing details, and streamlined list importing.",
-    "Improved Anime Tracker responsiveness with persistent artwork caching and virtualized large episode lists.",
-    "Fixed search popup repaint issues and several Anime Tracker scrolling and alignment problems.",
-    "Improved Auto Clicker keyboard output reliability for games and other applications."
+    "Fixed YouTube 1440p, 4K, and 8K downloads falling back to a lower-resolution MP4 stream when the selected high-resolution stream uses another container.",
+    "High-resolution video streams are now merged and remuxed into the requested MP4 output without reducing their resolution."
   ]
 }

@@ -1872,21 +1872,21 @@ std::wstring Mp4FormatSelector(Mp4Quality quality)
     switch (quality)
     {
     case Mp4Quality::Best:
-        return L"bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best";
+        return L"bv*+ba[ext=m4a]/bv*+ba/best";
     case Mp4Quality::P4320:
-        return L"bv*[height<=4320][ext=mp4]+ba[ext=m4a]/b[height<=4320][ext=mp4]/best[height<=4320]";
+        return L"bv*[height<=4320]+ba[ext=m4a]/bv*[height<=4320]+ba/b[height<=4320]/best[height<=4320]";
     case Mp4Quality::P2160:
-        return L"bv*[height<=2160][ext=mp4]+ba[ext=m4a]/b[height<=2160][ext=mp4]/best[height<=2160]";
+        return L"bv*[height<=2160]+ba[ext=m4a]/bv*[height<=2160]+ba/b[height<=2160]/best[height<=2160]";
     case Mp4Quality::P1440:
-        return L"bv*[height<=1440][ext=mp4]+ba[ext=m4a]/b[height<=1440][ext=mp4]/best[height<=1440]";
+        return L"bv*[height<=1440]+ba[ext=m4a]/bv*[height<=1440]+ba/b[height<=1440]/best[height<=1440]";
     case Mp4Quality::P1080:
-        return L"bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/best[height<=1080]";
+        return L"bv*[height<=1080]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]";
     case Mp4Quality::P720:
-        return L"bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/best[height<=720]";
+        return L"bv*[height<=720]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720]/best[height<=720]";
     case Mp4Quality::P480:
-        return L"bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480][ext=mp4]/best[height<=480]";
+        return L"bv*[height<=480]+ba[ext=m4a]/bv*[height<=480]+ba/b[height<=480]/best[height<=480]";
     }
-    return L"bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best";
+    return L"bv*+ba[ext=m4a]/bv*+ba/best";
 }
 
 std::wstring BitrateValue(Mp3Bitrate bitrate)
@@ -2550,6 +2550,8 @@ MediaDownloadJob MediaDownloadService::Download(
         arguments.push_back(L"-f");
         arguments.push_back(Mp4FormatSelector(options.mp4Quality));
         arguments.push_back(L"--merge-output-format");
+        arguments.push_back(L"mp4");
+        arguments.push_back(L"--remux-video");
         arguments.push_back(L"mp4");
     }
     else if (options.outputFormat == MediaOutputFormat::Mp3)
