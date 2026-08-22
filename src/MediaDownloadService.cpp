@@ -513,12 +513,74 @@ std::wstring CleanExternalToolOutput(std::wstring value)
     return condensed;
 }
 
+std::wstring ShortenExternalToolMessage(std::wstring value)
+{
+    value = CleanExternalToolOutput(value);
+    constexpr size_t kMaximumMessageLength = 420;
+    if (value.size() > kMaximumMessageLength)
+    {
+        value.resize(kMaximumMessageLength - 3);
+        value += L"...";
+    }
+    return value;
+}
+
 std::wstring FriendlyExternalToolMessage(
     const std::wstring& output,
     const std::wstring& fallbackMessage)
 {
-    const std::wstring cleaned = CleanExternalToolOutput(output);
-    return cleaned.empty() ? fallbackMessage : cleaned;
+    std::wstring normalized = output;
+    std::replace(normalized.begin(), normalized.end(), L'\r', L'\n');
+
+    std::wistringstream stream(normalized);
+    std::wstring line;
+    std::wstring lastError;
+    std::wstring lastWarning;
+    std::wstring lastUsefulLine;
+    while (std::getline(stream, line))
+    {
+        const std::wstring cleaned = CleanExternalToolOutput(line);
+        if (cleaned.empty())
+        {
+            continue;
+        }
+
+        const std::wstring lower = ToLower(cleaned);
+        const size_t errorPosition = lower.rfind(L"error:");
+        if (errorPosition != std::wstring::npos)
+        {
+            lastError = ShortenExternalToolMessage(cleaned.substr(errorPosition + 6));
+            continue;
+        }
+
+        const size_t warningPosition = lower.rfind(L"warning:");
+        if (warningPosition != std::wstring::npos)
+        {
+            lastWarning = ShortenExternalToolMessage(cleaned.substr(warningPosition + 8));
+            continue;
+        }
+
+        if (lower.rfind(L"[download]", 0) != 0 &&
+            lower.rfind(L"[youtube]", 0) != 0 &&
+            lower.rfind(L"[soundcloud]", 0) != 0)
+        {
+            lastUsefulLine = ShortenExternalToolMessage(cleaned);
+        }
+    }
+
+    if (!lastError.empty())
+    {
+        return lastError;
+    }
+    if (!lastWarning.empty())
+    {
+        return lastWarning;
+    }
+    if (!lastUsefulLine.empty())
+    {
+        return lastUsefulLine;
+    }
+    return fallbackMessage;
 }
 
 std::wstring BpmLabel(double value)
@@ -1746,6 +1808,19 @@ std::optional<LocalMusicAnalysis> AnalyzeMusicWithEssentiaDeepScan(
     return CombineEssentiaAnalyses(analyses);
 }
 
+void AppendJavascriptRuntimeArguments(
+    std::vector<std::wstring>& arguments,
+    const ExternalToolStatus& tools)
+{
+    if (!tools.quickJsFound || tools.quickJsPath.empty())
+    {
+        return;
+    }
+
+    arguments.push_back(L"--js-runtimes");
+    arguments.push_back(L"quickjs:" + tools.quickJsPath.wstring());
+}
+
 std::optional<LocalMusicAnalysis> AnalyzeMusicFromAudioSample(
     const std::wstring& url,
     const ExternalToolStatus& tools,
@@ -1758,16 +1833,19 @@ std::optional<LocalMusicAnalysis> AnalyzeMusicFromAudioSample(
         return std::nullopt;
     }
 
+    std::vector<std::wstring> streamArguments {
+        L"--no-warnings",
+        L"--no-playlist",
+        L"-f",
+        L"ba/bestaudio",
+        L"--get-url"
+    };
+    AppendJavascriptRuntimeArguments(streamArguments, tools);
+    streamArguments.push_back(url);
+
     const ProcessResult streamResult = processRunner.Run(
         tools.ytDlpPath,
-        {
-            L"--no-warnings",
-            L"--no-playlist",
-            L"-f",
-            L"ba/bestaudio",
-            L"--get-url",
-            url
-        },
+        streamArguments,
         cancelRequested,
         nullptr);
     if (streamResult.cancelled || streamResult.exitCode != 0)
@@ -1863,6 +1941,8 @@ std::wstring ExtensionFor(MediaOutputFormat format)
         return L".mp3";
     case MediaOutputFormat::Wav:
         return L".wav";
+    case MediaOutputFormat::Mov:
+        return L".mov";
     }
     return L".mp4";
 }
@@ -1927,6 +2007,237 @@ std::filesystem::path ResolveConflict(const std::filesystem::path& requestedPath
     return requestedPath;
 }
 
+bool IsVideoOutputFormat(MediaOutputFormat format)
+{
+    return format == MediaOutputFormat::Mp4 || format == MediaOutputFormat::Mov;
+}
+
+std::wstring ProbeValue(const std::wstring& output, const std::wstring& key)
+{
+    const std::wstring marker = key + L"=";
+    const size_t markerPosition = output.find(marker);
+    if (markerPosition == std::wstring::npos)
+    {
+        return {};
+    }
+
+    const size_t valueStart = markerPosition + marker.size();
+    const size_t valueEnd = output.find_first_of(L"\r\n", valueStart);
+    return TrimCopy(output.substr(valueStart, valueEnd - valueStart));
+}
+
+struct EditorCompatibility
+{
+    bool videoCompatible = false;
+    bool audioCompatible = false;
+};
+
+EditorCompatibility ProbeEditorCompatibility(
+    const std::filesystem::path& mediaPath,
+    const ExternalToolStatus& tools,
+    const ProcessRunner& processRunner,
+    const std::atomic_bool& cancelRequested)
+{
+    EditorCompatibility compatibility;
+    if (!tools.ffprobeFound || cancelRequested.load())
+    {
+        return compatibility;
+    }
+
+    const ProcessResult videoResult = processRunner.Run(
+        tools.ffprobePath,
+        {
+            L"-v", L"error",
+            L"-select_streams", L"v:0",
+            L"-show_entries", L"stream=codec_name,pix_fmt",
+            L"-of", L"default=noprint_wrappers=1",
+            mediaPath.wstring()
+        },
+        cancelRequested,
+        nullptr);
+
+    if (!videoResult.cancelled && videoResult.exitCode == 0)
+    {
+        const std::wstring codec = ToLower(ProbeValue(videoResult.output, L"codec_name"));
+        const std::wstring pixelFormat = ToLower(ProbeValue(videoResult.output, L"pix_fmt"));
+        compatibility.videoCompatible = codec == L"h264" &&
+            (pixelFormat == L"yuv420p" || pixelFormat == L"yuvj420p");
+    }
+
+    const ProcessResult audioResult = processRunner.Run(
+        tools.ffprobePath,
+        {
+            L"-v", L"error",
+            L"-select_streams", L"a:0",
+            L"-show_entries", L"stream=codec_name",
+            L"-of", L"default=noprint_wrappers=1",
+            mediaPath.wstring()
+        },
+        cancelRequested,
+        nullptr);
+
+    if (!audioResult.cancelled && audioResult.exitCode == 0)
+    {
+        const std::wstring codec = ToLower(ProbeValue(audioResult.output, L"codec_name"));
+        compatibility.audioCompatible = codec.empty() || codec == L"aac";
+    }
+
+    return compatibility;
+}
+
+std::filesystem::path MovSourcePath(const std::filesystem::path& finalPath)
+{
+    return finalPath.parent_path() / (finalPath.stem().wstring() + L".rex-source.mkv");
+}
+
+std::filesystem::path CompatibilityOutputPath(const std::filesystem::path& finalPath)
+{
+    return finalPath.parent_path() /
+        (finalPath.stem().wstring() + L".rex-compatible" + finalPath.extension().wstring());
+}
+
+void RemoveFileIfPresent(const std::filesystem::path& path)
+{
+    std::error_code error;
+    std::filesystem::remove(path, error);
+}
+
+void RemovePartialDownloadArtifacts(
+    const std::filesystem::path& folder,
+    const std::wstring& outputStem,
+    const std::filesystem::path& expectedOutput)
+{
+    RemoveFileIfPresent(expectedOutput);
+    if (folder.empty() || outputStem.empty())
+    {
+        return;
+    }
+
+    std::error_code error;
+    std::filesystem::directory_iterator iterator(folder, error);
+    const std::filesystem::directory_iterator end;
+    while (!error && iterator != end)
+    {
+        const std::filesystem::directory_entry entry = *iterator;
+        iterator.increment(error);
+        if (!entry.is_regular_file(error))
+        {
+            error.clear();
+            continue;
+        }
+
+        const std::wstring fileName = entry.path().filename().wstring();
+        if (fileName.size() <= outputStem.size() ||
+            fileName.compare(0, outputStem.size(), outputStem) != 0 ||
+            fileName[outputStem.size()] != L'.')
+        {
+            continue;
+        }
+
+        const std::wstring suffix = ToLower(fileName.substr(outputStem.size()));
+        const bool fragmentFile = suffix.size() > 2 &&
+            suffix[0] == L'.' &&
+            suffix[1] == L'f' &&
+            std::iswdigit(suffix[2]);
+        const bool temporaryFile =
+            suffix.find(L".part") != std::wstring::npos ||
+            suffix.find(L".ytdl") != std::wstring::npos ||
+            suffix.find(L".temp") != std::wstring::npos;
+        if (fragmentFile || temporaryFile)
+        {
+            std::error_code removeError;
+            std::filesystem::remove(entry.path(), removeError);
+        }
+    }
+}
+
+ProcessResult ConvertToEditorCompatibleVideo(
+    const std::filesystem::path& sourcePath,
+    const std::filesystem::path& outputPath,
+    const EditorCompatibility& compatibility,
+    const std::wstring& videoEncoder,
+    const ExternalToolStatus& tools,
+    const ProcessRunner& processRunner,
+    const std::atomic_bool& cancelRequested,
+    const ProcessRunner::OutputCallback& outputCallback)
+{
+    std::vector<std::wstring> arguments {
+        L"-hide_banner",
+        L"-loglevel", L"error",
+        L"-nostdin",
+        L"-y",
+        L"-i", sourcePath.wstring(),
+        L"-map", L"0:v:0",
+        L"-map", L"0:a:0?",
+        L"-map_metadata", L"0",
+        L"-map_chapters", L"0"
+    };
+
+    if (compatibility.videoCompatible)
+    {
+        arguments.insert(arguments.end(), { L"-c:v", L"copy" });
+    }
+    else if (videoEncoder == L"h264_nvenc")
+    {
+        arguments.insert(arguments.end(), {
+            L"-c:v", videoEncoder,
+            L"-preset", L"p4",
+            L"-rc", L"vbr",
+            L"-cq", L"18",
+            L"-b:v", L"0",
+            L"-pix_fmt", L"yuv420p"
+        });
+    }
+    else if (videoEncoder == L"h264_qsv")
+    {
+        arguments.insert(arguments.end(), {
+            L"-c:v", videoEncoder,
+            L"-preset", L"medium",
+            L"-global_quality", L"18",
+            L"-pix_fmt", L"yuv420p"
+        });
+    }
+    else if (videoEncoder == L"h264_amf")
+    {
+        arguments.insert(arguments.end(), {
+            L"-c:v", videoEncoder,
+            L"-quality", L"balanced",
+            L"-rc", L"cqp",
+            L"-qp_i", L"18",
+            L"-qp_p", L"20",
+            L"-qp_b", L"22",
+            L"-pix_fmt", L"yuv420p"
+        });
+    }
+    else
+    {
+        arguments.insert(arguments.end(), {
+            L"-c:v", L"libx264",
+            L"-preset", L"faster",
+            L"-crf", L"18",
+            L"-pix_fmt", L"yuv420p"
+        });
+    }
+    arguments.insert(arguments.end(), { L"-tag:v", L"avc1" });
+
+    if (compatibility.audioCompatible)
+    {
+        arguments.insert(arguments.end(), { L"-c:a", L"copy" });
+    }
+    else
+    {
+        arguments.insert(arguments.end(), { L"-c:a", L"aac", L"-b:a", L"192k" });
+    }
+
+    arguments.insert(arguments.end(), {
+        L"-progress", L"pipe:1",
+        L"-nostats",
+        L"-movflags", L"+faststart",
+        outputPath.wstring()
+    });
+    return processRunner.Run(tools.ffmpegPath, arguments, cancelRequested, outputCallback);
+}
+
 void ParseProgressText(const std::wstring& text, MediaDownloadJob& job)
 {
     if (text.find(L"[ExtractAudio]") != std::wstring::npos ||
@@ -1940,11 +2251,14 @@ void ParseProgressText(const std::wstring& text, MediaDownloadJob& job)
         job.status = MediaDownloadStatus::Downloading;
     }
 
-    const size_t percentPosition = text.find(L'%');
+    const size_t percentPosition = text.rfind(L'%');
     if (percentPosition != std::wstring::npos)
     {
+        const size_t previousLineEnd = text.find_last_of(L"\r\n", percentPosition);
+        const size_t lineStart = previousLineEnd == std::wstring::npos ? 0 : previousLineEnd + 1;
         size_t start = percentPosition;
-        while (start > 0 && (std::iswdigit(text[start - 1]) || text[start - 1] == L'.' || text[start - 1] == L' '))
+        while (start > lineStart &&
+            (std::iswdigit(text[start - 1]) || text[start - 1] == L'.' || text[start - 1] == L' '))
         {
             --start;
         }
@@ -1959,25 +2273,29 @@ void ParseProgressText(const std::wstring& text, MediaDownloadJob& job)
         }
     }
 
-    const size_t speedMarker = text.find(L" at ");
+    const size_t speedMarker = text.rfind(L" at ");
     if (speedMarker != std::wstring::npos)
     {
-        size_t speedStart = speedMarker + 4;
+        const size_t speedStart = speedMarker + 4;
         size_t speedEnd = text.find(L" ETA ", speedStart);
         if (speedEnd == std::wstring::npos)
         {
-            speedEnd = text.find(L'\n', speedStart);
+            speedEnd = text.find_first_of(L"\r\n", speedStart);
         }
-        if (speedEnd != std::wstring::npos && speedEnd > speedStart)
+        if (speedEnd == std::wstring::npos)
         {
-            job.speed = text.substr(speedStart, speedEnd - speedStart);
+            speedEnd = text.size();
+        }
+        if (speedEnd > speedStart)
+        {
+            job.speed = TrimCopy(text.substr(speedStart, speedEnd - speedStart));
         }
     }
 
-    const size_t etaMarker = text.find(L" ETA ");
+    const size_t etaMarker = text.rfind(L" ETA ");
     if (etaMarker != std::wstring::npos)
     {
-        size_t etaStart = etaMarker + 5;
+        const size_t etaStart = etaMarker + 5;
         size_t etaEnd = text.find_first_of(L"\r\n", etaStart);
         if (etaEnd == std::wstring::npos)
         {
@@ -1985,9 +2303,128 @@ void ParseProgressText(const std::wstring& text, MediaDownloadJob& job)
         }
         if (etaEnd > etaStart)
         {
-            job.eta = text.substr(etaStart, etaEnd - etaStart);
+            job.eta = TrimCopy(text.substr(etaStart, etaEnd - etaStart));
         }
     }
+}
+
+std::wstring DurationClockLabel(double seconds)
+{
+    const int totalSeconds = std::max(0, static_cast<int>(std::ceil(seconds)));
+    const int hours = totalSeconds / 3600;
+    const int minutes = (totalSeconds / 60) % 60;
+    const int remainingSeconds = totalSeconds % 60;
+    auto twoDigits = [](int value)
+    {
+        return value < 10 ? L"0" + std::to_wstring(value) : std::to_wstring(value);
+    };
+
+    if (hours > 0)
+    {
+        return std::to_wstring(hours) + L":" + twoDigits(minutes) + L":" + twoDigits(remainingSeconds);
+    }
+    return twoDigits(totalSeconds / 60) + L":" + twoDigits(remainingSeconds);
+}
+
+void UpdateEditorConversionEta(MediaDownloadJob& job, double durationSeconds)
+{
+    if (durationSeconds <= 0.0 || job.speed.empty())
+    {
+        return;
+    }
+
+    try
+    {
+        const double speedMultiplier = std::stod(job.speed);
+        if (speedMultiplier > 0.0 && std::isfinite(speedMultiplier))
+        {
+            const double completedSeconds = durationSeconds * job.progress;
+            job.eta = DurationClockLabel(
+                std::max(0.0, durationSeconds - completedSeconds) / speedMultiplier);
+        }
+    }
+    catch (...)
+    {
+    }
+}
+
+bool ParseFfmpegProgressLine(
+    const std::wstring& line,
+    double durationSeconds,
+    MediaDownloadJob& job)
+{
+    const std::wstring cleaned = TrimCopy(line);
+    if (cleaned.rfind(L"out_time_us=", 0) == 0)
+    {
+        try
+        {
+            const double completedSeconds = std::stod(cleaned.substr(12)) / 1000000.0;
+            if (durationSeconds > 0.0)
+            {
+                job.progress = std::clamp(completedSeconds / durationSeconds, 0.0, 0.999);
+            }
+            job.status = MediaDownloadStatus::Converting;
+            UpdateEditorConversionEta(job, durationSeconds);
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+
+    if (cleaned.rfind(L"speed=", 0) == 0)
+    {
+        const std::wstring speed = TrimCopy(cleaned.substr(6));
+        if (!speed.empty() && ToLower(speed) != L"n/a")
+        {
+            job.speed = speed;
+            UpdateEditorConversionEta(job, durationSeconds);
+            return true;
+        }
+        return false;
+    }
+
+    if (cleaned == L"progress=end")
+    {
+        job.progress = 1.0;
+        job.eta = L"00:00";
+        job.status = MediaDownloadStatus::Converting;
+        return true;
+    }
+    return false;
+}
+
+bool ConsumeFfmpegProgress(
+    const std::wstring& chunk,
+    std::wstring& pendingText,
+    double durationSeconds,
+    MediaDownloadJob& job)
+{
+    pendingText += chunk;
+    bool changed = false;
+    size_t lineEnd = pendingText.find_first_of(L"\r\n");
+    while (lineEnd != std::wstring::npos)
+    {
+        changed = ParseFfmpegProgressLine(
+            pendingText.substr(0, lineEnd),
+            durationSeconds,
+            job) || changed;
+        const size_t nextLine = pendingText.find_first_not_of(L"\r\n", lineEnd);
+        if (nextLine == std::wstring::npos)
+        {
+            pendingText.clear();
+            break;
+        }
+        pendingText.erase(0, nextLine);
+        lineEnd = pendingText.find_first_of(L"\r\n");
+    }
+
+    if (pendingText.size() > 8192)
+    {
+        pendingText.erase(0, pendingText.size() - 4096);
+    }
+    return changed;
 }
 
 std::wstring JoinMissingToolsMessage(const ExternalToolStatus& tools)
@@ -2128,6 +2565,22 @@ ExternalToolStatus ExternalToolService::CheckTools() const
         status.ytDlpPath = *ytDlpNoExtension;
     }
 
+    if (const auto quickJs = FindBesideExecutable({ L"tools\\qjs.exe", L"qjs.exe" }))
+    {
+        status.quickJsFound = true;
+        status.quickJsPath = *quickJs;
+    }
+    else if (const auto quickJsOnPath = FindOnPath(L"qjs.exe"))
+    {
+        status.quickJsFound = true;
+        status.quickJsPath = *quickJsOnPath;
+    }
+    else if (const auto quickJsNoExtension = FindOnPath(L"qjs"))
+    {
+        status.quickJsFound = true;
+        status.quickJsPath = *quickJsNoExtension;
+    }
+
     if (const auto ffmpeg = FindBesideExecutable({ L"tools\\ffmpeg\\bin\\ffmpeg.exe", L"tools\\ffmpeg.exe", L"ffmpeg.exe" }))
     {
         status.ffmpegFound = true;
@@ -2234,13 +2687,28 @@ ProcessResult ProcessRunner::Run(
     PROCESS_INFORMATION processInformation {};
     std::wstring commandLine = BuildCommandLine(executable, arguments);
 
+    ScopedHandle processJob(CreateJobObjectW(nullptr, nullptr));
+    if (processJob.Get())
+    {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobLimits {};
+        jobLimits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (!SetInformationJobObject(
+                processJob.Get(),
+                JobObjectExtendedLimitInformation,
+                &jobLimits,
+                sizeof(jobLimits)))
+        {
+            processJob.Reset();
+        }
+    }
+
     const BOOL created = CreateProcessW(
         executable.c_str(),
         commandLine.data(),
         nullptr,
         nullptr,
         TRUE,
-        CREATE_NO_WINDOW,
+        CREATE_NO_WINDOW | CREATE_SUSPENDED,
         nullptr,
         nullptr,
         &startupInfo,
@@ -2256,15 +2724,39 @@ ProcessResult ProcessRunner::Run(
 
     ScopedHandle process(processInformation.hProcess);
     ScopedHandle thread(processInformation.hThread);
+    const bool processAssignedToJob = processJob.Get() &&
+        AssignProcessToJobObject(processJob.Get(), process.Get());
 
-    std::string pendingBytes;
+    if (ResumeThread(thread.Get()) == static_cast<DWORD>(-1))
+    {
+        if (processAssignedToJob)
+        {
+            TerminateJobObject(processJob.Get(), ERROR_CANCELLED);
+        }
+        else
+        {
+            TerminateProcess(process.Get(), ERROR_CANCELLED);
+        }
+        result.output = L"Could not start external tool.";
+        return result;
+    }
+
     std::array<char, 4096> buffer {};
     bool processRunning = true;
+    bool cancellationSent = false;
     while (processRunning)
     {
-        if (cancelRequested.load())
+        if (cancelRequested.load() && !cancellationSent)
         {
-            TerminateProcess(process.Get(), 1);
+            if (processAssignedToJob)
+            {
+                TerminateJobObject(processJob.Get(), ERROR_CANCELLED);
+            }
+            else
+            {
+                TerminateProcess(process.Get(), ERROR_CANCELLED);
+            }
+            cancellationSent = true;
             result.cancelled = true;
         }
 
@@ -2279,7 +2771,6 @@ ProcessResult ProcessRunner::Run(
             }
 
             std::string chunk(buffer.data(), buffer.data() + bytesRead);
-            pendingBytes += chunk;
             const std::wstring wideChunk = BytesToWide(chunk);
             result.output += wideChunk;
             if (outputCallback)
@@ -2341,9 +2832,10 @@ std::optional<MediaDownloadJob> MediaMetadataService::Analyze(
         L"--dump-single-json",
         L"--skip-download",
         L"--no-warnings",
-        L"--no-playlist",
-        url
+        L"--no-playlist"
     };
+    AppendJavascriptRuntimeArguments(arguments, tools);
+    arguments.push_back(url);
 
     const ProcessResult result = processRunner_.Run(tools.ytDlpPath, arguments, cancelRequested, nullptr);
     if (result.cancelled)
@@ -2415,6 +2907,61 @@ std::optional<MediaDownloadJob> MediaMetadataService::Analyze(
 ExternalToolStatus MediaDownloadService::CheckExternalTools() const
 {
     return externalToolService_.CheckTools();
+}
+
+std::wstring MediaDownloadService::SelectAutomaticH264Encoder(
+    const ExternalToolStatus& tools,
+    const std::atomic_bool& cancelRequested) const
+{
+    {
+        std::lock_guard<std::mutex> lock(encoderCacheMutex_);
+        if (automaticEncoderCached_)
+        {
+            return automaticEncoder_;
+        }
+    }
+
+    if (!tools.ffmpegFound || cancelRequested.load())
+    {
+        return L"libx264";
+    }
+
+    std::wstring selectedEncoder = L"libx264";
+    for (const std::wstring& candidate : { L"h264_nvenc", L"h264_qsv", L"h264_amf" })
+    {
+        const ProcessResult testResult = processRunner_.Run(
+            tools.ffmpegPath,
+            {
+                L"-hide_banner", L"-loglevel", L"error",
+                L"-f", L"lavfi",
+                L"-i", L"color=c=black:s=256x256:d=0.1",
+                L"-frames:v", L"1",
+                L"-an",
+                L"-c:v", candidate,
+                L"-pix_fmt", L"yuv420p",
+                L"-f", L"null",
+                L"NUL"
+            },
+            cancelRequested,
+            nullptr);
+
+        if (testResult.cancelled || cancelRequested.load())
+        {
+            return L"libx264";
+        }
+        if (testResult.exitCode == 0)
+        {
+            selectedEncoder = candidate;
+            break;
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(encoderCacheMutex_);
+        automaticEncoder_ = selectedEncoder;
+        automaticEncoderCached_ = true;
+    }
+    return selectedEncoder;
 }
 
 std::optional<MediaDownloadJob> MediaDownloadService::Analyze(
@@ -2511,7 +3058,7 @@ MediaDownloadJob MediaDownloadService::Download(
         return job;
     }
 
-    if (options.outputFormat == MediaOutputFormat::Mp4 &&
+    if (IsVideoOutputFormat(options.outputFormat) &&
         job.platform == MediaPlatform::SoundCloud &&
         job.mediaType == MediaType::Audio)
     {
@@ -2528,31 +3075,46 @@ MediaDownloadJob MediaDownloadService::Download(
     job.speed.clear();
     job.eta.clear();
     job.errorMessage.clear();
+    job.editorCompatibilityPass = false;
 
     std::wstring baseName = options.customFileName.empty() ? job.title : options.customFileName;
     baseName = SanitizeFileName(baseName);
     const std::filesystem::path requestedPath = options.outputFolder / (baseName + ExtensionFor(options.outputFormat));
     job.outputFilePath = ResolveConflict(requestedPath);
 
-    std::filesystem::path outputTemplate = job.outputFilePath.parent_path() / (job.outputFilePath.stem().wstring() + L".%(ext)s");
+    const bool movOutput = options.outputFormat == MediaOutputFormat::Mov;
+    const std::filesystem::path movSourcePath = MovSourcePath(job.outputFilePath);
+    if (movOutput)
+    {
+        RemoveFileIfPresent(movSourcePath);
+    }
+
+    std::filesystem::path outputTemplate = movOutput
+        ? movSourcePath.parent_path() / (movSourcePath.stem().wstring() + L".%(ext)s")
+        : job.outputFilePath.parent_path() / (job.outputFilePath.stem().wstring() + L".%(ext)s");
+
+    const std::filesystem::path downloadArtifactPath =
+        movOutput ? movSourcePath : job.outputFilePath;
+    const std::wstring downloadArtifactStem = downloadArtifactPath.stem().wstring();
 
     std::vector<std::wstring> arguments {
         L"--no-playlist",
         L"--newline",
+        L"--concurrent-fragments", L"4",
         L"--ffmpeg-location",
         tools.ffmpegPath.parent_path().wstring(),
         L"-o",
         outputTemplate.wstring()
     };
 
-    if (options.outputFormat == MediaOutputFormat::Mp4)
+    if (IsVideoOutputFormat(options.outputFormat))
     {
         arguments.push_back(L"-f");
         arguments.push_back(Mp4FormatSelector(options.mp4Quality));
         arguments.push_back(L"--merge-output-format");
-        arguments.push_back(L"mp4");
+        arguments.push_back(movOutput ? L"mkv" : L"mp4");
         arguments.push_back(L"--remux-video");
-        arguments.push_back(L"mp4");
+        arguments.push_back(movOutput ? L"mkv" : L"mp4");
     }
     else if (options.outputFormat == MediaOutputFormat::Mp3)
     {
@@ -2569,6 +3131,7 @@ MediaDownloadJob MediaDownloadService::Download(
         arguments.push_back(L"wav");
     }
 
+    AppendJavascriptRuntimeArguments(arguments, tools);
     arguments.push_back(job.url);
 
     job.status = MediaDownloadStatus::Downloading;
@@ -2577,14 +3140,35 @@ MediaDownloadJob MediaDownloadService::Download(
         progressCallback(job);
     }
 
+    std::wstring ytDlpProgressText;
     ProcessResult result = processRunner_.Run(
         tools.ytDlpPath,
         arguments,
         cancelRequested,
         [&](const std::wstring& output)
         {
-            ParseProgressText(output, job);
-            if (progressCallback)
+            ytDlpProgressText += output;
+            bool progressChanged = false;
+            size_t lineEnd = ytDlpProgressText.find_first_of(L"\r\n");
+            while (lineEnd != std::wstring::npos)
+            {
+                ParseProgressText(ytDlpProgressText.substr(0, lineEnd), job);
+                progressChanged = true;
+                const size_t nextLine = ytDlpProgressText.find_first_not_of(L"\r\n", lineEnd);
+                if (nextLine == std::wstring::npos)
+                {
+                    ytDlpProgressText.clear();
+                    break;
+                }
+                ytDlpProgressText.erase(0, nextLine);
+                lineEnd = ytDlpProgressText.find_first_of(L"\r\n");
+            }
+
+            if (ytDlpProgressText.size() > 8192)
+            {
+                ytDlpProgressText.erase(0, ytDlpProgressText.size() - 4096);
+            }
+            if (progressChanged && progressCallback)
             {
                 progressCallback(job);
             }
@@ -2592,6 +3176,10 @@ MediaDownloadJob MediaDownloadService::Download(
 
     if (result.cancelled)
     {
+        RemovePartialDownloadArtifacts(
+            job.outputFilePath.parent_path(),
+            downloadArtifactStem,
+            downloadArtifactPath);
         job.status = MediaDownloadStatus::Cancelled;
         job.errorMessage = L"Download cancelled.";
         return job;
@@ -2599,22 +3187,163 @@ MediaDownloadJob MediaDownloadService::Download(
 
     if (result.exitCode != 0)
     {
+        RemovePartialDownloadArtifacts(
+            job.outputFilePath.parent_path(),
+            downloadArtifactStem,
+            downloadArtifactPath);
         job.status = MediaDownloadStatus::Failed;
         job.errorMessage = FriendlyExternalToolMessage(result.output, L"Download failed.");
         return job;
     }
 
-    if (!std::filesystem::exists(job.outputFilePath))
+    std::filesystem::path downloadedPath = movOutput ? movSourcePath : job.outputFilePath;
+    if (!movOutput && !std::filesystem::exists(downloadedPath))
     {
         const std::filesystem::path fallbackPath = job.outputFilePath.parent_path() /
             (job.outputFilePath.stem().wstring() + ExtensionFor(options.outputFormat));
         if (std::filesystem::exists(fallbackPath))
         {
             job.outputFilePath = fallbackPath;
+            downloadedPath = fallbackPath;
+        }
+    }
+
+    if (!std::filesystem::exists(downloadedPath))
+    {
+        RemovePartialDownloadArtifacts(
+            job.outputFilePath.parent_path(),
+            downloadArtifactStem,
+            downloadArtifactPath);
+        job.status = MediaDownloadStatus::Failed;
+        job.errorMessage = L"The download finished, but the output file could not be found.";
+        return job;
+    }
+
+    if (IsVideoOutputFormat(options.outputFormat) &&
+        (movOutput || options.editorCompatibility))
+    {
+        const EditorCompatibility compatibility = ProbeEditorCompatibility(
+            downloadedPath,
+            tools,
+            processRunner_,
+            cancelRequested);
+
+        if (cancelRequested.load())
+        {
+            RemoveFileIfPresent(downloadedPath);
+            job.status = MediaDownloadStatus::Cancelled;
+            job.errorMessage = L"Download cancelled.";
+            return job;
+        }
+
+        const bool requiresCompatibilityPass = movOutput ||
+            !compatibility.videoCompatible ||
+            !compatibility.audioCompatible;
+        if (requiresCompatibilityPass)
+        {
+            const std::filesystem::path convertedPath = movOutput
+                ? job.outputFilePath
+                : CompatibilityOutputPath(job.outputFilePath);
+            RemoveFileIfPresent(convertedPath);
+
+            job.status = MediaDownloadStatus::Converting;
+            job.editorCompatibilityPass = true;
+            job.progress = 0.0;
+            job.speed.clear();
+            job.eta.clear();
+            if (progressCallback)
+            {
+                progressCallback(job);
+            }
+
+            const std::wstring selectedEncoder = compatibility.videoCompatible
+                ? L"copy"
+                : SelectAutomaticH264Encoder(tools, cancelRequested);
+            auto runCompatibilityPass = [&](const std::wstring& encoder)
+            {
+                std::wstring ffmpegProgressText;
+                return ConvertToEditorCompatibleVideo(
+                    downloadedPath,
+                    convertedPath,
+                    compatibility,
+                    encoder,
+                    tools,
+                    processRunner_,
+                    cancelRequested,
+                    [&](const std::wstring& output)
+                    {
+                        if (ConsumeFfmpegProgress(
+                            output,
+                            ffmpegProgressText,
+                            job.durationSeconds,
+                            job) &&
+                            progressCallback)
+                        {
+                            progressCallback(job);
+                        }
+                    });
+            };
+            ProcessResult conversionResult = runCompatibilityPass(selectedEncoder);
+
+            const bool hardwareEncodeAttempted =
+                !compatibility.videoCompatible &&
+                selectedEncoder != L"libx264";
+            if (hardwareEncodeAttempted &&
+                !conversionResult.cancelled &&
+                !cancelRequested.load() &&
+                (conversionResult.exitCode != 0 || !std::filesystem::exists(convertedPath)))
+            {
+                RemoveFileIfPresent(convertedPath);
+                job.progress = 0.0;
+                job.speed.clear();
+                job.eta.clear();
+                if (progressCallback)
+                {
+                    progressCallback(job);
+                }
+                conversionResult = runCompatibilityPass(L"libx264");
+            }
+
+            if (conversionResult.cancelled)
+            {
+                RemoveFileIfPresent(convertedPath);
+                RemoveFileIfPresent(downloadedPath);
+                job.status = MediaDownloadStatus::Cancelled;
+                job.errorMessage = L"Download cancelled.";
+                return job;
+            }
+
+            if (conversionResult.exitCode != 0 || !std::filesystem::exists(convertedPath))
+            {
+                RemoveFileIfPresent(convertedPath);
+                RemoveFileIfPresent(downloadedPath);
+                job.status = MediaDownloadStatus::Failed;
+                job.errorMessage = FriendlyExternalToolMessage(
+                    conversionResult.output,
+                    L"The video downloaded, but an editor-compatible file could not be created.");
+                return job;
+            }
+
+            if (movOutput)
+            {
+                RemoveFileIfPresent(downloadedPath);
+            }
+            else if (!MoveFileExW(
+                convertedPath.c_str(),
+                job.outputFilePath.c_str(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            {
+                RemoveFileIfPresent(convertedPath);
+                job.status = MediaDownloadStatus::Failed;
+                job.errorMessage = L"The compatible MP4 was created, but Windows could not replace the downloaded file.";
+                return job;
+            }
         }
     }
 
     job.progress = 1.0;
+    job.speed.clear();
+    job.eta.clear();
     job.status = MediaDownloadStatus::Complete;
     job.errorMessage.clear();
     return job;
@@ -2630,6 +3359,8 @@ std::wstring MediaDownloadService::FormatLabel(MediaOutputFormat format)
         return L"MP3";
     case MediaOutputFormat::Wav:
         return L"WAV";
+    case MediaOutputFormat::Mov:
+        return L"MOV";
     }
     return L"MP4";
 }

@@ -723,18 +723,24 @@ std::vector<std::filesystem::path> ClipboardFilePaths(HDROP drop)
     return paths;
 }
 
-Gdiplus::REAL FittedTextSize(
+MediaEditorTextLayout MeasureTextLayout(
     Gdiplus::Graphics& graphics,
     const std::wstring& text,
+    const std::wstring& fontFamily,
     Gdiplus::REAL width,
     Gdiplus::REAL height)
 {
+    MediaEditorTextLayout result;
     if (text.empty() || width <= 1.0f || height <= 1.0f)
     {
-        return 2.0f;
+        return result;
     }
+    const Gdiplus::REAL minimumSize = std::max<Gdiplus::REAL>(
+        2.0f,
+        std::min(width, height) * 0.12f);
+    result.fontSize = minimumSize;
 
-    Gdiplus::FontFamily preferredFamily(L"Segoe UI");
+    Gdiplus::FontFamily preferredFamily(fontFamily.c_str());
     const Gdiplus::FontFamily* family =
         preferredFamily.GetLastStatus() == Gdiplus::Ok
             ? &preferredFamily
@@ -742,49 +748,67 @@ Gdiplus::REAL FittedTextSize(
     Gdiplus::StringFormat format;
     format.SetFormatFlags(
         Gdiplus::StringFormatFlagsMeasureTrailingSpaces |
-        Gdiplus::StringFormatFlagsLineLimit |
         Gdiplus::StringFormatFlagsNoClip);
     format.SetTrimming(Gdiplus::StringTrimmingNone);
 
-    Gdiplus::REAL low = 2.0f;
+    const auto fitsAt = [&](Gdiplus::REAL candidate)
+    {
+        Gdiplus::Font font(
+            family,
+            candidate,
+            Gdiplus::FontStyleRegular,
+            Gdiplus::UnitPixel);
+        if (font.GetLastStatus() != Gdiplus::Ok ||
+            font.GetHeight(&graphics) > height + 0.25f)
+        {
+            return false;
+        }
+
+        Gdiplus::RectF measured;
+        INT fitted = 0;
+        INT lines = 0;
+        const Gdiplus::Status measuredStatus = graphics.MeasureString(
+            text.c_str(),
+            static_cast<INT>(text.size()),
+            &font,
+            Gdiplus::RectF(0.0f, 0.0f, width, height),
+            &format,
+            &measured,
+            &fitted,
+            &lines);
+        return measuredStatus == Gdiplus::Ok &&
+            fitted >= static_cast<INT>(text.size()) &&
+            measured.Width <= width + 0.75f &&
+            measured.Height <= height + 0.25f;
+    };
+
+    if (fitsAt(minimumSize))
+    {
+        result.fullyFits = true;
+    }
+
+    Gdiplus::REAL low = minimumSize;
     Gdiplus::REAL high = std::max(
         low,
         std::min<Gdiplus::REAL>(2048.0f, height));
     for (int pass = 0; pass < 15; ++pass)
     {
         const Gdiplus::REAL candidate = (low + high) * 0.5f;
-        Gdiplus::Font font(
-            family,
-            candidate,
-            Gdiplus::FontStyleRegular,
-            Gdiplus::UnitPixel);
-        Gdiplus::RectF measured;
-        INT fitted = 0;
-        INT lines = 0;
-        const Gdiplus::REAL measurementHeight = std::max(
-            height * 2.0f,
-            height + candidate * 2.0f + 4.0f);
-        const Gdiplus::Status measuredStatus = graphics.MeasureString(
-            text.c_str(),
-            static_cast<INT>(text.size()),
-            &font,
-            Gdiplus::RectF(0.0f, 0.0f, width, measurementHeight),
-            &format,
-            &measured,
-            &fitted,
-            &lines);
-        const bool fits =
-            measuredStatus == Gdiplus::Ok &&
-            fitted >= static_cast<INT>(text.size()) &&
-            measured.Width <= width + 0.75f &&
-            measured.Height <= height + 0.75f;
-        if (fits) low = candidate;
-        else high = candidate;
+        if (fitsAt(candidate))
+        {
+            low = candidate;
+            result.fontSize = candidate;
+            result.fullyFits = true;
+        }
+        else
+        {
+            high = candidate;
+        }
     }
-    return low;
+    return result;
 }
 
-void DrawTextBox(
+void DrawTextBoxInternal(
     Gdiplus::Graphics& graphics,
     const MediaEditorTextBox& textBox)
 {
@@ -828,22 +852,26 @@ void DrawTextBox(
         (textBox.bounds.top + textBox.bounds.bottom) * 0.5f);
     graphics.RotateTransform(static_cast<Gdiplus::REAL>(rotation * 90));
 
-    Gdiplus::FontFamily preferredFamily(L"Segoe UI");
+    Gdiplus::FontFamily preferredFamily(textBox.fontFamily.c_str());
     const Gdiplus::FontFamily* family =
         preferredFamily.GetLastStatus() == Gdiplus::Ok
             ? &preferredFamily
             : Gdiplus::FontFamily::GenericSansSerif();
-    const Gdiplus::REAL fontSize =
-        FittedTextSize(graphics, textBox.text, contentWidth, contentHeight);
+    const MediaEditorTextLayout textLayout =
+        MeasureTextLayout(
+            graphics,
+            textBox.text,
+            textBox.fontFamily,
+            contentWidth,
+            contentHeight);
+    const Gdiplus::REAL fontSize = textLayout.fontSize;
     Gdiplus::Font font(
         family,
         fontSize,
         Gdiplus::FontStyleRegular,
         Gdiplus::UnitPixel);
     Gdiplus::StringFormat format;
-    format.SetFormatFlags(
-        Gdiplus::StringFormatFlagsMeasureTrailingSpaces |
-        Gdiplus::StringFormatFlagsLineLimit);
+    format.SetFormatFlags(Gdiplus::StringFormatFlagsMeasureTrailingSpaces);
     format.SetTrimming(Gdiplus::StringTrimmingNone);
     const Gdiplus::RectF layoutRect(
         -logicalWidth * 0.5f + padding,
@@ -870,6 +898,229 @@ std::wstring FileNameForMessage(const std::filesystem::path& path)
     const std::wstring name = path.filename().wstring();
     return name.empty() ? path.wstring() : name;
 }
+}
+
+MediaEditorTextLayout MeasureMediaEditorTextLayout(
+    Gdiplus::Graphics& graphics,
+    const std::wstring& text,
+    const std::wstring& fontFamily,
+    float width,
+    float height)
+{
+    return MeasureTextLayout(graphics, text, fontFamily, width, height);
+}
+
+void DrawMediaEditorTextBox(
+    Gdiplus::Graphics& graphics,
+    const MediaEditorTextBox& textBox)
+{
+    DrawTextBoxInternal(graphics, textBox);
+}
+
+void DrawMediaEditorTextBoxWithCaret(
+    Gdiplus::Graphics& graphics,
+    const MediaEditorTextBox& textBox,
+    size_t caretIndex,
+    COLORREF color,
+    float thickness)
+{
+    if (textBox.bounds.Width() <= 1.0f ||
+        textBox.bounds.Height() <= 1.0f ||
+        textBox.rotationQuarterTurns % 4 != 0)
+    {
+        return;
+    }
+
+    const Gdiplus::GraphicsState state = graphics.Save();
+    graphics.SetClip(
+        Gdiplus::RectF(
+            textBox.bounds.left,
+            textBox.bounds.top,
+            textBox.bounds.Width(),
+            textBox.bounds.Height()),
+        Gdiplus::CombineModeIntersect);
+    graphics.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
+    graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+    const Gdiplus::REAL width = textBox.bounds.Width();
+    const Gdiplus::REAL height = textBox.bounds.Height();
+    const Gdiplus::REAL padding = std::clamp(
+        std::min(width, height) * 0.035f,
+        1.5f,
+        18.0f);
+    const Gdiplus::REAL contentWidth =
+        std::max(1.0f, width - padding * 2.0f);
+    const Gdiplus::REAL contentHeight =
+        std::max(1.0f, height - padding * 2.0f);
+    const std::wstring layoutText = textBox.text.empty() ? L"M" : textBox.text;
+
+    Gdiplus::FontFamily preferredFamily(textBox.fontFamily.c_str());
+    const Gdiplus::FontFamily* family =
+        preferredFamily.GetLastStatus() == Gdiplus::Ok
+            ? &preferredFamily
+            : Gdiplus::FontFamily::GenericSansSerif();
+    const MediaEditorTextLayout textLayout = MeasureTextLayout(
+        graphics,
+        layoutText,
+        textBox.fontFamily,
+        contentWidth,
+        contentHeight);
+    Gdiplus::Font font(
+        family,
+        textLayout.fontSize,
+        Gdiplus::FontStyleRegular,
+        Gdiplus::UnitPixel);
+    if (font.GetLastStatus() != Gdiplus::Ok)
+    {
+        graphics.Restore(state);
+        return;
+    }
+
+    Gdiplus::StringFormat format;
+    format.SetFormatFlags(Gdiplus::StringFormatFlagsMeasureTrailingSpaces);
+    format.SetTrimming(Gdiplus::StringTrimmingNone);
+    const Gdiplus::RectF layoutRect(
+        textBox.bounds.left + padding,
+        textBox.bounds.top + padding,
+        contentWidth,
+        contentHeight);
+    if (!textBox.text.empty())
+    {
+        Gdiplus::SolidBrush textBrush(Gdiplus::Color(
+            static_cast<BYTE>(
+                std::clamp(textBox.opacity, 0.0f, 1.0f) * 255.0f),
+            GetRValue(textBox.color),
+            GetGValue(textBox.color),
+            GetBValue(textBox.color)));
+        graphics.DrawString(
+            textBox.text.c_str(),
+            static_cast<INT>(textBox.text.size()),
+            &font,
+            layoutRect,
+            &format,
+            &textBrush);
+    }
+    const size_t boundedIndex = std::min(caretIndex, textBox.text.size());
+    const auto isLineBreak = [&](size_t index)
+    {
+        return index < textBox.text.size() &&
+            (textBox.text[index] == L'\r' || textBox.text[index] == L'\n');
+    };
+    const auto measureCharacter = [&](size_t index, Gdiplus::RectF& bounds)
+    {
+        if (index >= textBox.text.size() || isLineBreak(index))
+        {
+            return false;
+        }
+        Gdiplus::CharacterRange range(static_cast<INT>(index), 1);
+        format.SetMeasurableCharacterRanges(1, &range);
+        Gdiplus::Region region;
+        if (graphics.MeasureCharacterRanges(
+                textBox.text.c_str(),
+                static_cast<INT>(textBox.text.size()),
+                &font,
+                layoutRect,
+                &format,
+                1,
+                &region) != Gdiplus::Ok)
+        {
+            return false;
+        }
+        return region.GetBounds(&bounds, &graphics) == Gdiplus::Ok;
+    };
+    const auto countLineBreaks = [&](size_t begin, size_t end)
+    {
+        int count = 0;
+        for (size_t index = begin; index < end; ++index)
+        {
+            if (textBox.text[index] == L'\r')
+            {
+                ++count;
+                if (index + 1 < end && textBox.text[index + 1] == L'\n')
+                {
+                    ++index;
+                }
+            }
+            else if (textBox.text[index] == L'\n')
+            {
+                ++count;
+            }
+        }
+        return count;
+    };
+
+    const Gdiplus::REAL lineHeight = std::max<Gdiplus::REAL>(
+        2.0f,
+        font.GetHeight(&graphics));
+    Gdiplus::REAL caretX = layoutRect.X;
+    Gdiplus::REAL caretY = layoutRect.Y;
+    Gdiplus::REAL caretHeight = lineHeight;
+    Gdiplus::RectF characterBounds;
+    if (boundedIndex < textBox.text.size() &&
+        measureCharacter(boundedIndex, characterBounds))
+    {
+        caretX = characterBounds.X;
+        caretY = characterBounds.Y;
+        caretHeight = std::max(2.0f, characterBounds.Height);
+    }
+    else if (boundedIndex > 0 &&
+        !isLineBreak(boundedIndex - 1) &&
+        measureCharacter(boundedIndex - 1, characterBounds))
+    {
+        caretX = characterBounds.GetRight();
+        caretY = characterBounds.Y;
+        caretHeight = std::max(2.0f, characterBounds.Height);
+    }
+    else if (boundedIndex > 0)
+    {
+        size_t previousCharacter = boundedIndex;
+        while (previousCharacter > 0)
+        {
+            --previousCharacter;
+            if (!isLineBreak(previousCharacter))
+            {
+                break;
+            }
+        }
+        const bool hasPreviousCharacter =
+            previousCharacter < boundedIndex &&
+            !isLineBreak(previousCharacter) &&
+            measureCharacter(previousCharacter, characterBounds);
+        const size_t breakStart = hasPreviousCharacter
+            ? previousCharacter + 1
+            : 0;
+        const int lineBreaks = countLineBreaks(breakStart, boundedIndex);
+        caretY = hasPreviousCharacter
+            ? characterBounds.Y + lineHeight * lineBreaks
+            : layoutRect.Y + lineHeight * lineBreaks;
+    }
+
+    caretX = std::clamp(
+        caretX,
+        layoutRect.X,
+        layoutRect.GetRight() - 1.0f);
+    caretY = std::clamp(
+        caretY,
+        layoutRect.Y,
+        layoutRect.GetBottom() - 2.0f);
+    caretHeight = std::clamp(
+        caretHeight,
+        2.0f,
+        layoutRect.GetBottom() - caretY);
+
+    Gdiplus::Pen pen(
+        Gdiplus::Color(
+            255,
+            GetRValue(color),
+            GetGValue(color),
+            GetBValue(color)),
+        std::max(1.0f, thickness));
+    graphics.DrawLine(
+        &pen,
+        caretX,
+        caretY,
+        caretX,
+        caretY + caretHeight);
+    graphics.Restore(state);
 }
 
 MediaEditorMediaKind MediaTypeDetector::KindFromExtension(const std::filesystem::path& path)
@@ -1495,6 +1746,10 @@ bool ImageEditingSession::AddTextBox(MediaEditorTextBox textBox)
         return false;
     }
     textBox.bounds = ClampCrop(textBox.bounds);
+    if (textBox.fontFamily.empty())
+    {
+        textBox.fontFamily = L"Segoe UI";
+    }
     textBox.opacity = std::clamp(textBox.opacity, 0.05f, 1.0f);
     textBox.rotationQuarterTurns =
         ((textBox.rotationQuarterTurns % 4) + 4) % 4;
@@ -1774,7 +2029,7 @@ bool ImageEditingSession::Flatten(
         drawing.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
         for (const MediaEditorTextBox& textBox : textBoxes_)
         {
-            DrawTextBox(drawing, textBox);
+            DrawMediaEditorTextBox(drawing, textBox);
         }
 
         Gdiplus::Bitmap output(

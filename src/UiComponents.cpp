@@ -1,15 +1,46 @@
 #include "UiComponents.h"
 
 #include <gdiplus.h>
+#include <windowsx.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iterator>
+#include <new>
 
 namespace rex::ui
 {
 namespace
 {
+constexpr wchar_t kEditContextProperty[] = L"RexToolkit.ThemedEditContext";
+constexpr UINT kEditMenuUndo = 1;
+constexpr UINT kEditMenuCut = 2;
+constexpr UINT kEditMenuCopy = 3;
+constexpr UINT kEditMenuPaste = 4;
+constexpr UINT kEditMenuDelete = 5;
+constexpr UINT kEditMenuSelectAll = 6;
+
+struct ThemedEditState
+{
+    WNDPROC originalProc = nullptr;
+    Palette palette;
+    UINT menuDpi = 96;
+};
+
+struct EditMenuItem
+{
+    const wchar_t* label = L"";
+    bool separator = false;
+};
+
+void FillMenuRect(HDC hdc, const RECT& rect, COLORREF color)
+{
+    HBRUSH brush = CreateSolidBrush(color);
+    FillRect(hdc, &rect, brush);
+    DeleteObject(brush);
+}
+
 enum class SurfaceRole
 {
     None,
@@ -254,6 +285,302 @@ void PaintCheckmark(HDC hdc, const RECT& bounds, COLORREF color, UINT dpi)
     };
     graphics.DrawLines(&pen, points, static_cast<INT>(std::size(points)));
 }
+
+bool PaintEditMenuItem(
+    const ThemedEditState& state,
+    const DRAWITEMSTRUCT& item)
+{
+    if (item.CtlType != ODT_MENU || item.itemData == 0)
+    {
+        return false;
+    }
+
+    const auto* menuItem = reinterpret_cast<const EditMenuItem*>(item.itemData);
+    const Palette& palette = state.palette;
+    FillMenuRect(item.hDC, item.rcItem, palette.dropdownBackground);
+    if (menuItem->separator)
+    {
+        RECT line = item.rcItem;
+        const int inset = Dips(12, state.menuDpi);
+        line.left += inset;
+        line.right -= inset;
+        line.top = (line.top + line.bottom) / 2;
+        line.bottom = line.top + 1;
+        FillMenuRect(item.hDC, line, palette.border);
+        return true;
+    }
+
+    const bool disabled = (item.itemState & (ODS_DISABLED | ODS_GRAYED)) != 0;
+    const bool selected = !disabled && (item.itemState & ODS_SELECTED) != 0;
+    if (selected)
+    {
+        RECT highlight = item.rcItem;
+        InflateRect(
+            &highlight,
+            -Dips(4, state.menuDpi),
+            -Dips(2, state.menuDpi));
+        FillRounded(
+            item.hDC,
+            highlight,
+            Dips(6, state.menuDpi),
+            palette.dropdownHover,
+            palette,
+            SurfaceRole::Dropdown);
+    }
+
+    RECT label = item.rcItem;
+    label.left += Dips(14, state.menuDpi);
+    label.right -= Dips(14, state.menuDpi);
+    SetBkMode(item.hDC, TRANSPARENT);
+    SetTextColor(
+        item.hDC,
+        disabled ? palette.disabledText : palette.textPrimary);
+    HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    const HGDIOBJ previousFont = SelectObject(item.hDC, font);
+    DrawTextW(
+        item.hDC,
+        menuItem->label,
+        -1,
+        &label,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
+    SelectObject(item.hDC, previousFont);
+    return true;
+}
+
+void AddEditMenuItem(
+    HMENU menu,
+    UINT position,
+    UINT command,
+    bool enabled,
+    const EditMenuItem& item)
+{
+    MENUITEMINFOW info {};
+    info.cbSize = sizeof(info);
+    info.fMask = MIIM_FTYPE | MIIM_ID | MIIM_STATE | MIIM_DATA;
+    info.fType = MFT_OWNERDRAW;
+    info.wID = command;
+    info.fState = enabled ? MFS_ENABLED : (MFS_DISABLED | MFS_GRAYED);
+    info.dwItemData = reinterpret_cast<ULONG_PTR>(&item);
+    InsertMenuItemW(menu, position, TRUE, &info);
+}
+
+void ShowEditContextMenu(HWND edit, ThemedEditState& state, POINT screenPoint)
+{
+    if (!IsWindowEnabled(edit))
+    {
+        return;
+    }
+
+    state.menuDpi = std::max<UINT>(96, GetDpiForWindow(edit));
+    if (screenPoint.x == -1 && screenPoint.y == -1)
+    {
+        if (!GetCaretPos(&screenPoint))
+        {
+            screenPoint = { 8, 8 };
+        }
+        ClientToScreen(edit, &screenPoint);
+        screenPoint.y += Dips(18, state.menuDpi);
+    }
+
+    DWORD selectionStart = 0;
+    DWORD selectionEnd = 0;
+    SendMessageW(
+        edit,
+        EM_GETSEL,
+        reinterpret_cast<WPARAM>(&selectionStart),
+        reinterpret_cast<LPARAM>(&selectionEnd));
+    const bool hasSelection = selectionStart != selectionEnd;
+    const bool readOnly =
+        (GetWindowLongPtrW(edit, GWL_STYLE) & ES_READONLY) != 0;
+    const bool canPaste = !readOnly &&
+        (IsClipboardFormatAvailable(CF_UNICODETEXT) ||
+         IsClipboardFormatAvailable(CF_TEXT));
+    const bool canUndo =
+        !readOnly && SendMessageW(edit, EM_CANUNDO, 0, 0) != 0;
+    const bool hasText = GetWindowTextLengthW(edit) > 0;
+
+    const std::array<EditMenuItem, 8> items {{
+        { L"Undo", false },
+        { L"", true },
+        { L"Cut", false },
+        { L"Copy", false },
+        { L"Paste", false },
+        { L"Delete", false },
+        { L"", true },
+        { L"Select all", false }
+    }};
+
+    HMENU menu = CreatePopupMenu();
+    if (!menu)
+    {
+        return;
+    }
+    HBRUSH menuBrush = CreateSolidBrush(state.palette.dropdownBackground);
+    MENUINFO menuInfo {};
+    menuInfo.cbSize = sizeof(menuInfo);
+    menuInfo.fMask = MIM_BACKGROUND | MIM_STYLE;
+    menuInfo.hbrBack = menuBrush;
+    menuInfo.dwStyle = MNS_NOCHECK;
+    SetMenuInfo(menu, &menuInfo);
+
+    AddEditMenuItem(menu, 0, kEditMenuUndo, canUndo, items[0]);
+    AddEditMenuItem(menu, 1, 100, false, items[1]);
+    AddEditMenuItem(
+        menu,
+        2,
+        kEditMenuCut,
+        !readOnly && hasSelection,
+        items[2]);
+    AddEditMenuItem(menu, 3, kEditMenuCopy, hasSelection, items[3]);
+    AddEditMenuItem(menu, 4, kEditMenuPaste, canPaste, items[4]);
+    AddEditMenuItem(
+        menu,
+        5,
+        kEditMenuDelete,
+        !readOnly && hasSelection,
+        items[5]);
+    AddEditMenuItem(menu, 6, 101, false, items[6]);
+    AddEditMenuItem(menu, 7, kEditMenuSelectAll, hasText, items[7]);
+
+    HWND root = GetAncestor(edit, GA_ROOT);
+    if (root)
+    {
+        SetForegroundWindow(root);
+    }
+    const UINT command = TrackPopupMenuEx(
+        menu,
+        TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
+        screenPoint.x,
+        screenPoint.y,
+        edit,
+        nullptr);
+    DestroyMenu(menu);
+    DeleteObject(menuBrush);
+    if (root)
+    {
+        PostMessageW(root, WM_NULL, 0, 0);
+    }
+
+    switch (command)
+    {
+    case kEditMenuUndo:
+        SendMessageW(edit, EM_UNDO, 0, 0);
+        break;
+    case kEditMenuCut:
+        SendMessageW(edit, WM_CUT, 0, 0);
+        break;
+    case kEditMenuCopy:
+        SendMessageW(edit, WM_COPY, 0, 0);
+        break;
+    case kEditMenuPaste:
+        SendMessageW(edit, WM_PASTE, 0, 0);
+        break;
+    case kEditMenuDelete:
+        SendMessageW(edit, WM_CLEAR, 0, 0);
+        break;
+    case kEditMenuSelectAll:
+        SendMessageW(edit, EM_SETSEL, 0, -1);
+        break;
+    default:
+        break;
+    }
+}
+
+LRESULT CALLBACK ThemedEditWindowProc(
+    HWND edit,
+    UINT message,
+    WPARAM wParam,
+    LPARAM lParam)
+{
+    auto* state = static_cast<ThemedEditState*>(
+        GetPropW(edit, kEditContextProperty));
+    if (!state)
+    {
+        return DefWindowProcW(edit, message, wParam, lParam);
+    }
+
+    if (message == WM_CONTEXTMENU)
+    {
+        ShowEditContextMenu(
+            edit,
+            *state,
+            { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) });
+        return 0;
+    }
+    if (message == WM_MEASUREITEM)
+    {
+        auto* measure = reinterpret_cast<MEASUREITEMSTRUCT*>(lParam);
+        if (measure && measure->CtlType == ODT_MENU &&
+            measure->itemData != 0)
+        {
+            const auto* item =
+                reinterpret_cast<const EditMenuItem*>(measure->itemData);
+
+            measure->itemWidth = Dips(174, state->menuDpi);
+            measure->itemHeight =
+                Dips(item->separator ? 9 : 34, state->menuDpi);
+            return TRUE;
+        }
+    }
+    if (message == WM_DRAWITEM)
+    {
+        const auto* item = reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
+        if (item && PaintEditMenuItem(*state, *item))
+        {
+            return TRUE;
+        }
+    }
+
+    const WNDPROC original = state->originalProc;
+    if (message == WM_NCDESTROY)
+    {
+        RemovePropW(edit, kEditContextProperty);
+        SetWindowLongPtrW(
+            edit,
+            GWLP_WNDPROC,
+            reinterpret_cast<LONG_PTR>(original));
+        delete state;
+    }
+    return original
+        ? CallWindowProcW(original, edit, message, wParam, lParam)
+        : DefWindowProcW(edit, message, wParam, lParam);
+}
+}
+
+void SetThemedEditContextMenu(HWND edit, const Palette& palette)
+{
+    if (!edit)
+    {
+        return;
+    }
+    if (auto* existing = static_cast<ThemedEditState*>(
+            GetPropW(edit, kEditContextProperty)))
+    {
+        existing->palette = palette;
+        return;
+    }
+
+    auto* state = new (std::nothrow) ThemedEditState;
+    if (!state)
+    {
+        return;
+    }
+    state->palette = palette;
+    if (!SetPropW(edit, kEditContextProperty, state))
+    {
+        delete state;
+        return;
+    }
+    state->originalProc = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(
+            edit,
+            GWLP_WNDPROC,
+            reinterpret_cast<LONG_PTR>(ThemedEditWindowProc)));
+    if (!state->originalProc)
+    {
+        RemovePropW(edit, kEditContextProperty);
+        delete state;
+    }
 }
 
 COLORREF BlendColor(COLORREF base, COLORREF tint, int tintPercent)

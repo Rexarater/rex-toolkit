@@ -190,5 +190,11 @@ void PaintDropdownItem(
     const Palette& palette,
     const DropdownItemOptions& options = {});
 
+
+// Replaces the native EDIT right-click menu with an owner-drawn menu that
+// follows the active Rex's Toolkit palette. Calling this again updates the
+// palette without stacking another window subclass.
+void SetThemedEditContextMenu(HWND edit, const Palette& palette);
+
 COLORREF BlendColor(COLORREF base, COLORREF tint, int tintPercent);
 }

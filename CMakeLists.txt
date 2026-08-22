@@ -9,6 +9,18 @@ add_executable(RexToolkit WIN32
     src/CacheManager.cpp
     src/CacheManager.h
     src/AppConstants.h
+    src/EqualizerAtomicFile.h
+    src/EqualizerConfigParser.h
+    src/EqualizerBackend.cpp
+    src/EqualizerDsp.cpp
+    src/EqualizerService.cpp
+    src/EqualizerSetup.cpp
+    src/EqualizerSetup.h
+    src/EqualizerSetupAutomation.cpp
+    src/EqualizerSetupAutomation.h
+    src/EqualizerPage.cpp
+    src/EqualizerPage.h
+    src/EqualizerService.h
     src/FileConversionService.cpp
     src/FileConversionService.h
     src/main.cpp
@@ -37,8 +49,12 @@ add_executable(RexToolkit WIN32
 
 target_compile_features(RexToolkit PRIVATE cxx_std_17)
 target_compile_definitions(RexToolkit PRIVATE UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
+target_include_directories(RexToolkit PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libdatachannel-src/deps/json/include"
+)
 
 target_link_libraries(RexToolkit PRIVATE
+    Advapi32
     Comdlg32
     Mf
     Mfplat
@@ -55,6 +71,7 @@ target_link_libraries(RexToolkit PRIVATE
     Shell32
     Shlwapi
     UxTheme
+    UIAutomationCore
     Windowscodecs
     Winhttp
     Wininet
@@ -107,6 +124,21 @@ if (EXISTS "${BUNDLED_YT_DLP}")
     )
 endif()
 
+set(BUNDLED_QUICKJS "${CMAKE_CURRENT_SOURCE_DIR}/tools/qjs.exe")
+set(BUNDLED_QUICKJS_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/tools/quickjs-ng-LICENSE.txt")
+if (EXISTS "${BUNDLED_QUICKJS}" AND EXISTS "${BUNDLED_QUICKJS_LICENSE}")
+    add_custom_command(TARGET RexToolkit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RexToolkit>/tools"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${BUNDLED_QUICKJS}"
+            "$<TARGET_FILE_DIR:RexToolkit>/tools/qjs.exe"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${BUNDLED_QUICKJS_LICENSE}"
+            "$<TARGET_FILE_DIR:RexToolkit>/tools/quickjs-ng-LICENSE.txt"
+        COMMENT "Copying bundled QuickJS-NG runtime and license"
+    )
+endif()
+
 set(BUNDLED_FFMPEG "${CMAKE_CURRENT_SOURCE_DIR}/tools/ffmpeg.exe")
 if (EXISTS "${BUNDLED_FFMPEG}")
     add_custom_command(TARGET RexToolkit POST_BUILD
@@ -149,6 +181,16 @@ if (EXISTS "${BUNDLED_INTERCEPTION_DIR}")
     )
 endif()
 
+set(BUNDLED_EQUALIZER_APO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tools/equalizerapo")
+if (EXISTS "${BUNDLED_EQUALIZER_APO_DIR}")
+    add_custom_command(TARGET RexToolkit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${BUNDLED_EQUALIZER_APO_DIR}"
+            "$<TARGET_FILE_DIR:RexToolkit>/tools/equalizerapo"
+        COMMENT "Copying verified Equalizer APO setup, source, license, and provenance"
+    )
+endif()
+
 set(REMINDER_NOTIFICATION_SOUND "${CMAKE_CURRENT_SOURCE_DIR}/assets/reminder_notification.mp3")
 if (EXISTS "${REMINDER_NOTIFICATION_SOUND}")
     add_custom_command(TARGET RexToolkit POST_BUILD
@@ -157,6 +199,21 @@ if (EXISTS "${REMINDER_NOTIFICATION_SOUND}")
             "${REMINDER_NOTIFICATION_SOUND}"
             "$<TARGET_FILE_DIR:RexToolkit>/assets/reminder_notification.mp3"
         COMMENT "Copying reminder notification sound"
+    )
+endif()
+
+set(REX_THIRD_PARTY_NOTICES "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_LICENSES.md")
+set(REX_EQUALIZER_HELP "${CMAKE_CURRENT_SOURCE_DIR}/docs/EQUALIZER.md")
+if (EXISTS "${REX_THIRD_PARTY_NOTICES}" AND EXISTS "${REX_EQUALIZER_HELP}")
+    add_custom_command(TARGET RexToolkit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${REX_THIRD_PARTY_NOTICES}"
+            "$<TARGET_FILE_DIR:RexToolkit>/THIRD_PARTY_LICENSES.md"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RexToolkit>/docs"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${REX_EQUALIZER_HELP}"
+            "$<TARGET_FILE_DIR:RexToolkit>/docs/EQUALIZER.md"
+        COMMENT "Copying Equalizer help and third-party notices"
     )
 endif()
 
@@ -178,6 +235,31 @@ if (BUILD_TESTING)
         target_compile_options(RexToolkitCacheTests PRIVATE /W4 /permissive-)
     endif()
     add_test(NAME RexToolkitCacheTests COMMAND RexToolkitCacheTests)
+
+    add_executable(RexToolkitEqualizerTests EXCLUDE_FROM_ALL
+        tests/EqualizerTests.cpp
+        src/EqualizerAtomicFile.h
+        src/EqualizerConfigParser.h
+        src/EqualizerDsp.cpp
+        src/EqualizerSetupAutomation.cpp
+        src/EqualizerSetupAutomation.h
+        src/EqualizerService.h
+    )
+    target_compile_features(RexToolkitEqualizerTests PRIVATE cxx_std_17)
+    target_compile_definitions(RexToolkitEqualizerTests PRIVATE UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
+    target_include_directories(RexToolkitEqualizerTests PRIVATE
+        src
+        "third_party/libdatachannel-src/deps/json/include"
+    )
+    target_link_libraries(RexToolkitEqualizerTests PRIVATE Ole32 UIAutomationCore Winhttp)
+    if (MSVC)
+        target_compile_options(RexToolkitEqualizerTests PRIVATE /W4 /permissive-)
+    endif()
+    add_test(NAME RexToolkitEqualizerTests COMMAND RexToolkitEqualizerTests)
+    add_test(
+        NAME RexToolkitEqualizerPackageSmoke
+        COMMAND $<TARGET_FILE:RexToolkit> --equalizer-verify-package
+    )
 
     add_executable(RexToolkitUiComponentsTests EXCLUDE_FROM_ALL
         tests/UiComponentsTests.cpp

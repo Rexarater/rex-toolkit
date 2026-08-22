@@ -13,6 +13,11 @@
 #include <string>
 #include <vector>
 
+namespace Gdiplus
+{
+class Graphics;
+}
+
 enum class MediaEditorMediaKind
 {
     Unsupported,
@@ -99,9 +104,33 @@ struct MediaEditorTextBox
     MediaEditorCropRect bounds;
     std::wstring text;
     COLORREF color = RGB(255, 74, 92);
+    std::wstring fontFamily = L"Segoe UI";
     float opacity = 1.0f;
     int rotationQuarterTurns = 0;
 };
+
+
+struct MediaEditorTextLayout
+{
+    float fontSize = 2.0f;
+    bool fullyFits = false;
+};
+
+MediaEditorTextLayout MeasureMediaEditorTextLayout(
+    Gdiplus::Graphics& graphics,
+    const std::wstring& text,
+    const std::wstring& fontFamily,
+    float width,
+    float height);
+void DrawMediaEditorTextBox(
+    Gdiplus::Graphics& graphics,
+    const MediaEditorTextBox& textBox);
+void DrawMediaEditorTextBoxWithCaret(
+    Gdiplus::Graphics& graphics,
+    const MediaEditorTextBox& textBox,
+    size_t caretIndex,
+    COLORREF color,
+    float thickness);
 
 struct MediaEditorImageSnapshot
 {

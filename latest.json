@@ -1,8 +1,14 @@
 {
-  "latestVersion": "0.8.6",
-  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.8.6/RexsToolkit_v0.8.6.zip",
+  "latestVersion": "0.9.0",
+  "downloadUrl": "https://github.com/Rexarater/rex-toolkit/releases/download/v0.9.0/RexsToolkit_v0.9.0.zip",
   "releaseNotes": [
-    "Fixed YouTube 1440p, 4K, and 8K downloads falling back to a lower-resolution MP4 stream when the selected high-resolution stream uses another container.",
-    "High-resolution video streams are now merged and remuxed into the requested MP4 output without reducing their resolution."
+    "Added a new Equalizer tool with sound presets, graphic and parametric editing, per-output profiles, clipping protection, tray controls, and optional AutoEq headphone profiles.",
+    "Includes guided Equalizer APO setup for system-wide audio processing. The complete Windows bundle includes the official Equalizer APO installer and preserves existing configurations.",
+    "Added editor-compatible MOV downloads and an optional compatibility conversion for downloaded videos.",
+    "Added font selection to the photo editor''s Text tool.",
+    "Cleaned up settings.",
+    "Added a setting in General for beta features.",
+    "Made the selected highlight color control the border edge glow color.",
+    "Updated yt-dlp and bundled QuickJS-NG for current media extraction requirements."
   ]
 }

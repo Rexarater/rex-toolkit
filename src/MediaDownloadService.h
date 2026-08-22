@@ -5,6 +5,7 @@
 #include <atomic>
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,9 +26,10 @@ enum class MediaType
 
 enum class MediaOutputFormat
 {
-    Mp4,
-    Mp3,
-    Wav
+    Mp4 = 0,
+    Mp3 = 1,
+    Wav = 2,
+    Mov = 3
 };
 
 enum class Mp4Quality
@@ -71,10 +73,12 @@ struct ExternalToolStatus
     bool ytDlpFound = false;
     bool ffmpegFound = false;
     bool ffprobeFound = false;
+    bool quickJsFound = false;
     bool essentiaFound = false;
     std::filesystem::path ytDlpPath;
     std::filesystem::path ffmpegPath;
     std::filesystem::path ffprobePath;
+    std::filesystem::path quickJsPath;
     std::filesystem::path essentiaPath;
 };
 
@@ -86,6 +90,7 @@ struct MediaDownloadOptions
     std::filesystem::path outputFolder;
     std::wstring customFileName;
     MediaConflictBehavior conflictBehavior = MediaConflictBehavior::AutoRename;
+    bool editorCompatibility = false;
 };
 
 struct MediaDownloadJob
@@ -110,6 +115,7 @@ struct MediaDownloadJob
     std::filesystem::path outputFilePath;
     MediaDownloadStatus status = MediaDownloadStatus::Idle;
     double progress = 0.0;
+    bool editorCompatibilityPass = false;
     std::wstring speed;
     std::wstring eta;
     std::wstring errorMessage;
@@ -191,7 +197,14 @@ public:
     static std::wstring SanitizeFileName(const std::wstring& value);
 
 private:
+    std::wstring SelectAutomaticH264Encoder(
+        const ExternalToolStatus& tools,
+        const std::atomic_bool& cancelRequested) const;
+
     ExternalToolService externalToolService_;
     MediaMetadataService metadataService_;
     ProcessRunner processRunner_;
+    mutable std::mutex encoderCacheMutex_;
+    mutable bool automaticEncoderCached_ = false;
+    mutable std::wstring automaticEncoder_ = L"libx264";
 };

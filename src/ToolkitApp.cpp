@@ -89,6 +89,9 @@ constexpr UINT kClockTickMessage = WM_APP + 141;
 constexpr UINT kTrayIconId = 1;
 constexpr UINT kTrayMenuOpenCommand = 45001;
 constexpr UINT kTrayMenuExitCommand = 45002;
+constexpr UINT kTrayMenuEqualizerToggleCommand = 45100;
+constexpr UINT kTrayMenuEqualizerOpenCommand = 45101;
+constexpr UINT kTrayMenuEqualizerPresetBaseCommand = 45110;
 constexpr wchar_t kSingleInstanceMutexName[] = L"Local\\RexToolkitSingleInstance";
 constexpr wchar_t kStartupRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 constexpr wchar_t kStartupRunValueName[] = L"RexToolkit";
@@ -125,6 +128,7 @@ constexpr UINT_PTR kSmoothScrollingToggleAnimationKey = 2;
 constexpr UINT_PTR kAutoClickerAlternateToggleAnimationKey = 3;
 constexpr UINT_PTR kAutoClickerToggleModeAnimationKey = 4;
 constexpr UINT_PTR kMacroTargetFocusToggleAnimationKey = 5;
+constexpr UINT_PTR kMediaEditorCompatibilityToggleAnimationKey = 6;
 constexpr UINT kClockRefreshMs = 200;
 constexpr int kMacroRecordHotkeyId = 2101;
 constexpr int kMacroPlayHotkeyId = 2102;
@@ -406,15 +410,27 @@ ThemePalette PaletteForTheme(AppTheme theme)
     };
 }
 
-void ApplyPalette(AppTheme theme)
+void ApplyPalette(AppTheme theme, const AppearanceSettings& appearance)
 {
     const ThemePalette palette = PaletteForTheme(theme);
+    const auto mixColor = [](COLORREF base, COLORREF tint, int tintPercent)
+    {
+        const int amount = std::clamp(tintPercent, 0, 100);
+        return RGB(
+            (GetRValue(base) * (100 - amount) + GetRValue(tint) * amount) / 100,
+            (GetGValue(base) * (100 - amount) + GetGValue(tint) * amount) / 100,
+            (GetBValue(base) * (100 - amount) + GetBValue(tint) * amount) / 100);
+    };
+    const bool customHighlight = appearance.customHighlightColorEnabled;
+    const COLORREF highlight = customHighlight ? appearance.highlightColor : palette.accent;
     kAppBackground = palette.appBackground;
     kSidebarBackground = palette.sidebarBackground;
     kPanelBackground = palette.panelBackground;
     kPanelHover = palette.panelHover;
-    kAccent = palette.accent;
-    kAccentSoft = palette.accentSoft;
+    kAccent = highlight;
+    kAccentSoft = customHighlight
+        ? mixColor(palette.panelBackground, highlight, theme == AppTheme::Light ? 18 : 52)
+        : palette.accentSoft;
     kGold = palette.gold;
     kTextPrimary = palette.textPrimary;
     kTextSecondary = palette.textSecondary;
@@ -427,7 +443,9 @@ void ApplyPalette(AppTheme theme)
     kDisabledText = palette.disabledText;
     kDropdownBackground = palette.dropdownBackground;
     kDropdownHover = palette.dropdownHover;
-    kDropdownSelected = palette.dropdownSelected;
+    kDropdownSelected = customHighlight
+        ? mixColor(palette.dropdownBackground, highlight, theme == AppTheme::Light ? 14 : 24)
+        : palette.dropdownSelected;
     ++gComponentPaletteRevision;
 }
 
@@ -977,6 +995,33 @@ std::wstring TrimWhitespace(std::wstring value)
     return std::wstring(first, last);
 }
 
+std::vector<std::wstring> ParseSmartTransferStunServers(const std::wstring& value)
+{
+    std::vector<std::wstring> servers;
+    size_t start = 0;
+    while (start <= value.size())
+    {
+        const size_t separator = value.find_first_of(L",;\r\n", start);
+        const size_t end = separator == std::wstring::npos ? value.size() : separator;
+        std::wstring server = TrimWhitespace(value.substr(start, end - start));
+        if (!server.empty())
+        {
+            servers.push_back(std::move(server));
+        }
+        if (separator == std::wstring::npos)
+        {
+            break;
+        }
+        start = separator + 1;
+    }
+
+    if (servers.empty())
+    {
+        servers.push_back(L"stun:stun.l.google.com:19302");
+    }
+    return servers;
+}
+
 std::wstring LowercaseText(std::wstring value)
 {
     std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch)
@@ -1325,9 +1370,16 @@ std::vector<ToolDefinition> CreateToolRegistry()
         {
             L"media_downloader",
             L"YouTube & SoundCloud Downloader",
-            L"Download authorized videos or audio as MP4, MP3, or WAV.",
+            L"Download authorized videos or audio as MP4, MOV, MP3, or WAV.",
             false,
             ToolKind::MediaDownloader
+        },
+        {
+            L"equalizer",
+            L"Equalizer",
+            L"Improve and customize your PC audio with headphone-specific EQ and simple sound presets.",
+            false,
+            ToolKind::Equalizer
         },
         {
             L"anime_tracker",
@@ -2326,7 +2378,7 @@ ToolkitApp::ToolkitApp(HINSTANCE instance)
     {
         appSettings_.mediaEditorExplorerIntegration = true;
     }
-    ApplyPalette(appSettings_.theme);
+    ApplyPalette(appSettings_.theme, appSettings_.appearance);
     ApplyUiSurfaceAppearance(appSettings_.appearance);
     currentPage_ = appSettings_.startPage == DefaultStartPage::AllTools ? Page::AllTools : Page::Favorites;
     LoadAutoClickerSettings();
@@ -2456,7 +2508,7 @@ int ToolkitApp::Run(int showCommand)
             message.wParam == 'A' &&
             (GetKeyState(VK_CONTROL) & 0x8000) != 0)
         {
-            for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_, videoCompressorTargetEdit_, smartTransferNameEdit_, smartTransferCodeEdit_, allToolsSearchEdit_, animeSearchEdit_, animeImportEdit_, animeNotesEdit_, reminderTitleEdit_, reminderDateEdit_, reminderTimeEdit_, reminderCategoryEdit_, reminderNotesEdit_, reminderSearchEdit_, macroNameEdit_ })
+            for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_, videoCompressorTargetEdit_, smartTransferNameEdit_, smartTransferStunEdit_, smartTransferCodeEdit_, allToolsSearchEdit_, animeSearchEdit_, animeImportEdit_, animeNotesEdit_, reminderTitleEdit_, reminderDateEdit_, reminderTimeEdit_, reminderCategoryEdit_, reminderNotesEdit_, reminderSearchEdit_, macroNameEdit_ })
             {
                 if (message.hwnd == edit)
                 {
@@ -2852,6 +2904,31 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         LoadLogoResource();
         LoadToolIconResources();
         mediaEditorPage_.Create(instance_, hwnd_);
+        equalizerPage_.Create(instance_, hwnd_);
+        equalizerPage_.SetBackgroundPainter([this](HDC target, const RECT& sourceBounds)
+        {
+            RECT destination {
+                0,
+                0,
+                std::max(1L, sourceBounds.right - sourceBounds.left),
+                std::max(1L, sourceBounds.bottom - sourceBounds.top)
+            };
+            EnsureAppearanceBackgroundCache();
+            const bool cachedRegionAvailable =
+                appearanceBackgroundCacheDc_ &&
+                appearanceBackgroundCacheBitmap_ &&
+                sourceBounds.left >= 0 && sourceBounds.top >= 0 &&
+                sourceBounds.right <= appearanceBackgroundCacheSize_.cx &&
+                sourceBounds.bottom <= appearanceBackgroundCacheSize_.cy;
+            if (cachedRegionAvailable)
+            {
+                BitBlt(
+                    target, 0, 0, destination.right, destination.bottom,
+                    appearanceBackgroundCacheDc_, sourceBounds.left, sourceBounds.top, SRCCOPY);
+                return;
+            }
+            FillSolidRect(target, destination, kAppBackground);
+        });
         CreateAllToolsSearchControl();
         CreateMediaDownloaderControls();
         CreateVideoCompressorControls();
@@ -2859,6 +2936,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         CreateAnimeTrackerControls();
         CreateReminderControls();
         CreateMacroRecorderControls();
+        RefreshThemedEditContextMenus();
         ApplyDarkTitleBar();
         DragAcceptFiles(hwnd_, TRUE);
         RecalculateLayout();
@@ -2915,7 +2993,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         animeItemFont_ = CreateUiFont(dpi_, 14, FW_SEMIBOLD);
         animeBodyFont_ = CreateUiFont(dpi_, 12, FW_NORMAL);
 
-        for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_, videoCompressorTargetEdit_, smartTransferNameEdit_, smartTransferCodeEdit_, allToolsSearchEdit_, reminderTitleEdit_, reminderDateEdit_, reminderTimeEdit_, reminderCategoryEdit_, reminderSearchEdit_, macroNameEdit_ })
+        for (HWND edit : { mediaUrlEdit_, mediaFileNameEdit_, videoCompressorTargetEdit_, smartTransferNameEdit_, smartTransferStunEdit_, smartTransferCodeEdit_, allToolsSearchEdit_, reminderTitleEdit_, reminderDateEdit_, reminderTimeEdit_, reminderCategoryEdit_, reminderSearchEdit_, macroNameEdit_ })
         {
             if (!edit)
             {
@@ -3185,6 +3263,31 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             RecalculateLayout();
             InvalidateRect(hwnd_, nullptr, FALSE);
             return 0;
+        }
+        if (reinterpret_cast<HWND>(lParam) == smartTransferStunEdit_)
+        {
+            const WORD notification = HIWORD(wParam);
+            if (notification == EN_CHANGE)
+            {
+                appSettings_.smartTransferStunServers = GetWindowTextString(smartTransferStunEdit_);
+                return 0;
+            }
+            if (notification == EN_KILLFOCUS)
+            {
+                std::wstring stunServers = TrimWhitespace(GetWindowTextString(smartTransferStunEdit_));
+                if (stunServers.empty())
+                {
+                    stunServers = L"stun:stun.l.google.com:19302";
+                }
+                appSettings_.smartTransferStunServers = stunServers;
+                if (GetWindowTextString(smartTransferStunEdit_) != stunServers)
+                {
+                    SetWindowTextW(smartTransferStunEdit_, stunServers.c_str());
+                }
+                SaveAppSettings();
+                InvalidateRect(hwnd_, &smartTransferP2pOptionsPanelRect_, FALSE);
+                return 0;
+            }
         }
         if (lParam != 0 && (HIWORD(wParam) == EN_SETFOCUS || HIWORD(wParam) == EN_KILLFOCUS))
         {
@@ -4215,6 +4318,7 @@ LRESULT ToolkitApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         macroRecorderService_.CancelRecording();
         macroPlaybackService_.Stop();
         DisableAutomationInputs();
+        equalizerPage_.Destroy();
         mediaEditorPage_.Destroy();
         if (!minimizedToTray_)
         {
@@ -4550,6 +4654,72 @@ void ToolkitApp::ShowTrayMenu(POINT screenPoint)
     }
 
     AppendMenuW(menu, MF_STRING, kTrayMenuOpenCommand, L"Open Rex's Toolkit");
+
+    constexpr std::array<const wchar_t*, 6> trayPresetIds {
+        L"balanced",
+        L"bass_plus",
+        L"warm",
+        L"gaming",
+        L"footsteps",
+        L"custom"
+    };
+    if (equalizerPage_.IsInitialized() && equalizerPage_.TrayControlsEnabled())
+    {
+        HMENU equalizerMenu = CreatePopupMenu();
+        if (equalizerMenu)
+        {
+            auto menuSummary = [](const std::wstring& prefix, const std::wstring& value)
+            {
+                std::wstring summary = prefix;
+                summary += value.empty() ? L"None" : value;
+                constexpr size_t maximumLength = 52;
+                if (summary.size() > maximumLength)
+                {
+                    summary.resize(maximumLength - 3);
+                    summary += L"...";
+                }
+                return summary;
+            };
+            const std::wstring output =
+                menuSummary(L"Output: ", equalizerPage_.CurrentOutputName());
+            const std::wstring headphones =
+                menuSummary(L"Headphones: ", equalizerPage_.CurrentHeadphoneName());
+            AppendMenuW(equalizerMenu, MF_STRING | MF_DISABLED | MF_GRAYED, 0, output.c_str());
+            AppendMenuW(equalizerMenu, MF_STRING | MF_DISABLED | MF_GRAYED, 0, headphones.c_str());
+            AppendMenuW(equalizerMenu, MF_SEPARATOR, 0, nullptr);
+            AppendMenuW(
+                equalizerMenu,
+                MF_STRING | (equalizerPage_.IsEnabled() ? MF_CHECKED : MF_UNCHECKED),
+                kTrayMenuEqualizerToggleCommand,
+                L"EQ Enabled");
+            AppendMenuW(equalizerMenu, MF_SEPARATOR, 0, nullptr);
+
+            const std::wstring activePreset = equalizerPage_.CurrentPresetId();
+            for (size_t index = 0; index < trayPresetIds.size(); ++index)
+            {
+                const std::wstring presetId = trayPresetIds[index];
+                const std::wstring display =
+                    rex::equalizer::EqualizerService::PresetDisplayName(presetId);
+                AppendMenuW(
+                    equalizerMenu,
+                    MF_STRING | (activePreset == presetId ? MF_CHECKED : MF_UNCHECKED),
+                    kTrayMenuEqualizerPresetBaseCommand + static_cast<UINT>(index),
+                    display.c_str());
+            }
+            AppendMenuW(equalizerMenu, MF_SEPARATOR, 0, nullptr);
+            AppendMenuW(
+                equalizerMenu,
+                MF_STRING,
+                kTrayMenuEqualizerOpenCommand,
+                L"Open Equalizer");
+            AppendMenuW(
+                menu,
+                MF_POPUP | MF_STRING,
+                reinterpret_cast<UINT_PTR>(equalizerMenu),
+                L"Equalizer");
+        }
+    }
+
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kTrayMenuExitCommand, L"Exit");
 
@@ -4568,6 +4738,22 @@ void ToolkitApp::ShowTrayMenu(POINT screenPoint)
     if (command == kTrayMenuOpenCommand)
     {
         RestoreFromTray();
+    }
+    else if (command == kTrayMenuEqualizerToggleCommand)
+    {
+        equalizerPage_.ToggleEnabled();
+    }
+    else if (command == kTrayMenuEqualizerOpenCommand)
+    {
+        RestoreFromTray();
+        OpenTool(ToolKind::Equalizer);
+    }
+    else if (command >= kTrayMenuEqualizerPresetBaseCommand &&
+             command < kTrayMenuEqualizerPresetBaseCommand + trayPresetIds.size())
+    {
+        const size_t index =
+            static_cast<size_t>(command - kTrayMenuEqualizerPresetBaseCommand);
+        equalizerPage_.SelectPreset(trayPresetIds[index]);
     }
     else if (command == kTrayMenuExitCommand)
     {
@@ -4641,6 +4827,7 @@ void ToolkitApp::LoadToolIconResources()
     macroRecorderIcon_ = LoadPngResource(IDR_MACRO_RECORDER_ICON);
     videoCompressorIcon_ = LoadPngResource(IDR_VIDEO_COMPRESSOR_ICON);
     mediaEditorIcon_ = LoadPngResource(IDR_MEDIA_EDITOR_ICON);
+    equalizerIcon_ = LoadPngResource(IDR_EQUALIZER_ICON);
     allToolsIcon_ = LoadPngResource(IDR_ALL_TOOLS_ICON);
     settingsIcon_ = LoadPngResource(IDR_SETTINGS_ICON);
     customImageIcon_ = LoadPngResource(IDR_CUSTOM_IMAGE_ICON);
@@ -4701,6 +4888,7 @@ void ToolkitApp::RefreshTintedIconResources()
     macroRecorderIconTinted_ = CreateTintedBitmap(macroRecorderIcon_.get(), kTextPrimary);
     videoCompressorIconTinted_ = CreateTintedBitmap(videoCompressorIcon_.get(), kTextPrimary);
     mediaEditorIconTinted_ = CreateTintedBitmap(mediaEditorIcon_.get(), kTextPrimary);
+    equalizerIconTinted_ = CreateTintedBitmap(equalizerIcon_.get(), kTextPrimary);
     allToolsIconTinted_ = CreateTintedBitmap(allToolsIcon_.get(), kTextPrimary);
     settingsIconTinted_ = CreateTintedBitmap(settingsIcon_.get(), kTextPrimary);
     customImageIconTinted_ = CreateTintedBitmap(customImageIcon_.get(), kTextPrimary);
@@ -4862,6 +5050,7 @@ void ToolkitApp::LoadAppSettings()
     appSettings_.appearance = AppearanceSettings {};
     appSettings_.minimizeToTrayOnClose = false;
     appSettings_.startWithWindowsToTray = false;
+    appSettings_.betaFeaturesEnabled = false;
     appSettings_.smartTransferWebRtcFallback = true;
     appSettings_.smartTransferWebRtcDiagnostics = false;
     appSettings_.smartTransferStunServers = L"stun:stun.l.google.com:19302";
@@ -4947,6 +5136,10 @@ void ToolkitApp::LoadAppSettings()
         {
             appSettings_.startWithWindowsToTray = value == L"1" || value == L"true";
         }
+        else if (key == L"betaFeaturesEnabled")
+        {
+            appSettings_.betaFeaturesEnabled = value == L"1" || value == L"true";
+        }
         else if (key == L"smartTransferWebRtcFallback")
         {
             appSettings_.smartTransferWebRtcFallback = value == L"1" || value == L"true";
@@ -5013,6 +5206,8 @@ void ToolkitApp::LoadAppSettings()
             else if (key == L"appearance.gradientBlendWithTheme") appearance.gradientBlendWithTheme = boolValue;
             else if (key == L"appearance.uiSurfaceStyle") appearance.uiSurfaceStyle = static_cast<UiSurfaceStyle>(integerValue(0, 0, 2));
             else if (key == L"appearance.uiSurfaceOpacity") appearance.uiSurfaceOpacity = integerValue(100, 35, 100);
+            else if (key == L"appearance.customHighlightColorEnabled") appearance.customHighlightColorEnabled = boolValue;
+            else if (key == L"appearance.highlightColor") appearance.highlightColor = static_cast<COLORREF>(integerValue(static_cast<int>(RGB(83, 147, 245)), 0, 0xFFFFFF));
             else if (key == L"appearance.borderEdgeGlowEnabled") appearance.borderEdgeGlowEnabled = boolValue;
             else if (key == L"appearance.smoothScrollingEnabled") appearance.smoothScrollingEnabled = boolValue;
         }
@@ -5073,6 +5268,7 @@ void ToolkitApp::SaveAppSettings() const
         << L"theme=" << theme << L'\n'
         << L"minimizeToTrayOnClose=" << (appSettings_.minimizeToTrayOnClose ? L"1" : L"0") << L'\n'
         << L"startWithWindowsToTray=" << (appSettings_.startWithWindowsToTray ? L"1" : L"0") << L'\n'
+        << L"betaFeaturesEnabled=" << (appSettings_.betaFeaturesEnabled ? L"1" : L"0") << L'\n'
         << L"smartTransferWebRtcFallback=" << (appSettings_.smartTransferWebRtcFallback ? L"1" : L"0") << L'\n'
         << L"smartTransferWebRtcDiagnostics=" << (appSettings_.smartTransferWebRtcDiagnostics ? L"1" : L"0") << L'\n'
         << L"smartTransferStunServers=" << appSettings_.smartTransferStunServers << L'\n'
@@ -5102,6 +5298,8 @@ void ToolkitApp::SaveAppSettings() const
         << L"appearance.gradientBlendWithTheme=" << (appSettings_.appearance.gradientBlendWithTheme ? 1 : 0) << L'\n'
         << L"appearance.uiSurfaceStyle=" << static_cast<int>(appSettings_.appearance.uiSurfaceStyle) << L'\n'
         << L"appearance.uiSurfaceOpacity=" << appSettings_.appearance.uiSurfaceOpacity << L'\n'
+        << L"appearance.customHighlightColorEnabled=" << (appSettings_.appearance.customHighlightColorEnabled ? 1 : 0) << L'\n'
+        << L"appearance.highlightColor=" << static_cast<unsigned long>(appSettings_.appearance.highlightColor) << L'\n'
         << L"appearance.borderEdgeGlowEnabled=" << (appSettings_.appearance.borderEdgeGlowEnabled ? 1 : 0) << L'\n'
         << L"appearance.smoothScrollingEnabled=" << (appSettings_.appearance.smoothScrollingEnabled ? 1 : 0) << L'\n';
 }
@@ -5358,13 +5556,17 @@ void ToolkitApp::LoadMediaDownloadSettings()
     int outputFormat = 0;
     int mp4Quality = 0;
     int mp3Bitrate = 0;
-    file >> outputFormat >> mp4Quality >> mp3Bitrate;
-    file.ignore(std::numeric_limits<std::streamsize>::max(), L'\n');
+    int editorCompatibility = 0;
+    std::wstring settingsLine;
+    std::getline(file, settingsLine);
+    std::wistringstream settings(settingsLine);
+    settings >> outputFormat >> mp4Quality >> mp3Bitrate;
+    settings >> editorCompatibility;
 
     std::wstring outputFolder;
     std::getline(file, outputFolder);
 
-    if (outputFormat >= 0 && outputFormat <= 2)
+    if (outputFormat >= 0 && outputFormat <= 3)
     {
         mediaDownloadOptions_.outputFormat = static_cast<MediaOutputFormat>(outputFormat);
     }
@@ -5376,6 +5578,7 @@ void ToolkitApp::LoadMediaDownloadSettings()
     {
         mediaDownloadOptions_.mp3Bitrate = static_cast<Mp3Bitrate>(mp3Bitrate);
     }
+    mediaDownloadOptions_.editorCompatibility = editorCompatibility != 0;
     if (!outputFolder.empty())
     {
         mediaDownloadOptions_.outputFolder = outputFolder;
@@ -5395,7 +5598,8 @@ void ToolkitApp::SaveMediaDownloadSettings() const
 
     file << static_cast<int>(mediaDownloadOptions_.outputFormat) << L' '
         << static_cast<int>(mediaDownloadOptions_.mp4Quality) << L' '
-        << static_cast<int>(mediaDownloadOptions_.mp3Bitrate) << L'\n'
+        << static_cast<int>(mediaDownloadOptions_.mp3Bitrate) << L' '
+        << (mediaDownloadOptions_.editorCompatibility ? 1 : 0) << L'\n'
         << mediaDownloadOptions_.outputFolder.wstring() << L'\n';
 }
 
@@ -6094,6 +6298,14 @@ void ToolkitApp::RecalculateLayout()
         mediaDownloadButtonRect_.right + Dips(132),
         mediaDownloadButtonRect_.bottom
     };
+    mediaEditorCompatibilityToggleRect_ = {
+        std::max(
+            static_cast<int>(mediaCancelButtonRect_.right + Dips(12)),
+            mediaSettingsRight - Dips(304)),
+        mediaDownloadButtonRect_.top,
+        mediaSettingsRight - Dips(24),
+        mediaDownloadButtonRect_.bottom
+    };
     mediaProgressRect_ = {
         mediaSettingsLeft + Dips(24),
         mediaDownloadButtonRect_.bottom + Dips(16),
@@ -6102,9 +6314,9 @@ void ToolkitApp::RecalculateLayout()
     };
     mediaOpenFileButtonRect_ = {
         mediaProgressRect_.left,
-        mediaProgressRect_.bottom + Dips(28),
+        mediaProgressRect_.bottom + Dips(40),
         mediaProgressRect_.left + Dips(130),
-        mediaProgressRect_.bottom + Dips(66)
+        mediaProgressRect_.bottom + Dips(78)
     };
     mediaOpenFolderButtonRect_ = {
         mediaOpenFileButtonRect_.right + Dips(12),
@@ -6371,7 +6583,52 @@ void ToolkitApp::RecalculateLayout()
         smartTransferSendTabRect_.right + Dips(154),
         smartTransferSendTabRect_.bottom
     };
-    const int transferBodyTop = smartTransferSendTabRect_.bottom + Dips(58);
+    smartTransferP2pOptionsToggleRect_ = {
+        std::max<int>(smartTransferReceiveTabRect_.right + Dips(10), transferRight - Dips(184)),
+        smartTransferSendTabRect_.top,
+        transferRight,
+        smartTransferSendTabRect_.bottom
+    };
+
+    int transferBodyTop = smartTransferSendTabRect_.bottom + Dips(58);
+    if (smartTransferP2pOptionsOpen_)
+    {
+        smartTransferP2pOptionsPanelRect_ = {
+            transferLeft,
+            smartTransferSendTabRect_.bottom + Dips(18),
+            transferRight,
+            smartTransferSendTabRect_.bottom + Dips(194)
+        };
+        const int p2pInnerLeft = smartTransferP2pOptionsPanelRect_.left + Dips(18);
+        const int p2pInnerRight = smartTransferP2pOptionsPanelRect_.right - Dips(18);
+        const int p2pHalf = p2pInnerLeft + ((p2pInnerRight - p2pInnerLeft) / 2);
+        smartTransferWebRtcFallbackToggleRect_ = {
+            p2pInnerLeft,
+            smartTransferP2pOptionsPanelRect_.top + Dips(18),
+            p2pHalf - Dips(8),
+            smartTransferP2pOptionsPanelRect_.top + Dips(54)
+        };
+        smartTransferWebRtcDiagnosticsToggleRect_ = {
+            p2pHalf + Dips(8),
+            smartTransferWebRtcFallbackToggleRect_.top,
+            p2pInnerRight,
+            smartTransferWebRtcFallbackToggleRect_.bottom
+        };
+        smartTransferStunEditRect_ = {
+            p2pInnerLeft,
+            smartTransferP2pOptionsPanelRect_.top + Dips(88),
+            p2pInnerRight,
+            smartTransferP2pOptionsPanelRect_.top + Dips(128)
+        };
+        transferBodyTop = smartTransferP2pOptionsPanelRect_.bottom + Dips(20);
+    }
+    else
+    {
+        smartTransferP2pOptionsPanelRect_ = {};
+        smartTransferWebRtcFallbackToggleRect_ = {};
+        smartTransferWebRtcDiagnosticsToggleRect_ = {};
+        smartTransferStunEditRect_ = {};
+    }
     smartTransferDropZoneRect_ = {
         transferLeft,
         transferBodyTop,
@@ -6627,17 +6884,11 @@ void ToolkitApp::RecalculateLayout()
         settingsLeft + settingsRailWidth - Dips(14),
         settingsTop + Dips(18) + settingsRailItemHeight
     };
-    settingsSmartTransferTabRect_ = {
+    settingsEqualizerTabRect_ = {
         settingsGeneralTabRect_.left,
         settingsGeneralTabRect_.bottom + settingsRailGap,
         settingsGeneralTabRect_.right,
         settingsGeneralTabRect_.bottom + settingsRailGap + settingsRailItemHeight
-    };
-    settingsWindowsIntegrationTabRect_ = {
-        settingsGeneralTabRect_.left,
-        settingsSmartTransferTabRect_.bottom + settingsRailGap,
-        settingsGeneralTabRect_.right,
-        settingsSmartTransferTabRect_.bottom + settingsRailGap + settingsRailItemHeight
     };
     settingsMacroRecorderTabRect_ = {
         0,
@@ -6647,9 +6898,9 @@ void ToolkitApp::RecalculateLayout()
     };
     settingsAppearanceTabRect_ = {
         settingsGeneralTabRect_.left,
-        settingsWindowsIntegrationTabRect_.bottom + settingsRailGap,
+        settingsEqualizerTabRect_.bottom + settingsRailGap,
         settingsGeneralTabRect_.right,
-        settingsWindowsIntegrationTabRect_.bottom + settingsRailGap + settingsRailItemHeight
+        settingsEqualizerTabRect_.bottom + settingsRailGap + settingsRailItemHeight
     };
     settingsUpdatesTabRect_ = {
         settingsGeneralTabRect_.left,
@@ -6698,30 +6949,94 @@ void ToolkitApp::RecalculateLayout()
         settingsControlLeft + Dips(420),
         settingsMinimizeToTrayToggleRect_.bottom + Dips(106)
     };
-    settingsWebRtcFallbackToggleRect_ = {
-        settingsControlLeft,
-        settingsTop + Dips(134),
-        settingsControlRight,
-        settingsTop + Dips(170)
-    };
-    settingsWebRtcDiagnosticsToggleRect_ = {
-        settingsControlLeft,
-        settingsWebRtcFallbackToggleRect_.bottom + Dips(70),
-        settingsControlRight,
-        settingsWebRtcFallbackToggleRect_.bottom + Dips(106)
-    };
-    settingsWebRtcStunServersRect_ = {
-        settingsControlLeft,
-        settingsWebRtcDiagnosticsToggleRect_.bottom + Dips(76),
-        settingsControlRight,
-        settingsWebRtcDiagnosticsToggleRect_.bottom + Dips(142)
-    };
     settingsExplorerContextToggleRect_ = {
         settingsControlLeft,
-        settingsTop + Dips(134),
+        settingsStartWithWindowsToggleRect_.bottom + Dips(70),
         settingsControlRight,
-        settingsTop + Dips(176)
+        settingsStartWithWindowsToggleRect_.bottom + Dips(106)
     };
+    settingsBetaFeaturesToggleRect_ = {
+        settingsControlLeft,
+        settingsExplorerContextToggleRect_.bottom + Dips(70),
+        settingsControlLeft + Dips(420),
+        settingsExplorerContextToggleRect_.bottom + Dips(106)
+    };
+    const int equalizerColumnGap = Dips(20);
+    const int equalizerColumnWidth =
+        std::max(1, (settingsControlRight - settingsControlLeft - equalizerColumnGap) / 2);
+    const int equalizerRightColumn = settingsControlLeft + equalizerColumnWidth + equalizerColumnGap;
+    const int equalizerCardInset = Dips(14);
+    const int equalizerFirstRow = settingsTop + Dips(128);
+    const int equalizerRowGap = Dips(104);
+    settingsEqualizerStartupToggleRect_ = {
+        settingsControlLeft + equalizerCardInset,
+        equalizerFirstRow,
+        settingsControlLeft + equalizerColumnWidth - equalizerCardInset,
+        equalizerFirstRow + Dips(36)
+    };
+    settingsEqualizerRememberDeviceToggleRect_ = {
+        equalizerRightColumn + equalizerCardInset,
+        equalizerFirstRow,
+        settingsControlRight - equalizerCardInset,
+        equalizerFirstRow + Dips(36)
+    };
+    settingsEqualizerAutoApplyToggleRect_ = {
+        settingsControlLeft + equalizerCardInset,
+        equalizerFirstRow + equalizerRowGap,
+        settingsControlLeft + equalizerColumnWidth - equalizerCardInset,
+        equalizerFirstRow + equalizerRowGap + Dips(36)
+    };
+    settingsEqualizerPreventClippingToggleRect_ = {
+        equalizerRightColumn + equalizerCardInset,
+        settingsEqualizerAutoApplyToggleRect_.top,
+        settingsControlRight - equalizerCardInset,
+        settingsEqualizerAutoApplyToggleRect_.bottom
+    };
+    settingsEqualizerTrayToggleRect_ = {
+        settingsControlLeft + equalizerCardInset,
+        equalizerFirstRow + equalizerRowGap * 2,
+        settingsControlLeft + equalizerColumnWidth - equalizerCardInset,
+        equalizerFirstRow + equalizerRowGap * 2 + Dips(36)
+    };
+    settingsEqualizerTechnicalToggleRect_ = {
+        equalizerRightColumn + equalizerCardInset,
+        settingsEqualizerTrayToggleRect_.top,
+        settingsControlRight - equalizerCardInset,
+        settingsEqualizerTrayToggleRect_.bottom
+    };
+    const int equalizerButtonTop = settingsTop + Dips(516);
+    const int equalizerButtonGap = Dips(12);
+    const int equalizerButtonCount = appSettings_.betaFeaturesEnabled ? 3 : 2;
+    const int equalizerButtonWidth =
+        std::max(1, (settingsControlRight - settingsControlLeft -
+            equalizerButtonGap * (equalizerButtonCount - 1)) / equalizerButtonCount);
+    settingsEqualizerSetupButtonRect_ = {
+        settingsControlLeft,
+        equalizerButtonTop,
+        settingsControlLeft + equalizerButtonWidth,
+        equalizerButtonTop + Dips(42)
+    };
+    settingsEqualizerProfilesButtonRect_ = {
+        settingsEqualizerSetupButtonRect_.right + equalizerButtonGap,
+        equalizerButtonTop,
+        appSettings_.betaFeaturesEnabled
+            ? settingsEqualizerSetupButtonRect_.right + equalizerButtonGap + equalizerButtonWidth
+            : settingsControlRight,
+        equalizerButtonTop + Dips(42)
+    };
+    if (appSettings_.betaFeaturesEnabled)
+    {
+        settingsEqualizerDiagnosticsButtonRect_ = {
+            settingsEqualizerProfilesButtonRect_.right + equalizerButtonGap,
+            equalizerButtonTop,
+            settingsControlRight,
+            equalizerButtonTop + Dips(42)
+        };
+    }
+    else
+    {
+        settingsEqualizerDiagnosticsButtonRect_ = {};
+    }
     const int settingsMacroColumnGap = Dips(18);
     const int settingsMacroColumnWidth = std::max(Dips(180), (settingsControlRight - settingsControlLeft - settingsMacroColumnGap) / 2);
     const int settingsMacroRightColumnLeft = settingsControlLeft + settingsMacroColumnWidth + settingsMacroColumnGap;
@@ -7224,13 +7539,38 @@ void ToolkitApp::RecalculateLayout()
         35,
         100);
 
+    const int colorCardHeight = Dips(88);
+    const int colorCardTop =
+        settingsAppearanceInterfaceSectionRect_.bottom + appearanceSectionGap + Dips(76);
+    settingsAppearanceColorSectionRect_ = {
+        settingsControlLeft,
+        settingsAppearanceInterfaceSectionRect_.bottom + appearanceSectionGap,
+        settingsControlRight,
+        colorCardTop + colorCardHeight
+    };
+    settingsHighlightColorButtonRect_ = {
+        settingsControlLeft,
+        colorCardTop,
+        settingsControlRight,
+        colorCardTop + colorCardHeight
+    };
+    const int resetInterfaceColorsTop = settingsHighlightColorButtonRect_.bottom + Dips(12);
+    settingsUseThemeInterfaceColorsButtonRect_ = {
+        settingsControlLeft,
+        resetInterfaceColorsTop,
+        settingsControlLeft + Dips(178),
+        resetInterfaceColorsTop + Dips(36)
+    };
+    settingsAppearanceColorSectionRect_.bottom =
+        settingsUseThemeInterfaceColorsButtonRect_.bottom + Dips(24);
+
     const bool compactMotionEffects = appearanceWidth < Dips(860);
     const int motionEffectsHeight = Dips(compactMotionEffects ? 282 : 184);
     settingsAppearanceMotionSectionRect_ = {
         settingsControlLeft,
-        settingsAppearanceInterfaceSectionRect_.bottom + appearanceSectionGap,
+        settingsAppearanceColorSectionRect_.bottom + appearanceSectionGap,
         settingsControlRight,
-        settingsAppearanceInterfaceSectionRect_.bottom + appearanceSectionGap + motionEffectsHeight
+        settingsAppearanceColorSectionRect_.bottom + appearanceSectionGap + motionEffectsHeight
     };
     const int motionCardTop =
         settingsAppearanceMotionSectionRect_.top + Dips(76);
@@ -7359,6 +7699,9 @@ void ToolkitApp::RecalculateLayout()
         settingsUiSurfaceStyleRects_.fill(RECT {});
         settingsUiSurfaceOpacityTrackRect_ = {};
         settingsUiSurfaceOpacityThumbRect_ = {};
+        settingsAppearanceColorSectionRect_ = {};
+        settingsHighlightColorButtonRect_ = {};
+        settingsUseThemeInterfaceColorsButtonRect_ = {};
         settingsAppearanceMotionSectionRect_ = {};
         settingsBorderEdgeGlowToggleRect_ = {};
         settingsSmoothScrollingToggleRect_ = {};
@@ -8475,7 +8818,8 @@ void ToolkitApp::RecalculateLayout()
         };
     }
     int desiredContentHeight = contentRect_.bottom - contentRect_.top;
-    if (currentPage_ == Page::Tool && currentTool_ == ToolKind::MediaEditor)
+    if (currentPage_ == Page::Tool &&
+        (currentTool_ == ToolKind::MediaEditor || currentTool_ == ToolKind::Equalizer))
     {
         desiredContentHeight = contentRect_.bottom - contentRect_.top;
     }
@@ -8549,6 +8893,12 @@ void ToolkitApp::RecalculateLayout()
     {
         desiredContentHeight = settingsSection_ == SettingsSection::Appearance
             ? std::max(Dips(650), static_cast<int>(appearanceContentBottom + Dips(70) - contentTop))
+            : settingsSection_ == SettingsSection::Equalizer
+                ? Dips(850)
+            : settingsSection_ == SettingsSection::General
+                ? std::max(
+                    Dips(760),
+                    static_cast<int>(settingsBetaFeaturesToggleRect_.bottom + Dips(124) - contentTop))
             : Dips(760);
     }
     else
@@ -8652,6 +9002,7 @@ void ToolkitApp::RecalculateLayout()
         }
     }
     UpdateMediaEditorPage();
+    UpdateEqualizerPage();
 }
 
 void ToolkitApp::ClampScrollOffset()
@@ -8891,6 +9242,7 @@ void ToolkitApp::RefreshScrollableChildControls()
     }
 
     UpdateMediaEditorPage();
+    UpdateEqualizerPage();
     if (currentPage_ == Page::AllTools)
     {
         UpdateAllToolsSearchControl();
@@ -9046,6 +9398,11 @@ void ToolkitApp::SelectPage(Page page)
 
 void ToolkitApp::OpenTool(ToolKind tool)
 {
+    if (!IsToolAvailable(tool))
+    {
+        return;
+    }
+
     if (currentPage_ == Page::AllTools)
     {
         allToolsScrollOffsetY_ = std::clamp(
@@ -9715,6 +10072,12 @@ void ToolkitApp::PaintContent(HDC hdc)
     if (currentPage_ == Page::Tool && currentTool_ == ToolKind::MediaEditor)
     {
         PaintMediaEditor(hdc);
+        return;
+    }
+
+    if (currentPage_ == Page::Tool && currentTool_ == ToolKind::Equalizer)
+    {
+        PaintEqualizer(hdc);
         return;
     }
 
@@ -11347,7 +11710,7 @@ void ToolkitApp::PaintMediaDownloader(HDC hdc)
     subtitleRect.bottom = subtitleRect.top + Dips(22);
     DrawTextLine(
         hdc,
-        L"Download authorized videos or audio and save them as MP4, MP3, or WAV.",
+        L"Download authorized videos or audio and save them as MP4, MOV, MP3, or WAV.",
         subtitleRect,
         bodyFont_,
         kTextSecondary,
@@ -11581,29 +11944,127 @@ void ToolkitApp::PaintMediaDownloader(HDC hdc)
         CanStartMediaDownload());
     PaintButton(hdc, mediaCancelButtonRect_, L"Cancel", false, false, mediaDownloading_ || mediaAnalyzing_ || mediaMusicAnalyzing_);
 
+    const bool videoOutput =
+        mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 ||
+        mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mov;
+    if (videoOutput && HasArea(mediaEditorCompatibilityToggleRect_))
+    {
+        const bool movOutput = mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mov;
+        const bool compatibilityEnabled = movOutput || mediaDownloadOptions_.editorCompatibility;
+        const bool compatibilityInteractive = !movOutput && !mediaDownloading_;
+        const bool hovered = compatibilityInteractive && hasHoveredButton_ &&
+            EqualRect(&mediaEditorCompatibilityToggleRect_, &hoveredButtonRect_);
+        const bool pressed = compatibilityInteractive && hasPressedButton_ &&
+            EqualRect(&mediaEditorCompatibilityToggleRect_, &pressedButtonRect_);
+
+        RECT compatibilityCard = mediaEditorCompatibilityToggleRect_;
+        if (pressed)
+        {
+            compatibilityCard = ShrinkRect(compatibilityCard, Dips(1), Dips(1));
+        }
+        FillUiSurfaceRoundRect(
+            hdc,
+            compatibilityCard,
+            Dips(10),
+            hovered ? BlendColor(kInputBackground, kAccent, 6) : kInputBackground,
+            UiSurfaceRole::Control);
+        StrokeRoundRect(
+            hdc,
+            compatibilityCard,
+            Dips(10),
+            hovered ? kAccentSoft : kBorder);
+
+        RECT compatibilitySwitch {
+            compatibilityCard.right - Dips(62),
+            compatibilityCard.top + ((compatibilityCard.bottom - compatibilityCard.top) - Dips(26)) / 2,
+            compatibilityCard.right - Dips(14),
+            compatibilityCard.top + ((compatibilityCard.bottom - compatibilityCard.top) + Dips(26)) / 2
+        };
+        PaintToggleSwitch(
+            hdc,
+            compatibilitySwitch,
+            compatibilityEnabled,
+            kMediaEditorCompatibilityToggleAnimationKey,
+            hovered,
+            pressed);
+
+        RECT compatibilityText {
+            compatibilityCard.left + Dips(14),
+            compatibilityCard.top,
+            compatibilitySwitch.left - Dips(10),
+            compatibilityCard.bottom
+        };
+        if (compatibilityText.right - compatibilityText.left >= Dips(46))
+        {
+            DrawTextLine(
+                hdc,
+                movOutput ? L"Included with MOV" : L"Editor compatibility",
+                compatibilityText,
+                bodyFont_,
+                compatibilityInteractive ? kTextPrimary : kTextSecondary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        }
+    }
+
     PaintProgressBar(hdc, mediaProgressRect_, mediaDownloadJob_.progress);
+
+    const std::wstring setupMessage = MediaSetupMessage();
+    const bool activeProgress =
+        mediaDownloadJob_.status == MediaDownloadStatus::Downloading ||
+        mediaDownloadJob_.status == MediaDownloadStatus::Converting;
+    const bool showReadableError =
+        mediaDownloadJob_.status == MediaDownloadStatus::Failed &&
+        setupMessage.empty();
 
     RECT statusRect {
         mediaProgressRect_.left,
         mediaProgressRect_.bottom + Dips(6),
         mediaProgressRect_.right,
-        mediaProgressRect_.bottom + Dips(32)
+        showReadableError
+            ? settingsPanel.bottom - Dips(8)
+            : mediaProgressRect_.bottom + Dips(32)
     };
 
     std::wstring statusText = mediaStatusText_.empty()
         ? MediaDownloadService::StatusLabel(mediaDownloadJob_.status)
         : mediaStatusText_;
-    if (!mediaDownloadJob_.speed.empty())
+    if (activeProgress)
     {
-        statusText += L"  " + mediaDownloadJob_.speed;
+        const int percent = std::clamp(
+            static_cast<int>(std::lround(mediaDownloadJob_.progress * 100.0)),
+            0,
+            100);
+        statusText += L"  " + std::to_wstring(percent) + L"%";
+        if (!mediaDownloadJob_.speed.empty())
+        {
+            statusText += L"  |  " + mediaDownloadJob_.speed;
+        }
+        if (!mediaDownloadJob_.eta.empty())
+        {
+            statusText += L"  |  ETA " + mediaDownloadJob_.eta;
+        }
     }
-    if (!mediaDownloadJob_.eta.empty())
-    {
-        statusText += L"  ETA " + mediaDownloadJob_.eta;
-    }
-    DrawTextLine(hdc, statusText.c_str(), statusRect, monospaceFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
 
-    const std::wstring setupMessage = MediaSetupMessage();
+    if (showReadableError)
+    {
+        DrawTextLine(
+            hdc,
+            statusText.c_str(),
+            statusRect,
+            bodyFont_,
+            RGB(240, 170, 100),
+            DT_LEFT | DT_WORDBREAK | DT_EDITCONTROL);
+    }
+    else
+    {
+        DrawTextLine(
+            hdc,
+            statusText.c_str(),
+            statusRect,
+            monospaceFont_,
+            kTextSecondary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    }
     if (!setupMessage.empty())
     {
         RECT setupRect = statusRect;
@@ -11662,6 +12123,37 @@ void ToolkitApp::PaintMediaEditor(HDC hdc)
     DrawTextLine(hdc, L"Trim and combine videos, or quickly crop and draw on images.", subtitleRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
 }
 
+void ToolkitApp::PaintEqualizer(HDC hdc)
+{
+    const int margin = Dips(42);
+    const int contentTop = contentRect_.top;
+    const ToolDefinition* tool = FindTool(ToolKind::Equalizer);
+
+    PaintBackButton(hdc, backButtonRect_);
+    RECT titleRect {
+        backButtonRect_.right + Dips(20),
+        contentTop + Dips(kToolHeaderTopDip - 4),
+        contentRect_.right - margin,
+        contentTop + Dips(kToolHeaderTopDip + 36)
+    };
+    DrawTextLine(
+        hdc,
+        tool ? tool->name.c_str() : L"Equalizer",
+        titleRect,
+        headingFont_,
+        kTextPrimary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    RECT subtitleRect = titleRect;
+    subtitleRect.top = titleRect.bottom + Dips(2);
+    subtitleRect.bottom = subtitleRect.top + Dips(24);
+    DrawTextLine(
+        hdc,
+        L"Applies system-wide to supported Windows audio output.",
+        subtitleRect,
+        bodyFont_,
+        kTextSecondary,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+}
 void ToolkitApp::PaintVideoCompressor(HDC hdc)
 {
     const int margin = Dips(42);
@@ -16246,8 +16738,75 @@ void ToolkitApp::PaintSmartFileTransfer(HDC hdc)
     paintTab(smartTransferSendTabRect_, L"Send", smartTransferTab_ == SmartTransferTab::Send);
     paintTab(smartTransferReceiveTabRect_, L"Receive", smartTransferTab_ == SmartTransferTab::Receive);
 
-    RECT noteRect { smartTransferReceiveTabRect_.right + Dips(20), smartTransferSendTabRect_.top, contentRect_.right - margin, smartTransferSendTabRect_.bottom };
+    const bool p2pOptionsHovered = hasHoveredButton_ && EqualRect(&smartTransferP2pOptionsToggleRect_, &hoveredButtonRect_);
+    FillRoundRect(hdc, smartTransferP2pOptionsToggleRect_, Dips(10), p2pOptionsHovered ? kPanelHover : kButtonBackground);
+    StrokeRoundRect(hdc, smartTransferP2pOptionsToggleRect_, Dips(10), smartTransferP2pOptionsOpen_ ? kAccent : kBorder);
+    RECT p2pToggleLabel {
+        smartTransferP2pOptionsToggleRect_.left + Dips(14),
+        smartTransferP2pOptionsToggleRect_.top,
+        smartTransferP2pOptionsToggleRect_.right - Dips(34),
+        smartTransferP2pOptionsToggleRect_.bottom
+    };
+    DrawTextLine(hdc, L"P2P options", p2pToggleLabel, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    RECT p2pChevron {
+        smartTransferP2pOptionsToggleRect_.right - Dips(30),
+        smartTransferP2pOptionsToggleRect_.top + Dips(9),
+        smartTransferP2pOptionsToggleRect_.right - Dips(10),
+        smartTransferP2pOptionsToggleRect_.bottom - Dips(9)
+    };
+    PaintChevron(hdc, p2pChevron, !smartTransferP2pOptionsOpen_, kTextSecondary);
+
+    RECT noteRect { smartTransferReceiveTabRect_.right + Dips(20), smartTransferSendTabRect_.top, smartTransferP2pOptionsToggleRect_.left - Dips(18), smartTransferSendTabRect_.bottom };
     DrawTextLine(hdc, L"Some networks block direct transfers. Rex's Toolkit will try available direct methods and explain what works.", noteRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    if (smartTransferP2pOptionsOpen_)
+    {
+        FillRoundRect(hdc, smartTransferP2pOptionsPanelRect_, Dips(14), kPanelBackground);
+        StrokeRoundRect(hdc, smartTransferP2pOptionsPanelRect_, Dips(14), kBorder);
+        PaintCheckbox(
+            hdc,
+            smartTransferWebRtcFallbackToggleRect_,
+            appSettings_.smartTransferWebRtcFallback,
+            L"Enable WebRTC P2P fallback");
+        PaintCheckbox(
+            hdc,
+            smartTransferWebRtcDiagnosticsToggleRect_,
+            appSettings_.smartTransferWebRtcDiagnostics,
+            L"Show advanced diagnostics");
+
+        RECT stunLabel {
+            smartTransferStunEditRect_.left,
+            smartTransferP2pOptionsPanelRect_.top + Dips(58),
+            smartTransferStunEditRect_.right,
+            smartTransferStunEditRect_.top - Dips(4)
+        };
+        DrawTextLine(hdc, L"STUN servers (separate multiple entries with commas)", stunLabel, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        FillRoundRect(hdc, smartTransferStunEditRect_, Dips(10), kInputBackground);
+        StrokeRoundRect(hdc, smartTransferStunEditRect_, Dips(10), EditBorderColor(smartTransferStunEdit_));
+
+        std::wstring p2pStatus;
+        if (appSettings_.smartTransferWebRtcDiagnostics)
+        {
+            p2pStatus = smartTransferTab_ == SmartTransferTab::Send
+                ? smartTransferHostSnapshot_.webRtcDiagnostics
+                : smartTransferWebRtcSnapshot_.diagnostics;
+            if (p2pStatus.empty())
+            {
+                p2pStatus = L"Diagnostics will appear here after a manual P2P session starts.";
+            }
+        }
+        else
+        {
+            p2pStatus = L"Direct P2P may reveal your public IP to the other user. " + WebRtcTransport::StatusMessage();
+        }
+        RECT p2pStatusRect {
+            smartTransferStunEditRect_.left,
+            smartTransferStunEditRect_.bottom + Dips(8),
+            smartTransferStunEditRect_.right,
+            smartTransferP2pOptionsPanelRect_.bottom - Dips(8)
+        };
+        DrawTextLine(hdc, p2pStatus.c_str(), p2pStatusRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    }
 
     if (smartTransferTab_ == SmartTransferTab::Send)
     {
@@ -16382,9 +16941,11 @@ void ToolkitApp::PaintSmartFileTransfer(HDC hdc)
             p2pBody.left = smartTransferCopyPairingButtonRect_.right + Dips(16);
             p2pBody.top = smartTransferCopyPairingButtonRect_.top;
             p2pBody.bottom = smartTransferCopyPairingButtonRect_.bottom;
-            std::wstring p2pMessage = smartTransferHostSnapshot_.webRtcMessage.empty()
-                ? L"Copy a sender pairing code if LAN and Direct Host fail."
-                : smartTransferHostSnapshot_.webRtcMessage;
+            std::wstring p2pMessage = !appSettings_.smartTransferWebRtcFallback
+                ? L"Disabled in P2P options."
+                : (smartTransferHostSnapshot_.webRtcMessage.empty()
+                    ? L"Copy a sender pairing code if LAN and Direct Host fail."
+                    : smartTransferHostSnapshot_.webRtcMessage);
             DrawTextLine(hdc, p2pMessage.c_str(), p2pBody, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
             PaintButton(
                 hdc,
@@ -16392,7 +16953,7 @@ void ToolkitApp::PaintSmartFileTransfer(HDC hdc)
                 smartTransferWebRtcBusy_ ? L"Working..." : L"Copy Sender Code",
                 false,
                 smartTransferWebRtcBusy_,
-                smartTransferHosting_ && !smartTransferWebRtcBusy_ && smartTransferHostSnapshot_.webRtcDependencyAvailable);
+                appSettings_.smartTransferWebRtcFallback && smartTransferHosting_ && !smartTransferWebRtcBusy_ && smartTransferHostSnapshot_.webRtcDependencyAvailable);
 
             RECT responseLabel {
                 smartTransferReceiverResponseEditRect_.left,
@@ -16409,7 +16970,7 @@ void ToolkitApp::PaintSmartFileTransfer(HDC hdc)
                 smartTransferWebRtcBusy_ ? L"Pairing..." : L"Apply Response",
                 true,
                 smartTransferWebRtcBusy_,
-                smartTransferHosting_ && !smartTransferWebRtcBusy_ && smartTransferHostSnapshot_.webRtcDependencyAvailable);
+                appSettings_.smartTransferWebRtcFallback && smartTransferHosting_ && !smartTransferWebRtcBusy_ && smartTransferHostSnapshot_.webRtcDependencyAvailable);
         }
 
         if (smartTransferHostSnapshot_.approvalPending)
@@ -17775,8 +18336,14 @@ void ToolkitApp::PaintSettings(HDC hdc)
             : settingsAppearanceMotionSectionRect_.bottom;
     const int settingsPanelBottom = settingsSection_ == SettingsSection::Appearance
         ? appearancePanelContentBottom + Dips(28)
-        : contentTop + Dips(660);
-    const int settingsRailBottom = std::min(settingsPanelBottom, contentTop + Dips(660));
+        : settingsSection_ == SettingsSection::Equalizer
+            ? contentTop + Dips(800)
+        : settingsSection_ == SettingsSection::General
+            ? settingsBetaFeaturesToggleRect_.bottom + Dips(76)
+            : contentTop + Dips(660);
+    const int settingsRailBottom = settingsSection_ == SettingsSection::General
+        ? settingsPanelBottom
+        : std::min(settingsPanelBottom, contentTop + Dips(660));
     RECT railPanel {
         contentRect_.left + margin,
         contentTop + Dips(132),
@@ -17787,8 +18354,7 @@ void ToolkitApp::PaintSettings(HDC hdc)
     StrokeRoundRect(hdc, railPanel, Dips(16), kBorder);
 
     PaintSettingsSectionTab(hdc, settingsGeneralTabRect_, L"General", SettingsSection::General);
-    PaintSettingsSectionTab(hdc, settingsSmartTransferTabRect_, L"Smart Transfer", SettingsSection::SmartTransfer);
-    PaintSettingsSectionTab(hdc, settingsWindowsIntegrationTabRect_, L"Windows Integration", SettingsSection::WindowsIntegration);
+    PaintSettingsSectionTab(hdc, settingsEqualizerTabRect_, L"Equalizer", SettingsSection::Equalizer);
     PaintSettingsSectionTab(hdc, settingsAppearanceTabRect_, L"Appearance", SettingsSection::Appearance);
     PaintSettingsSectionTab(hdc, settingsUpdatesTabRect_, L"Updates", SettingsSection::Updates);
     PaintSettingsSectionTab(hdc, settingsAboutTabRect_, L"About", SettingsSection::About);
@@ -17830,7 +18396,7 @@ void ToolkitApp::PaintSettings(HDC hdc)
 
     if (settingsSection_ == SettingsSection::General)
     {
-        drawSectionTitle(L"General", L"Choose where files save and which page opens first.");
+        drawSectionTitle(L"General", L"Choose downloads, startup behavior, Windows integration, and beta tools.");
         drawLabel(L"Default output folder", settingsDefaultFolderRect_);
         FillRoundRect(hdc, settingsDefaultFolderRect_, Dips(10), kInputBackground);
         StrokeRoundRect(hdc, settingsDefaultFolderRect_, Dips(10), kBorder);
@@ -17886,71 +18452,194 @@ void ToolkitApp::PaintSettings(HDC hdc)
             bodyFont_,
             kTextSecondary,
             DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
-        return;
-    }
 
-    if (settingsSection_ == SettingsSection::SmartTransfer)
-    {
-        drawSectionTitle(L"Smart Transfer", L"Control peer-to-peer fallback behavior and advanced diagnostics.");
+        drawLabel(L"File Explorer", settingsExplorerContextToggleRect_);
         PaintCheckbox(
             hdc,
-            settingsWebRtcFallbackToggleRect_,
-            appSettings_.smartTransferWebRtcFallback,
-            L"Enable WebRTC P2P fallback");
-        RECT fallbackDescription {
-            settingsWebRtcFallbackToggleRect_.left + Dips(30),
-            settingsWebRtcFallbackToggleRect_.bottom + Dips(2),
+            settingsExplorerContextToggleRect_,
+            appSettings_.mediaEditorExplorerIntegration,
+            L"Add 'Edit in Rex's Toolkit' to file menus");
+        RECT explorerDescription {
+            settingsExplorerContextToggleRect_.left + Dips(30),
+            settingsExplorerContextToggleRect_.bottom + Dips(2),
             panel.right - Dips(28),
-            settingsWebRtcFallbackToggleRect_.bottom + Dips(48)
+            settingsExplorerContextToggleRect_.bottom + Dips(48)
         };
         DrawTextLine(
             hdc,
-            WebRtcTransport::StatusMessage().c_str(),
-            fallbackDescription,
+            L"Adds the editor command to supported video and image file menus. On Windows 11, it may appear under Show more options.",
+            explorerDescription,
             bodyFont_,
             kTextSecondary,
             DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
 
+        drawLabel(L"Beta features", settingsBetaFeaturesToggleRect_);
         PaintCheckbox(
             hdc,
-            settingsWebRtcDiagnosticsToggleRect_,
-            appSettings_.smartTransferWebRtcDiagnostics,
-            L"Show WebRTC advanced diagnostics");
-        RECT diagnosticsDescription {
-            settingsWebRtcDiagnosticsToggleRect_.left + Dips(30),
-            settingsWebRtcDiagnosticsToggleRect_.bottom + Dips(2),
+            settingsBetaFeaturesToggleRect_,
+            appSettings_.betaFeaturesEnabled,
+            L"Enable beta features");
+        RECT betaDescription {
+            settingsBetaFeaturesToggleRect_.left + Dips(30),
+            settingsBetaFeaturesToggleRect_.bottom + Dips(2),
             panel.right - Dips(28),
-            settingsWebRtcDiagnosticsToggleRect_.bottom + Dips(32)
+            settingsBetaFeaturesToggleRect_.bottom + Dips(48)
         };
         DrawTextLine(
             hdc,
-            L"Shows ICE, data channel, selected candidate, and backend details when WebRTC is available.",
-            diagnosticsDescription,
+            L"Shows experimental tools such as (Beta) Smart File Transfer. Beta tools may change while they are being tested.",
+            betaDescription,
+            bodyFont_,
+            kTextSecondary,
+            DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+        return;
+    }
+
+    if (settingsSection_ == SettingsSection::Equalizer)
+    {
+        const int settingsControlLeft = panel.left + Dips(28);
+        const int settingsControlRight = panel.right - Dips(28);
+        const int settingsTop = panel.top;
+        drawSectionTitle(
+            L"Equalizer",
+            L"Control startup, per-output profiles, clipping protection, and backend setup.");
+
+        auto paintEqualizerOptionCard = [&](const RECT& control)
+        {
+            RECT card {
+                control.left - Dips(14),
+                control.top - Dips(10),
+                control.right + Dips(14),
+                control.bottom + Dips(50)
+            };
+            FillRoundRect(hdc, card, Dips(10), kInputBackground);
+            StrokeRoundRect(hdc, card, Dips(10), kBorder);
+        };
+
+        auto drawEqualizerDescription = [&](const RECT& control, const wchar_t* label)
+        {
+            RECT description {
+                control.left + Dips(30),
+                control.bottom,
+                control.right,
+                control.bottom + Dips(44)
+            };
+            DrawTextLine(
+                hdc,
+                label,
+                description,
+                bodyFont_,
+                kTextSecondary,
+                DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+        };
+
+        paintEqualizerOptionCard(settingsEqualizerStartupToggleRect_);
+        paintEqualizerOptionCard(settingsEqualizerRememberDeviceToggleRect_);
+        paintEqualizerOptionCard(settingsEqualizerAutoApplyToggleRect_);
+        paintEqualizerOptionCard(settingsEqualizerPreventClippingToggleRect_);
+        paintEqualizerOptionCard(settingsEqualizerTrayToggleRect_);
+        paintEqualizerOptionCard(settingsEqualizerTechnicalToggleRect_);
+
+        PaintCheckbox(
+            hdc,
+            settingsEqualizerStartupToggleRect_,
+            equalizerPage_.EnableOnStartup(),
+            L"Turn EQ on when Rex starts");
+        drawEqualizerDescription(
+            settingsEqualizerStartupToggleRect_,
+            L"Forces the selected output's saved EQ profile on when Rex's Toolkit starts.");
+
+        PaintCheckbox(
+            hdc,
+            settingsEqualizerRememberDeviceToggleRect_,
+            equalizerPage_.RememberPerDevice(),
+            L"Remember each output");
+        drawEqualizerDescription(
+            settingsEqualizerRememberDeviceToggleRect_,
+            L"Keeps separate headphone and EQ choices for each endpoint.");
+
+        PaintCheckbox(
+            hdc,
+            settingsEqualizerAutoApplyToggleRect_,
+            equalizerPage_.AutomaticallyApplyDeviceProfile(),
+            L"Apply when output changes");
+        drawEqualizerDescription(
+            settingsEqualizerAutoApplyToggleRect_,
+            L"Loads the matching profile after a default-device change.");
+
+        PaintCheckbox(
+            hdc,
+            settingsEqualizerPreventClippingToggleRect_,
+            equalizerPage_.PreventClipping(),
+            L"Prevent clipping");
+        drawEqualizerDescription(
+            settingsEqualizerPreventClippingToggleRect_,
+            L"Automatically reserves headroom for positive EQ boosts.");
+
+        PaintCheckbox(
+            hdc,
+            settingsEqualizerTrayToggleRect_,
+            equalizerPage_.TrayControlsEnabled(),
+            L"Show tray controls");
+        drawEqualizerDescription(
+            settingsEqualizerTrayToggleRect_,
+            L"Adds EQ toggle and preset shortcuts to the tray menu.");
+
+        PaintCheckbox(
+            hdc,
+            settingsEqualizerTechnicalToggleRect_,
+            equalizerPage_.ShowTechnicalControls(),
+            L"Show technical controls");
+        drawEqualizerDescription(
+            settingsEqualizerTechnicalToggleRect_,
+            L"Shows backend status and maintenance controls under Customize EQ.");
+
+        RECT profileStatus {
+            settingsControlLeft,
+            settingsTop + Dips(440),
+            settingsControlRight,
+            settingsTop + Dips(498)
+        };
+        FillRoundRect(hdc, profileStatus, Dips(10), kInputBackground);
+        StrokeRoundRect(hdc, profileStatus, Dips(10), kBorder);
+        RECT profileStatusTitle = ShrinkRect(profileStatus, Dips(14), Dips(6));
+        profileStatusTitle.bottom = profileStatusTitle.top + Dips(22);
+        DrawTextLine(
+            hdc,
+            L"Headphone profiles",
+            profileStatusTitle,
+            navFont_,
+            kTextPrimary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        std::wstring databaseText = L"Database version: ";
+        databaseText += equalizerPage_.HeadphoneDatabaseVersion();
+        RECT profileStatusText = profileStatusTitle;
+        profileStatusText.top = profileStatusTitle.bottom;
+        profileStatusText.bottom = profileStatus.bottom - Dips(5);
+        DrawTextLine(
+            hdc,
+            databaseText.c_str(),
+            profileStatusText,
             bodyFont_,
             kTextSecondary,
             DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
 
-        drawLabel(L"STUN servers", settingsWebRtcStunServersRect_);
-        FillRoundRect(hdc, settingsWebRtcStunServersRect_, Dips(10), kInputBackground);
-        StrokeRoundRect(hdc, settingsWebRtcStunServersRect_, Dips(10), kBorder);
-        RECT stunText = ShrinkRect(settingsWebRtcStunServersRect_, Dips(12), Dips(8));
-        DrawTextLine(
-            hdc,
-            appSettings_.smartTransferStunServers.empty() ? L"No STUN servers configured" : appSettings_.smartTransferStunServers.c_str(),
-            stunText,
-            bodyFont_,
-            kTextPrimary,
-            DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
+        PaintButton(hdc, settingsEqualizerSetupButtonRect_, L"Set Up Audio", true);
+        PaintButton(hdc, settingsEqualizerProfilesButtonRect_, L"Update Profiles", false);
+        if (appSettings_.betaFeaturesEnabled)
+        {
+            PaintButton(hdc, settingsEqualizerDiagnosticsButtonRect_, L"Diagnostics", false);
+        }
 
         RECT privacyNote {
-            settingsWebRtcStunServersRect_.left,
-            settingsWebRtcStunServersRect_.bottom + Dips(18),
-            panel.right - Dips(28),
-            settingsWebRtcStunServersRect_.bottom + Dips(72)
+            settingsControlLeft,
+            settingsEqualizerSetupButtonRect_.bottom + Dips(20),
+            settingsControlRight,
+            settingsEqualizerSetupButtonRect_.bottom + Dips(74)
         };
         DrawTextLine(
             hdc,
-            L"Direct P2P transfer may reveal your public IP address to the other user. This is normal for direct peer-to-peer connections.",
+            L"Audio processing stays local. The bundled audio engine installs only after you confirm; profile updates download data over HTTPS.",
             privacyNote,
             bodyFont_,
             kTextSecondary,
@@ -17958,54 +18647,6 @@ void ToolkitApp::PaintSettings(HDC hdc)
         return;
     }
 
-    if (settingsSection_ == SettingsSection::WindowsIntegration)
-    {
-        drawSectionTitle(
-            L"Windows Integration",
-            L"Open supported media directly in Rex's Toolkit from File Explorer.");
-        PaintCheckbox(
-            hdc,
-            settingsExplorerContextToggleRect_,
-            appSettings_.mediaEditorExplorerIntegration,
-            L"Add 'Edit in Rex's Toolkit' to file menus");
-
-        RECT description {
-            settingsExplorerContextToggleRect_.left + Dips(30),
-            settingsExplorerContextToggleRect_.bottom + Dips(4),
-            panel.right - Dips(28),
-            settingsExplorerContextToggleRect_.bottom + Dips(54)
-        };
-        DrawTextLine(
-            hdc,
-            L"Adds a per-user menu for supported videos and images. Administrator access is not required.",
-            description,
-            bodyFont_,
-            kTextSecondary,
-            DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
-
-        RECT information {
-            settingsExplorerContextToggleRect_.left,
-            settingsExplorerContextToggleRect_.bottom + Dips(82),
-            panel.right - Dips(28),
-            settingsExplorerContextToggleRect_.bottom + Dips(182)
-        };
-        FillRoundRect(hdc, information, Dips(12), kInputBackground);
-        StrokeRoundRect(hdc, information, Dips(12), kBorder);
-        RECT informationTitle = ShrinkRect(information, Dips(16), Dips(12));
-        informationTitle.bottom = informationTitle.top + Dips(25);
-        DrawTextLine(hdc, L"Video & Image Editor", informationTitle, navFont_, kTextPrimary, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-        RECT informationText = informationTitle;
-        informationText.top = informationTitle.bottom + Dips(4);
-        informationText.bottom = information.bottom - Dips(12);
-        DrawTextLine(
-            hdc,
-            L"Supports MP4, MOV, MKV, WEBM, AVI, M4V, PNG, JPG, JPEG, WEBP, and BMP. On Windows 11, the command may appear under Show more options.",
-            informationText,
-            bodyFont_,
-            kTextSecondary,
-            DT_LEFT | DT_WORDBREAK | DT_END_ELLIPSIS);
-        return;
-    }
 
     if (settingsSection_ == SettingsSection::MacroRecorder)
     {
@@ -18732,6 +19373,141 @@ void ToolkitApp::PaintSettings(HDC hdc)
         }
 
         if (appearanceTab_ == AppearanceTab::Interface &&
+            sectionVisible(settingsAppearanceColorSectionRect_))
+        {
+        paintSectionHeader(
+            settingsAppearanceColorSectionRect_,
+            L"Interface colors",
+            L"Choose the accent used for highlights and interactive edge lighting.",
+            0);
+
+        const auto colorLabel = [](COLORREF color)
+        {
+            wchar_t value[8] {};
+            swprintf_s(
+                value,
+                std::size(value),
+                L"#%02X%02X%02X",
+                static_cast<unsigned int>(GetRValue(color)),
+                static_cast<unsigned int>(GetGValue(color)),
+                static_cast<unsigned int>(GetBValue(color)));
+            return std::wstring(value);
+        };
+        auto paintColorChoice = [&](const RECT& bounds,
+                                    const wchar_t* title,
+                                    const wchar_t* description,
+                                    COLORREF color,
+                                    bool custom)
+        {
+            RECT card = bounds;
+            const bool hovered =
+                hasHoveredButton_ && EqualRect(&bounds, &hoveredButtonRect_);
+            const bool pressed =
+                hasPressedButton_ && EqualRect(&bounds, &pressedButtonRect_);
+            if (pressed)
+            {
+                card = ShrinkRect(card, Dips(1), Dips(1));
+            }
+            FillUiSurfaceRoundRect(
+                hdc,
+                card,
+                Dips(12),
+                hovered ? BlendColor(kInputBackground, kAccent, 6) : kInputBackground,
+                UiSurfaceRole::Control);
+            StrokeRoundRect(
+                hdc,
+                card,
+                Dips(12),
+                hovered ? kAccentSoft : kBorder);
+
+            const int swatchSize = Dips(42);
+            RECT swatch {
+                card.left + Dips(16),
+                card.top + ((card.bottom - card.top) - swatchSize) / 2,
+                card.left + Dips(16) + swatchSize,
+                card.top + ((card.bottom - card.top) + swatchSize) / 2
+            };
+            FillRoundRect(hdc, swatch, Dips(12), color);
+            StrokeRoundRect(
+                hdc,
+                swatch,
+                Dips(12),
+                BlendColor(kBorder, kTextSecondary, 38));
+
+            const int actionWidth = Dips(76);
+            RECT actionRect {
+                card.right - Dips(14) - actionWidth,
+                card.top + Dips(18),
+                card.right - Dips(14),
+                card.bottom - Dips(18)
+            };
+            RECT titleRect {
+                swatch.right + Dips(14),
+                card.top + Dips(9),
+                actionRect.left - Dips(10),
+                card.top + Dips(33)
+            };
+            DrawTextLine(
+                hdc,
+                title,
+                titleRect,
+                navFont_,
+                kTextPrimary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            RECT descriptionRect {
+                titleRect.left,
+                titleRect.bottom,
+                titleRect.right,
+                titleRect.bottom + Dips(22)
+            };
+            DrawTextLine(
+                hdc,
+                description,
+                descriptionRect,
+                bodyFont_,
+                kTextSecondary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            std::wstring status = custom ? L"Custom  " : L"Theme default  ";
+            status += colorLabel(color);
+            RECT statusRect {
+                titleRect.left,
+                descriptionRect.bottom,
+                titleRect.right,
+                card.bottom - Dips(8)
+            };
+            DrawTextLine(
+                hdc,
+                status.c_str(),
+                statusRect,
+                bodyFont_,
+                custom ? kAccent : kTextSecondary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            DrawTextLine(
+                hdc,
+                L"Change",
+                actionRect,
+                bodyFont_,
+                hovered ? kTextPrimary : kAccent,
+                DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        };
+
+        paintColorChoice(
+            settingsHighlightColorButtonRect_,
+            L"Highlight color",
+            L"Active tabs, selections, primary accents, and border edge glow.",
+            kAccent,
+            appSettings_.appearance.customHighlightColorEnabled);
+        PaintButton(
+            hdc,
+            settingsUseThemeInterfaceColorsButtonRect_,
+            L"Use Theme Color",
+            false,
+            false,
+            appSettings_.appearance.customHighlightColorEnabled);
+        paintSectionDivider(settingsAppearanceColorSectionRect_);
+        }
+
+        if (appearanceTab_ == AppearanceTab::Interface &&
             sectionVisible(settingsAppearanceMotionSectionRect_))
         {
         paintSectionHeader(
@@ -18991,8 +19767,8 @@ void ToolkitApp::PaintSettings(HDC hdc)
         { L"Build date", APP_BUILD_DATE },
         { L"Developer", L"Rexarater" },
         { L"Special thanks", L"Addion" },
-        { L"Licenses", L"Rex's Toolkit app assets and code are project-owned unless noted." },
-        { L"Third-party tools", L"yt-dlp, FFmpeg, Essentia, AniList API, Windows Imaging Component" }
+        { L"Licenses", L"See THIRD_PARTY_LICENSES.md beside the app for bundled and integrated component notices." },
+        { L"Third-party tools", L"yt-dlp, FFmpeg, Essentia, Equalizer APO, AutoEq, libdatachannel, OpenSSL, Interception, AniList, WIC" }
     };
 
     int rowTop = panel.top + Dips(94);
@@ -19013,7 +19789,10 @@ void ToolkitApp::PaintSettings(HDC hdc)
             panel.right - Dips(28),
             rowTop + rowHeight
         };
-        DrawTextLine(hdc, row.label, labelRect, bodyFont_, kTextSecondary, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        const UINT labelFormat = longValue
+            ? DT_LEFT | DT_SINGLELINE | DT_TOP | DT_END_ELLIPSIS
+            : DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS;
+        DrawTextLine(hdc, row.label, labelRect, bodyFont_, kTextSecondary, labelFormat);
         DrawTextLine(
             hdc,
             row.value.c_str(),
@@ -19309,6 +20088,7 @@ void ToolkitApp::CloseDropdown()
 void ToolkitApp::UpdateCurrentToolControls()
 {
     UpdateMediaEditorPage();
+    UpdateEqualizerPage();
     if (currentPage_ != Page::Tool)
     {
         return;
@@ -19369,6 +20149,44 @@ void ToolkitApp::UpdateMediaEditorPage()
     mediaEditorPage_.SetVisible(true);
 }
 
+void ToolkitApp::UpdateEqualizerPage()
+{
+    EqualizerTheme theme;
+    theme.pageBackground = kAppBackground;
+    theme.panelBackground = kPanelBackground;
+    theme.panelHover = kPanelHover;
+    theme.inputBackground = kInputBackground;
+    theme.buttonBackground = kButtonBackground;
+    theme.border = kBorder;
+    theme.textPrimary = kTextPrimary;
+    theme.textSecondary = kTextSecondary;
+    theme.accent = kAccent;
+    theme.accentSoft = kAccentSoft;
+    theme.warning = kGold;
+    theme.danger = RGB(224, 88, 102);
+    theme.surfaceStyle = static_cast<rex::ui::SurfaceStyle>(appSettings_.appearance.uiSurfaceStyle);
+    theme.surfaceOpacity = appSettings_.appearance.uiSurfaceOpacity;
+    theme.light = appSettings_.theme == AppTheme::Light;
+    theme.smoothScrollingEnabled = appSettings_.appearance.smoothScrollingEnabled;
+    equalizerPage_.SetTheme(theme);
+    equalizerPage_.SetBetaFeaturesEnabled(appSettings_.betaFeaturesEnabled);
+
+    const bool visible = currentPage_ == Page::Tool && currentTool_ == ToolKind::Equalizer;
+    if (!visible)
+    {
+        equalizerPage_.SetVisible(false);
+        return;
+    }
+
+    RECT bounds {
+        contentRect_.left,
+        contentRect_.top + Dips(kToolBodyTopDip),
+        contentRect_.right,
+        contentRect_.bottom
+    };
+    equalizerPage_.SetBounds(bounds, dpi_);
+    equalizerPage_.SetVisible(true);
+}
 void ToolkitApp::PaintDropdown(HDC hdc)
 {
     if (activeDropdown_ == DropdownKind::None || dropdownLabels_.empty())
@@ -19532,7 +20350,8 @@ bool ToolkitApp::HandleDropdownClick(POINT point)
 
     if (kind == DropdownKind::MediaQuality)
     {
-        if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4)
+        if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 ||
+            mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mov)
         {
             mediaDownloadOptions_.mp4Quality = static_cast<Mp4Quality>(value);
         }
@@ -19984,8 +20803,7 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
         {
             for (const RECT& candidate : {
                 settingsGeneralTabRect_,
-                settingsSmartTransferTabRect_,
-                settingsWindowsIntegrationTabRect_,
+                settingsEqualizerTabRect_,
                 settingsAppearanceTabRect_,
                 settingsUpdatesTabRect_,
                 settingsAboutTabRect_
@@ -20001,25 +20819,32 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
                     settingsBrowseDefaultFolderButtonRect_,
                     settingsStartPageButtonRect_,
                     settingsMinimizeToTrayToggleRect_,
-                    settingsStartWithWindowsToggleRect_
+                    settingsStartWithWindowsToggleRect_,
+                    settingsExplorerContextToggleRect_,
+                    settingsBetaFeaturesToggleRect_
                 })
                 {
                     rect = hit(candidate);
                     if (rect.right > rect.left) return rect;
                 }
             }
-            else if (settingsSection_ == SettingsSection::SmartTransfer)
+            else if (settingsSection_ == SettingsSection::Equalizer)
             {
-                for (const RECT& candidate : { settingsWebRtcFallbackToggleRect_, settingsWebRtcDiagnosticsToggleRect_ })
+                for (const RECT& candidate : {
+                    settingsEqualizerStartupToggleRect_,
+                    settingsEqualizerRememberDeviceToggleRect_,
+                    settingsEqualizerAutoApplyToggleRect_,
+                    settingsEqualizerPreventClippingToggleRect_,
+                    settingsEqualizerTrayToggleRect_,
+                    settingsEqualizerTechnicalToggleRect_,
+                    settingsEqualizerSetupButtonRect_,
+                    settingsEqualizerProfilesButtonRect_,
+                    settingsEqualizerDiagnosticsButtonRect_
+                })
                 {
                     rect = hit(candidate);
                     if (rect.right > rect.left) return rect;
                 }
-            }
-            else if (settingsSection_ == SettingsSection::WindowsIntegration)
-            {
-                rect = hit(settingsExplorerContextToggleRect_);
-                if (rect.right > rect.left) return rect;
             }
             else if (settingsSection_ == SettingsSection::MacroRecorder)
             {
@@ -20085,6 +20910,8 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
                     settingsGradientColor2ButtonRect_,
                     settingsGradientDirectionButtonRect_,
                     settingsGradientBlendToggleRect_,
+                    settingsHighlightColorButtonRect_,
+                    settingsUseThemeInterfaceColorsButtonRect_,
                     settingsBorderEdgeGlowToggleRect_,
                     settingsSmoothScrollingToggleRect_,
                     settingsResetBackgroundButtonRect_,
@@ -20216,6 +21043,12 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
             mediaDownloadButtonRect_,
             mediaCancelButtonRect_
         };
+        if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 &&
+            !mediaDownloading_ &&
+            HasArea(mediaEditorCompatibilityToggleRect_))
+        {
+            candidates.push_back(mediaEditorCompatibilityToggleRect_);
+        }
         if (mediaDownloadJob_.status == MediaDownloadStatus::Complete && !mediaDownloadJob_.outputFilePath.empty())
         {
             candidates.push_back(mediaOpenFileButtonRect_);
@@ -20437,8 +21270,14 @@ RECT ToolkitApp::ButtonRectAtPoint(POINT point) const
     {
         std::vector<RECT> candidates {
             smartTransferSendTabRect_,
-            smartTransferReceiveTabRect_
+            smartTransferReceiveTabRect_,
+            smartTransferP2pOptionsToggleRect_
         };
+        if (smartTransferP2pOptionsOpen_)
+        {
+            candidates.push_back(smartTransferWebRtcFallbackToggleRect_);
+            candidates.push_back(smartTransferWebRtcDiagnosticsToggleRect_);
+        }
         if (smartTransferTab_ == SmartTransferTab::Send)
         {
             candidates.insert(
@@ -20906,9 +21745,10 @@ void ToolkitApp::PaintToolCardBase(
         card,
         Dips(18),
         hovered ? kPanelHover : kPanelBackground);
+    const RECT cardBorder = ShrinkRect(card, 1, 1);
     StrokeRoundRect(
         hdc,
-        card,
+        cardBorder,
         Dips(18),
         hovered ? BlendColor(kBorder, kAccentSoft, 30) : kBorder);
 
@@ -20926,20 +21766,38 @@ void ToolkitApp::PaintToolCardBase(
     PaintFavoriteStar(hdc, ShrinkRect(starRect, Dips(8), Dips(8)), tool.favorite, kTextPrimary);
 
     const int cardWidth = card.right - card.left;
-    const int iconSize = std::clamp(cardWidth / 4, Dips(70), Dips(88));
+    const bool compactCard = cardWidth < Dips(320);
+    const bool veryCompactCard = cardWidth < Dips(230);
+    const int iconSize = veryCompactCard
+        ? std::clamp(cardWidth / 4, Dips(44), Dips(56))
+        : compactCard
+            ? std::clamp(cardWidth / 4, Dips(56), Dips(72))
+            : std::clamp(cardWidth / 4, Dips(70), Dips(88));
+    const int iconTopInset = veryCompactCard
+        ? Dips(14)
+        : compactCard ? Dips(24) : Dips(38);
+    const int nameTopGap = veryCompactCard
+        ? Dips(6)
+        : compactCard ? Dips(12) : Dips(20);
+    const int nameHeight = veryCompactCard ? Dips(24) : Dips(28);
+    const int descriptionTopGap = veryCompactCard
+        ? Dips(2)
+        : compactCard ? Dips(4) : Dips(6);
+    // Keep multiline descriptions clear of the footer rule at every card width.
+    const int footerReserve = Dips(66);
     RECT iconRect {
         card.left + ((card.right - card.left) - iconSize) / 2,
-        card.top + Dips(38),
+        card.top + iconTopInset,
         card.left + ((card.right - card.left) + iconSize) / 2,
-        card.top + Dips(38) + iconSize
+        card.top + iconTopInset + iconSize
     };
     PaintToolIcon(hdc, tool.kind, iconRect);
 
     RECT nameRect {
         card.left + Dips(18),
-        iconRect.bottom + Dips(20),
+        iconRect.bottom + nameTopGap,
         card.right - Dips(18),
-        iconRect.bottom + Dips(48)
+        iconRect.bottom + nameTopGap + nameHeight
     };
     DrawTextLine(
         hdc,
@@ -20951,9 +21809,9 @@ void ToolkitApp::PaintToolCardBase(
 
     RECT descriptionRect {
         card.left + Dips(20),
-        nameRect.bottom + Dips(6),
+        nameRect.bottom + descriptionTopGap,
         card.right - Dips(20),
-        card.bottom - Dips(66)
+        card.bottom - footerReserve
     };
     DrawTextLine(
         hdc,
@@ -20961,7 +21819,7 @@ void ToolkitApp::PaintToolCardBase(
         descriptionRect,
         bodyFont_,
         kTextSecondary,
-        DT_CENTER | DT_WORDBREAK | DT_END_ELLIPSIS);
+        DT_CENTER | DT_WORDBREAK | DT_EDITCONTROL | DT_END_ELLIPSIS);
 
     RECT footerRule {
         card.left + Dips(22),
@@ -21106,6 +21964,10 @@ void ToolkitApp::PaintToolIcon(HDC hdc, ToolKind tool, const RECT& bounds)
     else if (tool == ToolKind::MediaEditor)
     {
         icon = mediaEditorIconTinted_.get();
+    }
+    else if (tool == ToolKind::Equalizer)
+    {
+        icon = equalizerIconTinted_.get();
     }
     else if (tool == ToolKind::AnimeTracker)
     {
@@ -21652,6 +22514,10 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
     {
         SetFocus(hwnd_);
     }
+    else if (focusedWindow == smartTransferStunEdit_ && !IsPointInRect(smartTransferStunEditRect_, point))
+    {
+        SetFocus(hwnd_);
+    }
     else if (focusedWindow == reminderTitleEdit_ && !IsPointInRect(reminderTitleEditRect_, point))
     {
         SetFocus(hwnd_);
@@ -21820,20 +22686,9 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             InvalidateRect(hwnd_, nullptr, FALSE);
             return;
         }
-        if (IsPointInRect(settingsSmartTransferTabRect_, point))
+        if (IsPointInRect(settingsEqualizerTabRect_, point))
         {
-            settingsSection_ = SettingsSection::SmartTransfer;
-            CloseDropdown();
-            StopSmoothScroll();
-            scrollOffsetY_ = 0;
-            smoothScrollTargetOffsetY_ = 0;
-            RecalculateLayout();
-            InvalidateRect(hwnd_, nullptr, FALSE);
-            return;
-        }
-        if (IsPointInRect(settingsWindowsIntegrationTabRect_, point))
-        {
-            settingsSection_ = SettingsSection::WindowsIntegration;
+            settingsSection_ = SettingsSection::Equalizer;
             CloseDropdown();
             StopSmoothScroll();
             scrollOffsetY_ = 0;
@@ -21917,7 +22772,65 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             InvalidateRect(hwnd_, nullptr, FALSE);
             return;
         }
-        if (settingsSection_ == SettingsSection::WindowsIntegration &&
+        if (settingsSection_ == SettingsSection::General &&
+            IsPointInRect(settingsBetaFeaturesToggleRect_, point))
+        {
+            appSettings_.betaFeaturesEnabled = !appSettings_.betaFeaturesEnabled;
+            SaveAppSettings();
+            RecalculateLayout();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (settingsSection_ == SettingsSection::Equalizer)
+        {
+            if (IsPointInRect(settingsEqualizerStartupToggleRect_, point))
+            {
+                equalizerPage_.SetEnableOnStartup(!equalizerPage_.EnableOnStartup());
+            }
+            else if (IsPointInRect(settingsEqualizerRememberDeviceToggleRect_, point))
+            {
+                equalizerPage_.SetRememberPerDevice(!equalizerPage_.RememberPerDevice());
+            }
+            else if (IsPointInRect(settingsEqualizerAutoApplyToggleRect_, point))
+            {
+                equalizerPage_.SetAutomaticallyApplyDeviceProfile(
+                    !equalizerPage_.AutomaticallyApplyDeviceProfile());
+            }
+            else if (IsPointInRect(settingsEqualizerPreventClippingToggleRect_, point))
+            {
+                equalizerPage_.SetPreventClipping(!equalizerPage_.PreventClipping());
+            }
+            else if (IsPointInRect(settingsEqualizerTrayToggleRect_, point))
+            {
+                equalizerPage_.SetTrayControlsEnabled(!equalizerPage_.TrayControlsEnabled());
+            }
+            else if (IsPointInRect(settingsEqualizerTechnicalToggleRect_, point))
+            {
+                equalizerPage_.SetShowTechnicalControls(!equalizerPage_.ShowTechnicalControls());
+            }
+            else if (IsPointInRect(settingsEqualizerSetupButtonRect_, point))
+            {
+                equalizerPage_.BeginBackendSetup();
+            }
+            else if (IsPointInRect(settingsEqualizerProfilesButtonRect_, point))
+            {
+                equalizerPage_.BeginProfileUpdate();
+            }
+            else if (appSettings_.betaFeaturesEnabled &&
+                IsPointInRect(settingsEqualizerDiagnosticsButtonRect_, point))
+            {
+                OpenTool(ToolKind::Equalizer);
+                equalizerPage_.OpenAdvanced(true);
+                return;
+            }
+            else
+            {
+                return;
+            }
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (settingsSection_ == SettingsSection::General &&
             IsPointInRect(settingsExplorerContextToggleRect_, point))
         {
             const bool requested = !appSettings_.mediaEditorExplorerIntegration;
@@ -21931,7 +22844,7 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
                 {
                     errorMessage = L"Windows could not update the File Explorer integration.";
                 }
-                MessageBoxW(hwnd_, errorMessage.c_str(), L"Windows Integration", MB_ICONWARNING | MB_OK);
+                MessageBoxW(hwnd_, errorMessage.c_str(), L"File Explorer integration", MB_ICONWARNING | MB_OK);
                 InvalidateRect(hwnd_, nullptr, FALSE);
                 return;
             }
@@ -22055,22 +22968,6 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
                 SaveMacroRecorderSettings();
                 InvalidateRect(hwnd_, nullptr, FALSE);
             }
-            return;
-        }
-        if (settingsSection_ == SettingsSection::SmartTransfer &&
-            IsPointInRect(settingsWebRtcFallbackToggleRect_, point))
-        {
-            appSettings_.smartTransferWebRtcFallback = !appSettings_.smartTransferWebRtcFallback;
-            SaveAppSettings();
-            InvalidateRect(hwnd_, nullptr, FALSE);
-            return;
-        }
-        if (settingsSection_ == SettingsSection::SmartTransfer &&
-            IsPointInRect(settingsWebRtcDiagnosticsToggleRect_, point))
-        {
-            appSettings_.smartTransferWebRtcDiagnostics = !appSettings_.smartTransferWebRtcDiagnostics;
-            SaveAppSettings();
-            InvalidateRect(hwnd_, nullptr, FALSE);
             return;
         }
         if (settingsSection_ == SettingsSection::Appearance)
@@ -22314,6 +23211,16 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
                     return;
                 }
             }
+            if (IsPointInRect(settingsHighlightColorButtonRect_, point))
+            {
+                ChooseAppearanceInterfaceColor();
+                return;
+            }
+            if (IsPointInRect(settingsUseThemeInterfaceColorsButtonRect_, point))
+            {
+                ResetAppearanceInterfaceColors();
+                return;
+            }
             if (IsPointInRect(settingsBorderEdgeGlowToggleRect_, point))
             {
                 appearance.borderEdgeGlowEnabled = !appearance.borderEdgeGlowEnabled;
@@ -22418,6 +23325,15 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
         return;
     }
 
+    if (currentPage_ == Page::Tool && currentTool_ == ToolKind::Equalizer)
+    {
+        if (IsPointInRect(backButtonRect_, point))
+        {
+            SelectPage(Page::AllTools);
+        }
+        return;
+    }
+
     if (currentPage_ == Page::Tool && currentTool_ == ToolKind::SmartFileTransfer)
     {
         if (IsPointInRect(backButtonRect_, point))
@@ -22441,6 +23357,48 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
             RecalculateLayout();
             UpdateSmartFileTransferControls();
             InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (IsPointInRect(smartTransferP2pOptionsToggleRect_, point))
+        {
+            smartTransferP2pOptionsOpen_ = !smartTransferP2pOptionsOpen_;
+            CloseDropdown();
+            RecalculateLayout();
+            UpdateSmartFileTransferControls();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+
+        const bool p2pOptionsEditable =
+            !smartTransferHosting_ &&
+            !smartTransferConnecting_ &&
+            !smartTransferDownloading_ &&
+            !smartTransferWebRtcBusy_ &&
+            !smartTransferWebRtcReceiverActive_;
+        if (smartTransferP2pOptionsOpen_ &&
+            p2pOptionsEditable &&
+            IsPointInRect(smartTransferWebRtcFallbackToggleRect_, point))
+        {
+            appSettings_.smartTransferWebRtcFallback = !appSettings_.smartTransferWebRtcFallback;
+            if (!appSettings_.smartTransferWebRtcFallback)
+            {
+                smartTransferWebRtcFallbackOffered_ = false;
+                smartTransferReceiverResponseCode_.clear();
+                smartTransferReceiveWebRtcMessage_ = L"Manual P2P fallback is disabled in P2P options.";
+            }
+            SaveAppSettings();
+            RecalculateLayout();
+            UpdateSmartFileTransferControls();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+        if (smartTransferP2pOptionsOpen_ &&
+            p2pOptionsEditable &&
+            IsPointInRect(smartTransferWebRtcDiagnosticsToggleRect_, point))
+        {
+            appSettings_.smartTransferWebRtcDiagnostics = !appSettings_.smartTransferWebRtcDiagnostics;
+            SaveAppSettings();
+            InvalidateRect(hwnd_, &smartTransferP2pOptionsPanelRect_, FALSE);
             return;
         }
 
@@ -22828,6 +23786,15 @@ void ToolkitApp::OnLeftButtonDown(POINT point)
         if (IsPointInRect(mediaCancelButtonRect_, point))
         {
             CancelMediaDownload();
+            return;
+        }
+        if (IsPointInRect(mediaEditorCompatibilityToggleRect_, point) &&
+            mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 &&
+            !mediaDownloading_)
+        {
+            mediaDownloadOptions_.editorCompatibility = !mediaDownloadOptions_.editorCompatibility;
+            SaveMediaDownloadSettings();
+            InvalidateRect(hwnd_, &mediaEditorCompatibilityToggleRect_, FALSE);
             return;
         }
         if (mediaDownloadJob_.status == MediaDownloadStatus::Complete && !mediaDownloadJob_.outputFilePath.empty())
@@ -25561,6 +26528,20 @@ void ToolkitApp::CreateSmartFileTransferControls()
         instance_,
         nullptr);
 
+    smartTransferStunEdit_ = CreateWindowExW(
+        0,
+        L"EDIT",
+        L"",
+        WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL,
+        0,
+        0,
+        0,
+        0,
+        hwnd_,
+        nullptr,
+        instance_,
+        nullptr);
+
     smartTransferCodeEdit_ = CreateWindowExW(
         0,
         L"EDIT",
@@ -25603,7 +26584,7 @@ void ToolkitApp::CreateSmartFileTransferControls()
         instance_,
         nullptr);
 
-    for (HWND edit : { smartTransferNameEdit_, smartTransferCodeEdit_, smartTransferReceiverResponseEdit_, smartTransferSenderPairingEdit_ })
+    for (HWND edit : { smartTransferNameEdit_, smartTransferStunEdit_, smartTransferCodeEdit_, smartTransferReceiverResponseEdit_, smartTransferSenderPairingEdit_ })
     {
         if (!edit)
         {
@@ -25616,6 +26597,11 @@ void ToolkitApp::CreateSmartFileTransferControls()
     if (smartTransferNameEdit_)
     {
         SendMessageW(smartTransferNameEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Optional transfer name"));
+    }
+    if (smartTransferStunEdit_)
+    {
+        SetWindowTextW(smartTransferStunEdit_, appSettings_.smartTransferStunServers.c_str());
+        SendMessageW(smartTransferStunEdit_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"stun:host:port"));
     }
     if (smartTransferCodeEdit_)
     {
@@ -25676,6 +26662,11 @@ void ToolkitApp::UpdateSmartFileTransferControls()
         !smartTransferHosting_,
         smartTransferTab_ == SmartTransferTab::Send);
     moveEdit(
+        smartTransferStunEdit_,
+        smartTransferStunEditRect_,
+        !smartTransferHosting_ && !smartTransferConnecting_ && !smartTransferDownloading_ && !smartTransferWebRtcBusy_ && !smartTransferWebRtcReceiverActive_,
+        smartTransferP2pOptionsOpen_ && HasArea(smartTransferStunEditRect_));
+    moveEdit(
         smartTransferCodeEdit_,
         smartTransferReceiveCodeEditRect_,
         !smartTransferConnecting_ && !smartTransferDownloading_,
@@ -25683,12 +26674,12 @@ void ToolkitApp::UpdateSmartFileTransferControls()
     moveEdit(
         smartTransferReceiverResponseEdit_,
         smartTransferReceiverResponseEditRect_,
-        !smartTransferWebRtcBusy_ && smartTransferHosting_,
+        appSettings_.smartTransferWebRtcFallback && !smartTransferWebRtcBusy_ && smartTransferHosting_,
         smartTransferTab_ == SmartTransferTab::Send && HasArea(smartTransferReceiverResponseEditRect_));
     moveEdit(
         smartTransferSenderPairingEdit_,
         smartTransferSenderPairingEditRect_,
-        !smartTransferWebRtcBusy_ && !smartTransferDownloading_,
+        appSettings_.smartTransferWebRtcFallback && !smartTransferWebRtcBusy_ && !smartTransferDownloading_,
         smartTransferTab_ == SmartTransferTab::Receive && HasArea(smartTransferSenderPairingEditRect_));
 }
 
@@ -25797,11 +26788,7 @@ void ToolkitApp::StartSmartTransferHosting()
     smartTransferOptions_.transferName = GetWindowTextString(smartTransferNameEdit_);
     smartTransferOptions_.enableWebRtcFallback = appSettings_.smartTransferWebRtcFallback;
     smartTransferOptions_.showWebRtcDiagnostics = appSettings_.smartTransferWebRtcDiagnostics;
-    smartTransferOptions_.stunServers.clear();
-    if (!appSettings_.smartTransferStunServers.empty())
-    {
-        smartTransferOptions_.stunServers.push_back(appSettings_.smartTransferStunServers);
-    }
+    smartTransferOptions_.stunServers = ParseSmartTransferStunServers(appSettings_.smartTransferStunServers);
     smartTransferHostSnapshot_ = {};
     smartTransferSenderPairingCode_.clear();
     if (smartTransferReceiverResponseEdit_)
@@ -25862,6 +26849,13 @@ void ToolkitApp::StartSmartTransferCreatePairingCode()
         return;
     }
 
+    if (!appSettings_.smartTransferWebRtcFallback)
+    {
+        smartTransferStatusMessage_ = L"Manual P2P fallback is disabled in P2P options.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
     if (!smartTransferSenderPairingCode_.empty())
     {
         if (SetClipboardUnicodeText(hwnd_, smartTransferSenderPairingCode_))
@@ -25894,6 +26888,13 @@ void ToolkitApp::StartSmartTransferApplyReceiverResponse()
 {
     if (!smartTransferHosting_ || smartTransferWebRtcBusy_)
     {
+        return;
+    }
+
+    if (!appSettings_.smartTransferWebRtcFallback)
+    {
+        smartTransferStatusMessage_ = L"Manual P2P fallback is disabled in P2P options.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
 
@@ -25930,6 +26931,13 @@ void ToolkitApp::StartSmartTransferCreateReceiverResponse()
         return;
     }
 
+    if (!appSettings_.smartTransferWebRtcFallback)
+    {
+        smartTransferReceiveStatusMessage_ = L"Manual P2P fallback is disabled in P2P options.";
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
     const std::wstring senderPairingCode = GetWindowTextString(smartTransferSenderPairingEdit_);
     if (TrimWhitespace(senderPairingCode).empty())
     {
@@ -25943,11 +26951,7 @@ void ToolkitApp::StartSmartTransferCreateReceiverResponse()
     smartTransferReceiveStatusMessage_ = L"Creating receiver response code...";
     HWND hwnd = hwnd_;
     SmartTransferInvite invite = smartTransferReceiveInvite_;
-    std::vector<std::wstring> stunServers;
-    if (!appSettings_.smartTransferStunServers.empty())
-    {
-        stunServers.push_back(appSettings_.smartTransferStunServers);
-    }
+    std::vector<std::wstring> stunServers = ParseSmartTransferStunServers(appSettings_.smartTransferStunServers);
     smartTransferThread_ = std::thread(
         [this, hwnd, invite, senderPairingCode, stunServers]()
         {
@@ -26092,9 +27096,18 @@ void ToolkitApp::ApplySmartTransferConnectResult(const SmartTransferConnectResul
     smartTransferReceiveInvite_ = result.invite;
     smartTransferReceiveManifest_ = {};
     smartTransferReceiveStatusMessage_ = result.message.empty() ? L"Could not connect." : result.message;
-    smartTransferWebRtcFallbackOffered_ = result.webRtcFallbackOffered || result.webRtcDependencyMissing;
-    smartTransferWebRtcDependencyMissing_ = result.webRtcDependencyMissing;
+    const bool serviceOfferedFallback = result.webRtcFallbackOffered || result.webRtcDependencyMissing;
+    smartTransferWebRtcFallbackOffered_ = appSettings_.smartTransferWebRtcFallback && serviceOfferedFallback;
+    smartTransferWebRtcDependencyMissing_ = appSettings_.smartTransferWebRtcFallback && result.webRtcDependencyMissing;
     smartTransferReceiveWebRtcMessage_ = result.webRtcMessage;
+    if (!appSettings_.smartTransferWebRtcFallback && serviceOfferedFallback)
+    {
+        smartTransferReceiveWebRtcMessage_ = L"Manual P2P fallback is disabled in P2P options.";
+        if (!result.waitingForApproval)
+        {
+            smartTransferReceiveStatusMessage_ += L" Manual P2P fallback is disabled in P2P options.";
+        }
+    }
     if (result.waitingForApproval)
     {
         smartTransferDownloadProgress_.status = SmartTransferClientStatus::WaitingForApproval;
@@ -29161,12 +30174,15 @@ void ToolkitApp::ApplyMediaJobUpdate(const MediaDownloadJob& job)
     {
         const bool audioOnly = job.platform == MediaPlatform::SoundCloud ||
             (job.platform != MediaPlatform::YouTube && job.mediaType == MediaType::Audio);
-        if (audioOnly && mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4)
+        if (audioOnly &&
+            (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 ||
+             mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mov))
         {
             mediaDownloadOptions_.outputFormat = MediaOutputFormat::Mp3;
             SaveMediaDownloadSettings();
         }
-        if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 &&
+        if ((mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 ||
+             mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mov) &&
             job.maxVideoHeight > 0 &&
             Mp4QualityHeight(mediaDownloadOptions_.mp4Quality) > job.maxVideoHeight)
         {
@@ -29201,6 +30217,22 @@ void ToolkitApp::ApplyMediaJobUpdate(const MediaDownloadJob& job)
     else if (job.status == MediaDownloadStatus::Cancelled)
     {
         mediaStatusText_ = L"Cancelled.";
+    }
+    else if (job.status == MediaDownloadStatus::Converting &&
+        job.editorCompatibilityPass &&
+        job.outputFormat == MediaOutputFormat::Mov)
+    {
+        mediaStatusText_ = L"Creating an editor-compatible MOV...";
+    }
+    else if (job.status == MediaDownloadStatus::Converting &&
+        job.editorCompatibilityPass &&
+        job.outputFormat == MediaOutputFormat::Mp4)
+    {
+        mediaStatusText_ = L"Making the MP4 editor-compatible...";
+    }
+    else if (job.status == MediaDownloadStatus::Converting)
+    {
+        mediaStatusText_ = L"Finalizing download...";
     }
     else
     {
@@ -29615,9 +30647,14 @@ void ToolkitApp::ShowMediaFormatDropdown()
     OpenDropdown(
         DropdownKind::MediaFormat,
         mediaFormatButtonRect_,
-        { L"MP4", L"MP3", L"WAV" },
-        { static_cast<int>(MediaOutputFormat::Mp4), static_cast<int>(MediaOutputFormat::Mp3), static_cast<int>(MediaOutputFormat::Wav) },
-        { !audioOnly, true, true },
+        { L"MP4", L"MOV (editor compatible)", L"MP3", L"WAV" },
+        {
+            static_cast<int>(MediaOutputFormat::Mp4),
+            static_cast<int>(MediaOutputFormat::Mov),
+            static_cast<int>(MediaOutputFormat::Mp3),
+            static_cast<int>(MediaOutputFormat::Wav)
+        },
+        { !audioOnly, !audioOnly, true, true },
         static_cast<int>(mediaDownloadOptions_.outputFormat));
 }
 
@@ -29628,7 +30665,8 @@ void ToolkitApp::ShowMediaQualityDropdown()
         return;
     }
 
-    if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4)
+    if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 ||
+        mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mov)
     {
         const std::array<Mp4Quality, 7> allQualities {
             Mp4Quality::Best,
@@ -30477,6 +31515,11 @@ bool ToolkitApp::IsActivationMouseMessage(WPARAM message, const MSLLHOOKSTRUCT& 
     return false;
 }
 
+bool ToolkitApp::IsToolAvailable(ToolKind tool) const
+{
+    return tool != ToolKind::SmartFileTransfer || appSettings_.betaFeaturesEnabled;
+}
+
 void ToolkitApp::RebuildVisibleToolsCache()
 {
     visibleToolsCache_.clear();
@@ -30495,7 +31538,10 @@ void ToolkitApp::RebuildVisibleToolsCache()
         {
             for (const ToolDefinition& tool : tools_)
             {
-                visibleToolsCache_.push_back(&tool);
+                if (IsToolAvailable(tool.kind))
+                {
+                    visibleToolsCache_.push_back(&tool);
+                }
             }
             return;
         }
@@ -30511,7 +31557,10 @@ void ToolkitApp::RebuildVisibleToolsCache()
         {
             for (const ToolDefinition& tool : tools_)
             {
-                visibleToolsCache_.push_back(&tool);
+                if (IsToolAvailable(tool.kind))
+                {
+                    visibleToolsCache_.push_back(&tool);
+                }
             }
             return;
         }
@@ -30526,7 +31575,7 @@ void ToolkitApp::RebuildVisibleToolsCache()
                 {
                     return haystack.find(searchTerm) != std::wstring::npos;
                 });
-            if (matches)
+            if (matches && IsToolAvailable(tool.kind))
             {
                 visibleToolsCache_.push_back(&tool);
             }
@@ -30536,7 +31585,7 @@ void ToolkitApp::RebuildVisibleToolsCache()
 
     for (const ToolDefinition& tool : tools_)
     {
-        if (tool.favorite)
+        if (tool.favorite && IsToolAvailable(tool.kind))
         {
             visibleToolsCache_.push_back(&tool);
         }
@@ -30736,7 +31785,8 @@ bool ToolkitApp::CanStartMediaDownload() const
         return false;
     }
 
-    if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 &&
+    if ((mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 ||
+         mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mov) &&
         mediaDownloadJob_.platform == MediaPlatform::SoundCloud)
     {
         return false;
@@ -30747,7 +31797,8 @@ bool ToolkitApp::CanStartMediaDownload() const
 
 std::wstring ToolkitApp::MediaQualityLabel() const
 {
-    if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4)
+    if (mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mp4 ||
+        mediaDownloadOptions_.outputFormat == MediaOutputFormat::Mov)
     {
         return MediaDownloadService::Mp4QualityLabel(mediaDownloadOptions_.mp4Quality);
     }
@@ -31809,6 +32860,7 @@ void ToolkitApp::PaintAppearancePreview(HDC hdc, const RECT& logicalBounds)
 
 void ToolkitApp::SaveAndApplyAppearance(bool rebuildImage)
 {
+    ApplyPalette(appSettings_.theme, appSettings_.appearance);
     ApplyUiSurfaceAppearance(appSettings_.appearance);
     InvalidateToolCardCache();
     InvalidateAppearanceBackgroundCache(rebuildImage);
@@ -31840,12 +32892,16 @@ void ToolkitApp::ResetAppearanceBackground()
     const int retainedSurfaceOpacity = appSettings_.appearance.uiSurfaceOpacity;
     const bool retainedBorderEdgeGlow = appSettings_.appearance.borderEdgeGlowEnabled;
     const bool retainedSmoothScrolling = appSettings_.appearance.smoothScrollingEnabled;
+    const bool retainedCustomHighlight = appSettings_.appearance.customHighlightColorEnabled;
+    const COLORREF retainedHighlight = appSettings_.appearance.highlightColor;
     appSettings_.appearance = AppearanceSettings {};
     appSettings_.appearance.imageRelativePath = retainedImage;
     appSettings_.appearance.uiSurfaceStyle = retainedSurfaceStyle;
     appSettings_.appearance.uiSurfaceOpacity = retainedSurfaceOpacity;
     appSettings_.appearance.borderEdgeGlowEnabled = retainedBorderEdgeGlow;
     appSettings_.appearance.smoothScrollingEnabled = retainedSmoothScrolling;
+    appSettings_.appearance.customHighlightColorEnabled = retainedCustomHighlight;
+    appSettings_.appearance.highlightColor = retainedHighlight;
     appearanceStatusMessage_ = L"Background settings restored to defaults.";
     RecalculateLayout();
     SaveAndApplyAppearance(true);
@@ -31903,6 +32959,41 @@ void ToolkitApp::ChooseAppearanceGradientColor(bool firstColor)
     }
     if (firstColor) appSettings_.appearance.gradientColor1 = chooser.rgbResult;
     else appSettings_.appearance.gradientColor2 = chooser.rgbResult;
+    SaveAndApplyAppearance(false);
+}
+
+void ToolkitApp::ChooseAppearanceInterfaceColor()
+{
+    CloseDropdown();
+    CHOOSECOLORW chooser {};
+    static COLORREF customColors[16] {};
+    chooser.lStructSize = sizeof(chooser);
+    chooser.hwndOwner = hwnd_;
+    chooser.lpCustColors = customColors;
+    chooser.rgbResult = kAccent;
+    chooser.Flags = CC_FULLOPEN | CC_RGBINIT;
+    if (!ChooseColorW(&chooser))
+    {
+        return;
+    }
+
+    AppearanceSettings& appearance = appSettings_.appearance;
+    appearance.highlightColor = chooser.rgbResult;
+    appearance.customHighlightColorEnabled = true;
+    appearanceStatusMessage_ = L"Highlight and border glow color updated.";
+    SaveAndApplyAppearance(false);
+}
+
+void ToolkitApp::ResetAppearanceInterfaceColors()
+{
+    AppearanceSettings& appearance = appSettings_.appearance;
+    if (!appearance.customHighlightColorEnabled)
+    {
+        return;
+    }
+
+    appearance.customHighlightColorEnabled = false;
+    appearanceStatusMessage_ = L"Highlight and border glow now follow the selected theme.";
     SaveAndApplyAppearance(false);
 }
 
@@ -32160,9 +33251,37 @@ std::wstring ToolkitApp::SmartTransferClientStatusLabel() const
     return L"Ready.";
 }
 
+void ToolkitApp::RefreshThemedEditContextMenus()
+{
+    const rex::ui::Palette& palette = ComponentPalette();
+    for (HWND edit : {
+        mediaUrlEdit_,
+        mediaFileNameEdit_,
+        videoCompressorTargetEdit_,
+        smartTransferNameEdit_,
+        smartTransferStunEdit_,
+        smartTransferCodeEdit_,
+        smartTransferReceiverResponseEdit_,
+        smartTransferSenderPairingEdit_,
+        allToolsSearchEdit_,
+        animeSearchEdit_,
+        animeImportEdit_,
+        animeNotesEdit_,
+        reminderTitleEdit_,
+        reminderDateEdit_,
+        reminderTimeEdit_,
+        reminderCategoryEdit_,
+        reminderNotesEdit_,
+        reminderSearchEdit_,
+        macroNameEdit_ })
+    {
+        rex::ui::SetThemedEditContextMenu(edit, palette);
+    }
+}
+
 void ToolkitApp::ApplyTheme()
 {
-    ApplyPalette(appSettings_.theme);
+    ApplyPalette(appSettings_.theme, appSettings_.appearance);
     ApplyUiSurfaceAppearance(appSettings_.appearance);
     InvalidateAppearanceBackgroundCache(false);
     RefreshTintedIconResources();
@@ -32171,12 +33290,14 @@ void ToolkitApp::ApplyTheme()
         DeleteObject(editBackgroundBrush_);
     }
     editBackgroundBrush_ = CreateSolidBrush(kInputBackground);
+    RefreshThemedEditContextMenus();
     if (hwnd_)
     {
         ApplyDarkTitleBar();
         InvalidateRect(hwnd_, nullptr, FALSE);
     }
     UpdateMediaEditorPage();
+    UpdateEqualizerPage();
     if (macroOverlayWindow_)
     {
         ApplyTitleBarTheme(macroOverlayWindow_);

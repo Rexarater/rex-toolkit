@@ -39,11 +39,33 @@ constexpr UINT kPreviewProxyFinishedMessage = WM_APP + 0x436;
 constexpr UINT_PTR kClipboardTimerId = 1;
 constexpr UINT_PTR kPreviewTimerId = 2;
 constexpr UINT_PTR kControlAnimationTimerId = 3;
+constexpr UINT_PTR kTextCaretTimerId = 4;
 constexpr UINT kClipboardTimerMs = 650;
 constexpr UINT kPreviewTimerMs = 33;
 constexpr UINT kControlAnimationTimerMs = 16;
+constexpr UINT kTextCaretTimerMs = 530;
 constexpr ULONGLONG kNativePreviewTimeoutMs = 3000;
 constexpr COLORREF kTextEditColorKey = RGB(1, 2, 3);
+constexpr std::array<const wchar_t*, 10> kTextFontFamilies {
+    L"Segoe UI",
+    L"Bahnschrift",
+    L"Arial",
+    L"Arial Black",
+    L"Comic Sans MS",
+    L"Georgia",
+    L"Times New Roman",
+    L"Trebuchet MS",
+    L"Impact",
+    L"Cascadia Mono"
+};
+constexpr std::array<COLORREF, 5> kImageColorSwatches {
+    RGB(255, 255, 255),
+    RGB(255, 59, 79),
+    RGB(255, 212, 59),
+    RGB(59, 130, 246),
+    RGB(17, 17, 17)
+};
+
 
 enum class EditorView
 {
@@ -73,6 +95,7 @@ enum class ImageToolbarPopup
 {
     None,
     Color,
+    Font,
     Thickness,
     Zoom,
     Save
@@ -469,146 +492,26 @@ void DrawLabel(
     SelectObject(hdc, oldFont);
 }
 
-Gdiplus::REAL FittedTextSize(
+MediaEditorTextLayout FittedTextLayout(
     Gdiplus::Graphics& graphics,
     const std::wstring& text,
+    const std::wstring& fontFamily,
     Gdiplus::REAL width,
     Gdiplus::REAL height)
 {
-    if (text.empty() || width <= 1.0f || height <= 1.0f)
-    {
-        return 2.0f;
-    }
-
-    Gdiplus::FontFamily preferredFamily(L"Segoe UI");
-    const Gdiplus::FontFamily* family =
-        preferredFamily.GetLastStatus() == Gdiplus::Ok
-            ? &preferredFamily
-            : Gdiplus::FontFamily::GenericSansSerif();
-    Gdiplus::StringFormat format;
-    format.SetFormatFlags(
-        Gdiplus::StringFormatFlagsMeasureTrailingSpaces |
-        Gdiplus::StringFormatFlagsLineLimit |
-        Gdiplus::StringFormatFlagsNoClip);
-    format.SetTrimming(Gdiplus::StringTrimmingNone);
-
-    Gdiplus::REAL low = 2.0f;
-    Gdiplus::REAL high = std::max(
-        low,
-        std::min<Gdiplus::REAL>(2048.0f, height));
-    for (int pass = 0; pass < 15; ++pass)
-    {
-        const Gdiplus::REAL candidate = (low + high) * 0.5f;
-        Gdiplus::Font font(
-            family,
-            candidate,
-            Gdiplus::FontStyleRegular,
-            Gdiplus::UnitPixel);
-        Gdiplus::RectF measured;
-        INT fitted = 0;
-        INT lines = 0;
-        const Gdiplus::REAL measurementHeight = std::max(
-            height * 2.0f,
-            height + candidate * 2.0f + 4.0f);
-        const Gdiplus::Status measuredStatus = graphics.MeasureString(
-            text.c_str(),
-            static_cast<INT>(text.size()),
-            &font,
-            Gdiplus::RectF(0.0f, 0.0f, width, measurementHeight),
-            &format,
-            &measured,
-            &fitted,
-            &lines);
-        const bool fits =
-            measuredStatus == Gdiplus::Ok &&
-            fitted >= static_cast<INT>(text.size()) &&
-            measured.Width <= width + 0.75f &&
-            measured.Height <= height + 0.75f;
-        if (fits) low = candidate;
-        else high = candidate;
-    }
-    return low;
+    return MeasureMediaEditorTextLayout(
+        graphics,
+        text,
+        fontFamily,
+        width,
+        height);
 }
 
 void DrawTextBox(
     Gdiplus::Graphics& graphics,
     const MediaEditorTextBox& textBox)
 {
-    if (textBox.text.empty() ||
-        textBox.bounds.Width() <= 1.0f ||
-        textBox.bounds.Height() <= 1.0f)
-    {
-        return;
-    }
-
-    const int rotation =
-        ((textBox.rotationQuarterTurns % 4) + 4) % 4;
-    const bool sideways = (rotation % 2) != 0;
-    const Gdiplus::REAL physicalWidth = textBox.bounds.Width();
-    const Gdiplus::REAL physicalHeight = textBox.bounds.Height();
-    const Gdiplus::REAL logicalWidth =
-        sideways ? physicalHeight : physicalWidth;
-    const Gdiplus::REAL logicalHeight =
-        sideways ? physicalWidth : physicalHeight;
-    const Gdiplus::REAL padding = std::clamp(
-        std::min(logicalWidth, logicalHeight) * 0.035f,
-        1.5f,
-        18.0f);
-    const Gdiplus::REAL contentWidth =
-        std::max(1.0f, logicalWidth - padding * 2.0f);
-    const Gdiplus::REAL contentHeight =
-        std::max(1.0f, logicalHeight - padding * 2.0f);
-
-    const Gdiplus::GraphicsState state = graphics.Save();
-    graphics.SetClip(
-        Gdiplus::RectF(
-            textBox.bounds.left,
-            textBox.bounds.top,
-            physicalWidth,
-            physicalHeight),
-        Gdiplus::CombineModeIntersect);
-    graphics.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
-    graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
-    graphics.TranslateTransform(
-        (textBox.bounds.left + textBox.bounds.right) * 0.5f,
-        (textBox.bounds.top + textBox.bounds.bottom) * 0.5f);
-    graphics.RotateTransform(static_cast<Gdiplus::REAL>(rotation * 90));
-
-    Gdiplus::FontFamily preferredFamily(L"Segoe UI");
-    const Gdiplus::FontFamily* family =
-        preferredFamily.GetLastStatus() == Gdiplus::Ok
-            ? &preferredFamily
-            : Gdiplus::FontFamily::GenericSansSerif();
-    const Gdiplus::REAL fontSize =
-        FittedTextSize(graphics, textBox.text, contentWidth, contentHeight);
-    Gdiplus::Font font(
-        family,
-        fontSize,
-        Gdiplus::FontStyleRegular,
-        Gdiplus::UnitPixel);
-    Gdiplus::StringFormat format;
-    format.SetFormatFlags(
-        Gdiplus::StringFormatFlagsMeasureTrailingSpaces |
-        Gdiplus::StringFormatFlagsLineLimit);
-    format.SetTrimming(Gdiplus::StringTrimmingNone);
-    const Gdiplus::RectF layoutRect(
-        -logicalWidth * 0.5f + padding,
-        -logicalHeight * 0.5f + padding,
-        contentWidth,
-        contentHeight);
-    Gdiplus::SolidBrush brush(Gdiplus::Color(
-        static_cast<BYTE>(std::clamp(textBox.opacity, 0.0f, 1.0f) * 255.0f),
-        GetRValue(textBox.color),
-        GetGValue(textBox.color),
-        GetBValue(textBox.color)));
-    graphics.DrawString(
-        textBox.text.c_str(),
-        static_cast<INT>(textBox.text.size()),
-        &font,
-        layoutRect,
-        &format,
-        &brush);
-    graphics.Restore(state);
+    DrawMediaEditorTextBox(graphics, textBox);
 }
 
 bool HasVisibleText(const std::wstring& text)
@@ -751,6 +654,7 @@ private:
     void HandleTextEditNotification(WORD notification);
     void UpdateTextEditBounds();
     void UpdateTextEditFont();
+    void ResetTextCaretBlink();
     void SetCursorForPoint(POINT point);
 
     HINSTANCE instance_ = nullptr;
@@ -766,6 +670,7 @@ private:
     HBRUSH textEditBrush_ = nullptr;
     HFONT textEditFont_ = nullptr;
     bool finishingTextEdit_ = false;
+    bool textCaretVisible_ = true;
     UINT dpi_ = 96;
     MediaEditorTheme theme_;
     RECT pageBounds_ {};
@@ -833,12 +738,14 @@ private:
     std::filesystem::path lastImageSavePath_;
     ImageFormat lastImageSaveFormat_ = ImageFormat::Png;
 
-    COLORREF drawingColor_ = RGB(255, 76, 96);
+    COLORREF drawingColor_ = kImageColorSwatches.front();
     float drawingThickness_ = 6.0f;
     float drawingOpacity_ = 1.0f;
     bool eraserEnabled_ = false;
     bool textToolEnabled_ = false;
+    std::wstring textFontFamily_ = L"Segoe UI";
     bool textEditing_ = false;
+    bool activeTextFullyFits_ = true;
     ImageToolbarPopup imageToolbarPopup_ = ImageToolbarPopup::None;
     float imageScale_ = 1.0f;
     bool imageFitMode_ = true;
@@ -913,6 +820,9 @@ private:
     RECT colorPopupRect_ {};
     RECT colorCustomRect_ {};
     std::array<RECT, 5> colorSwatchRects_ {};
+    RECT fontRect_ {};
+    RECT fontPopupRect_ {};
+    std::array<RECT, kTextFontFamilies.size()> fontOptionRects_ {};
     RECT thicknessRect_ {};
     RECT thicknessPopupRect_ {};
     RECT thicknessSliderRect_ {};
@@ -1139,6 +1049,8 @@ void MediaEditorPage::Impl::SetTheme(const MediaEditorTheme& theme)
     editBrush_ = CreateSolidBrush(theme_.inputBackground);
     textIconTinted_ = CreateTintedBitmap(textIcon_.get(), theme_.textPrimary);
     galleryIconTinted_ = CreateTintedBitmap(galleryIcon_.get(), theme_.textPrimary);
+    rex::ui::SetThemedEditContextMenu(sizeLimitEdit_, EditorComponentPalette(theme_));
+    rex::ui::SetThemedEditContextMenu(textEdit_, EditorComponentPalette(theme_));
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
     if (textEdit_) InvalidateRect(textEdit_, nullptr, TRUE);
 }
@@ -1340,6 +1252,7 @@ LRESULT CALLBACK MediaEditorPage::Impl::TextEditWindowProc(
             (GetKeyState(VK_CONTROL) & 0x8000) != 0)
         {
             SendMessageW(window, EM_SETSEL, 0, -1);
+            page->ResetTextCaretBlink();
             return 0;
         }
         if (message == WM_KEYDOWN && wParam == VK_ESCAPE)
@@ -1368,14 +1281,66 @@ LRESULT CALLBACK MediaEditorPage::Impl::TextEditWindowProc(
                 : 0;
             return original | DLGC_WANTALLKEYS | DLGC_WANTCHARS;
         }
-        if (page->originalTextEditProc_)
+        if (message == WM_SETFOCUS && page->originalTextEditProc_)
         {
-            return CallWindowProcW(
+            const LRESULT result = CallWindowProcW(
                 page->originalTextEditProc_,
                 window,
                 message,
                 wParam,
                 lParam);
+            DestroyCaret();
+            page->ResetTextCaretBlink();
+            return result;
+        }
+        if (message == WM_KILLFOCUS && page->originalTextEditProc_)
+        {
+            const LRESULT result = CallWindowProcW(
+                page->originalTextEditProc_,
+                window,
+                message,
+                wParam,
+                lParam);
+            return result;
+        }
+        if (page->originalTextEditProc_)
+        {
+            const bool mayPaintNativeText =
+                message == WM_CHAR ||
+                message == WM_PASTE ||
+                message == WM_CUT ||
+                message == WM_CLEAR ||
+                message == WM_UNDO ||
+                message == WM_SETTEXT ||
+                message == EM_REPLACESEL ||
+                (message == WM_KEYDOWN &&
+                    (wParam == VK_BACK || wParam == VK_DELETE));
+            const bool caretMoved =
+                mayPaintNativeText ||
+                message == EM_SETSEL ||
+                message == WM_LBUTTONDOWN ||
+                message == WM_LBUTTONUP ||
+                (message == WM_MOUSEMOVE && (wParam & MK_LBUTTON) != 0) ||
+                message == WM_KEYDOWN;
+            const LRESULT result = CallWindowProcW(
+                page->originalTextEditProc_,
+                window,
+                message,
+                wParam,
+                lParam);
+            if ((caretMoved || message == WM_SETFONT) && GetFocus() == window)
+            {
+                DestroyCaret();
+            }
+            if (mayPaintNativeText && IsWindow(window))
+            {
+                InvalidateRect(window, nullptr, TRUE);
+            }
+            if (caretMoved && IsWindow(window))
+            {
+                page->ResetTextCaretBlink();
+            }
+            return result;
         }
     }
     return DefWindowProcW(window, message, wParam, lParam);
@@ -1543,6 +1508,12 @@ LRESULT MediaEditorPage::Impl::HandleMessage(UINT message, WPARAM wParam, LPARAM
             SendMessageW(textEdit_, EM_SETLIMITTEXT, 8192, 0);
             SendMessageW(textEdit_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(Dips(3), Dips(3)));
         }
+        rex::ui::SetThemedEditContextMenu(
+            sizeLimitEdit_,
+            EditorComponentPalette(theme_));
+        rex::ui::SetThemedEditContextMenu(
+            textEdit_,
+            EditorComponentPalette(theme_));
         if (textPopup_)
         {
             SetLayeredWindowAttributes(textPopup_, kTextEditColorKey, 255, LWA_COLORKEY);
@@ -1643,6 +1614,19 @@ LRESULT MediaEditorPage::Impl::HandleMessage(UINT message, WPARAM wParam, LPARAM
                     exportLastClockPaintAt_ = now;
                     InvalidateRect(hwnd_, &exportOverlayRect_, FALSE);
                 }
+            }
+            return 0;
+        }
+        if (wParam == kTextCaretTimerId)
+        {
+            if (visible_ && textEditing_ && GetFocus() == textEdit_)
+            {
+                textCaretVisible_ = !textCaretVisible_;
+                InvalidateRect(hwnd_, &imageCanvasRect_, FALSE);
+            }
+            else
+            {
+                KillTimer(hwnd_, kTextCaretTimerId);
             }
             return 0;
         }
@@ -1877,6 +1861,7 @@ LRESULT MediaEditorPage::Impl::HandleMessage(UINT message, WPARAM wParam, LPARAM
         KillTimer(hwnd_, kClipboardTimerId);
         KillTimer(hwnd_, kPreviewTimerId);
         KillTimer(hwnd_, kControlAnimationTimerId);
+        KillTimer(hwnd_, kTextCaretTimerId);
         ClearCompatibilityPreviews();
         preview_.Shutdown();
         if (textPopup_ && IsWindow(textPopup_))
@@ -2160,6 +2145,7 @@ void MediaEditorPage::Impl::Layout()
     left = textToolRect_.right + groupGap;
 
     colorRect_ = {};
+    fontRect_ = {};
     thicknessRect_ = {};
     opacityRect_ = {};
     const bool drawTool = !eraserEnabled_ && !textToolEnabled_;
@@ -2174,6 +2160,25 @@ void MediaEditorPage::Impl::Layout()
         const int thicknessWidth = Dips(tightImageToolbar ? 64 : compactImageToolbar ? 84 : 96);
         thicknessRect_ = { left, toolbarTop, left + thicknessWidth, toolbarBottom };
         left = thicknessRect_.right + itemGap;
+    }
+    if (textToolEnabled_)
+    {
+        const int available = propertyLimit - left;
+        const int minimumFontWidth = Dips(84);
+        if (available >= minimumFontWidth)
+        {
+            const int desiredFontWidth =
+                Dips(tightImageToolbar ? 108 : compactImageToolbar ? 126 : 148);
+            int maximumFontWidth = available;
+            const int minimumOpacityWidth = Dips(72);
+            if (available >= minimumFontWidth + itemGap + minimumOpacityWidth)
+            {
+                maximumFontWidth = available - itemGap - minimumOpacityWidth;
+            }
+            const int fontWidth = std::min(desiredFontWidth, maximumFontWidth);
+            fontRect_ = { left, toolbarTop, left + fontWidth, toolbarBottom };
+            left = fontRect_.right + itemGap;
+        }
     }
     if (!eraserEnabled_)
     {
@@ -2198,16 +2203,22 @@ void MediaEditorPage::Impl::Layout()
     {
         imageToolbarPopup_ = ImageToolbarPopup::None;
     }
+    if (imageToolbarPopup_ == ImageToolbarPopup::Font && !HasArea(fontRect_))
+    {
+        imageToolbarPopup_ = ImageToolbarPopup::None;
+    }
 
     resetCropRect_ = {};
     colorPopupRect_ = {};
     colorCustomRect_ = {};
+    fontPopupRect_ = {};
     thicknessPopupRect_ = {};
     thicknessSliderRect_ = {};
     zoomPopupRect_ = {};
     savePopupRect_ = {};
     saveAsRect_ = {};
     for (RECT& rect : colorSwatchRects_) rect = {};
+    for (RECT& rect : fontOptionRects_) rect = {};
     for (RECT& rect : thicknessRects_) rect = {};
     for (RECT& rect : zoomOptionRects_) rect = {};
 
@@ -2238,6 +2249,23 @@ void MediaEditorPage::Impl::Layout()
         colorCustomRect_ = {
             colorPopupRect_.left + Dips(12), colorPopupRect_.top + Dips(56),
             colorPopupRect_.right - Dips(12), colorPopupRect_.bottom - Dips(12) };
+    }
+    else if (imageToolbarPopup_ == ImageToolbarPopup::Font && HasArea(fontRect_))
+    {
+        const int popupWidth = Dips(224);
+        const int popupX = popupLeft(fontRect_.left, popupWidth);
+        const int popupHeight = Dips(
+            16 + 36 * static_cast<int>(fontOptionRects_.size()));
+        fontPopupRect_ = {
+            popupX, popupTop, popupX + popupWidth, popupTop + popupHeight };
+        int rowTop = fontPopupRect_.top + Dips(10);
+        for (RECT& option : fontOptionRects_)
+        {
+            option = {
+                fontPopupRect_.left + Dips(10), rowTop,
+                fontPopupRect_.right - Dips(10), rowTop + Dips(32) };
+            rowTop += Dips(36);
+        }
     }
     else if (imageToolbarPopup_ == ImageToolbarPopup::Thickness &&
         HasArea(thicknessRect_))
@@ -2469,7 +2497,7 @@ void MediaEditorPage::Impl::HandleTextEditNotification(WORD notification)
         text.resize(static_cast<size_t>(length));
         activeTextBox_.text = std::move(text);
         UpdateTextEditFont();
-        InvalidateRect(hwnd_, &imageCanvasRect_, FALSE);
+        ResetTextCaretBlink();
     }
     else if (notification == EN_KILLFOCUS &&
         textEditing_ &&
@@ -2493,6 +2521,7 @@ void MediaEditorPage::Impl::BeginTextEditing(MediaEditorCropRect bounds)
     activeTextBox_ = {};
     activeTextBox_.bounds = bounds;
     activeTextBox_.color = drawingColor_;
+    activeTextBox_.fontFamily = textFontFamily_;
     activeTextBox_.opacity = drawingOpacity_;
     activeTextBox_.rotationQuarterTurns = 0;
     pendingTextBounds_ = {};
@@ -2503,6 +2532,7 @@ void MediaEditorPage::Impl::BeginTextEditing(MediaEditorCropRect bounds)
     UpdateTextEditFont();
     SetFocus(textEdit_);
     SendMessageW(textEdit_, EM_SETSEL, 0, 0);
+    ResetTextCaretBlink();
     statusText_ = L"Type in the box. Press Enter to finish, Shift+Enter for a new line, or Esc to cancel.";
     InvalidateRect(hwnd_, &imageCanvasRect_, FALSE);
 }
@@ -2521,6 +2551,7 @@ void MediaEditorPage::Impl::CommitTextEditing()
     activeTextBox_.text = std::move(text);
     ShowWindow(textPopup_, SW_HIDE);
     textEditing_ = false;
+    KillTimer(hwnd_, kTextCaretTimerId);
 
     if (HasVisibleText(activeTextBox_.text))
     {
@@ -2554,6 +2585,7 @@ void MediaEditorPage::Impl::CancelTextEditing()
     finishingTextEdit_ = true;
     ShowWindow(textPopup_, SW_HIDE);
     textEditing_ = false;
+    KillTimer(hwnd_, kTextCaretTimerId);
     activeTextBox_ = {};
     pendingTextBounds_ = {};
     statusText_.clear();
@@ -2634,28 +2666,38 @@ void MediaEditorPage::Impl::UpdateTextEditFont()
     }
     RECT client {};
     GetClientRect(textEdit_, &client);
-    const int width = std::max(1L, client.right - client.left - Dips(6));
-    const int height = std::max(1L, client.bottom - client.top - Dips(6));
+    const int width = std::max(1L, client.right - client.left);
+    const int height = std::max(1L, client.bottom - client.top);
     const std::wstring sample =
         activeTextBox_.text.empty() ? L"M" : activeTextBox_.text;
     HDC editDc = GetDC(textEdit_);
-    Gdiplus::REAL size = static_cast<Gdiplus::REAL>(Dips(12));
+    MediaEditorTextLayout textLayout {
+        static_cast<float>(Dips(12)),
+        true
+    };
     if (editDc)
     {
         Gdiplus::Graphics graphics(editDc);
-        size = FittedTextSize(
+        textLayout = FittedTextLayout(
             graphics,
             sample,
+            activeTextBox_.fontFamily,
             static_cast<Gdiplus::REAL>(width),
             static_cast<Gdiplus::REAL>(height));
         ReleaseDC(textEdit_, editDc);
     }
+    activeTextFullyFits_ =
+        activeTextBox_.text.empty() || textLayout.fullyFits;
+    statusText_ = activeTextFullyFits_
+        ? L"Type in the box. Press Enter to finish, Shift+Enter for a new line, or Esc to cancel."
+        : L"Text is too long for this box and will be clipped. Shorten it or draw a larger box.";
+    const Gdiplus::REAL size = textLayout.fontSize;
 
     LOGFONTW font {};
     font.lfHeight = -std::max(2, static_cast<int>(std::floor(size)));
     font.lfWeight = FW_NORMAL;
-    font.lfQuality = ANTIALIASED_QUALITY;
-    wcscpy_s(font.lfFaceName, L"Segoe UI");
+    font.lfQuality = NONANTIALIASED_QUALITY;
+    wcsncpy_s(font.lfFaceName, activeTextBox_.fontFamily.c_str(), _TRUNCATE);
     HFONT nextFont = CreateFontIndirectW(&font);
     if (!nextFont)
     {
@@ -2672,6 +2714,18 @@ void MediaEditorPage::Impl::UpdateTextEditFont()
     }
     textEditFont_ = nextFont;
 }
+
+void MediaEditorPage::Impl::ResetTextCaretBlink()
+{
+    if (!hwnd_ || !textEditing_)
+    {
+        return;
+    }
+    textCaretVisible_ = true;
+    SetTimer(hwnd_, kTextCaretTimerId, kTextCaretTimerMs, nullptr);
+    InvalidateRect(hwnd_, &imageCanvasRect_, FALSE);
+}
+
 
 void MediaEditorPage::Impl::PaintButton(
     HDC hdc,
@@ -3589,6 +3643,31 @@ void MediaEditorPage::Impl::PaintImage(HDC hdc)
         }
     }
 
+    if (HasArea(fontRect_))
+    {
+        PaintButton(hdc, fontRect_, L"", true);
+        RECT fontLabel {
+            fontRect_.left + Dips(12),
+            fontRect_.top,
+            fontRect_.right - Dips(24),
+            fontRect_.bottom
+        };
+        HFONT previewFont =
+            CreateFontForDpi(dpi_, 9, FW_NORMAL, textFontFamily_.c_str());
+        DrawLabel(
+            hdc,
+            textFontFamily_,
+            fontLabel,
+            previewFont ? previewFont : smallFont_,
+            theme_.textPrimary,
+            DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        if (previewFont) DeleteObject(previewFont);
+        RECT chevronRect {
+            fontRect_.right - Dips(22), fontRect_.top,
+            fontRect_.right - Dips(6), fontRect_.bottom
+        };
+        drawChevron(chevronRect, theme_.textSecondary);
+    }
     if (HasArea(thicknessRect_))
     {
         PaintButton(hdc, thicknessRect_, L"", true);
@@ -3768,17 +3847,10 @@ void MediaEditorPage::Impl::PaintImage(HDC hdc)
     if (imageToolbarPopup_ == ImageToolbarPopup::Color && HasArea(colorPopupRect_))
     {
         paintPopupFrame(colorPopupRect_);
-        const std::array<COLORREF, 5> swatches {
-            RGB(255, 255, 255),
-            RGB(255, 76, 96),
-            RGB(255, 205, 64),
-            RGB(82, 157, 255),
-            RGB(18, 20, 24)
-        };
         for (size_t index = 0; index < colorSwatchRects_.size(); ++index)
         {
             const RECT& swatchRect = colorSwatchRects_[index];
-            const COLORREF swatchColor = swatches[index];
+            const COLORREF swatchColor = kImageColorSwatches[index];
             Gdiplus::SolidBrush swatchBrush(gdiColor(swatchColor));
             graphics.FillEllipse(
                 &swatchBrush,
@@ -3809,6 +3881,27 @@ void MediaEditorPage::Impl::PaintImage(HDC hdc)
             }
         }
         PaintButton(hdc, colorCustomRect_, L"Custom color...");
+    }
+    else if (imageToolbarPopup_ == ImageToolbarPopup::Font && HasArea(fontPopupRect_))
+    {
+        paintPopupFrame(fontPopupRect_);
+        for (size_t index = 0; index < fontOptionRects_.size(); ++index)
+        {
+            const std::wstring family = kTextFontFamilies[index];
+            const bool selected = family == textFontFamily_;
+            PaintButton(hdc, fontOptionRects_[index], L"", true, false, selected);
+            HFONT previewFont =
+                CreateFontForDpi(dpi_, 10, FW_NORMAL, family.c_str());
+            RECT label = Inset(fontOptionRects_[index], Dips(12), 0);
+            DrawLabel(
+                hdc,
+                family,
+                label,
+                previewFont ? previewFont : bodyFont_,
+                theme_.textPrimary,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+            if (previewFont) DeleteObject(previewFont);
+        }
     }
     else if (imageToolbarPopup_ == ImageToolbarPopup::Thickness &&
         HasArea(thicknessPopupRect_))
@@ -4025,7 +4118,7 @@ void MediaEditorPage::Impl::PaintImageCanvas(HDC hdc)
         DrawTextBox(graphics, displayText);
     }
 
-    if (textEditing_ && HasVisibleText(activeTextBox_.text))
+    if (textEditing_)
     {
         MediaEditorTextBox displayText = activeTextBox_;
         const POINT topLeft = ImageToCanvas({
@@ -4042,7 +4135,25 @@ void MediaEditorPage::Impl::PaintImageCanvas(HDC hdc)
             static_cast<float>(bottomRight.x),
             static_cast<float>(bottomRight.y)
         };
-        DrawTextBox(graphics, displayText);
+        if (textCaretVisible_ && GetFocus() == textEdit_)
+        {
+            DWORD selectionEnd = 0;
+            SendMessageW(
+                textEdit_,
+                EM_GETSEL,
+                0,
+                reinterpret_cast<LPARAM>(&selectionEnd));
+            DrawMediaEditorTextBoxWithCaret(
+                graphics,
+                displayText,
+                static_cast<size_t>(selectionEnd),
+                theme_.accent,
+                static_cast<float>(std::max(1, Dips(1))));
+        }
+        else if (HasVisibleText(activeTextBox_.text))
+        {
+            DrawTextBox(graphics, displayText);
+        }
     }
 
     auto drawTextSelection = [&](const MediaEditorCropRect& bounds, bool draft)
@@ -5769,7 +5880,7 @@ RECT MediaEditorPage::Impl::HitButton(POINT point) const
     if (imageSession_.CanRedo() && Contains(redoRect_, point))
         return redoRect_;
     for (const RECT& rect : {
-        newEditRect_, drawRect_, colorRect_, thicknessRect_, eraserRect_,
+        newEditRect_, drawRect_, colorRect_, fontRect_, thicknessRect_, eraserRect_,
         textToolRect_, rotateRect_, resetCropRect_, fitRect_, actualSizeRect_,
         copyRect_, saveRect_, saveMenuRect_, saveAsRect_, colorCustomRect_,
         thicknessSliderRect_ })
@@ -5777,6 +5888,10 @@ RECT MediaEditorPage::Impl::HitButton(POINT point) const
         if (HasArea(rect) && Contains(rect, point)) return rect;
     }
     for (const RECT& rect : colorSwatchRects_)
+    {
+        if (HasArea(rect) && Contains(rect, point)) return rect;
+    }
+    for (const RECT& rect : fontOptionRects_)
     {
         if (HasArea(rect) && Contains(rect, point)) return rect;
     }
@@ -6270,6 +6385,7 @@ void MediaEditorPage::Impl::OnLeftButtonDown(POINT point, WPARAM)
             switch (imageToolbarPopup_)
             {
             case ImageToolbarPopup::Color: popupRect = colorPopupRect_; break;
+            case ImageToolbarPopup::Font: popupRect = fontPopupRect_; break;
             case ImageToolbarPopup::Thickness: popupRect = thicknessPopupRect_; break;
             case ImageToolbarPopup::Zoom: popupRect = zoomPopupRect_; break;
             case ImageToolbarPopup::Save: popupRect = savePopupRect_; break;
@@ -6287,6 +6403,7 @@ void MediaEditorPage::Impl::OnLeftButtonDown(POINT point, WPARAM)
 
             const bool overPopupAnchor =
                 Contains(colorRect_, point) ||
+                Contains(fontRect_, point) ||
                 Contains(thicknessRect_, point) ||
                 Contains(actualSizeRect_, point) ||
                 Contains(saveMenuRect_, point);
@@ -6902,6 +7019,13 @@ void MediaEditorPage::Impl::OnLeftButtonUp(POINT point, WPARAM)
                 ? ImageToolbarPopup::None
                 : ImageToolbarPopup::Color;
     }
+    else if (same(fontRect_))
+    {
+        imageToolbarPopup_ =
+            imageToolbarPopup_ == ImageToolbarPopup::Font
+                ? ImageToolbarPopup::None
+                : ImageToolbarPopup::Font;
+    }
     else if (same(thicknessRect_))
     {
         imageToolbarPopup_ =
@@ -6978,17 +7102,27 @@ void MediaEditorPage::Impl::OnLeftButtonUp(POINT point, WPARAM)
     }
     else
     {
-        const std::array<COLORREF, 5> swatches {
-            RGB(255, 255, 255), RGB(255, 76, 96), RGB(255, 205, 64),
-            RGB(82, 157, 255), RGB(18, 20, 24)
-        };
         const std::array<float, 3> thicknesses { 2.0f, 6.0f, 14.0f };
         const std::array<int, 6> zoomValues { 25, 50, 75, 100, 150, 200 };
         for (size_t index = 0; index < colorSwatchRects_.size(); ++index)
         {
             if (same(colorSwatchRects_[index]))
             {
-                drawingColor_ = swatches[index];
+                drawingColor_ = kImageColorSwatches[index];
+                imageToolbarPopup_ = ImageToolbarPopup::None;
+                break;
+            }
+        }
+        for (size_t index = 0; index < fontOptionRects_.size(); ++index)
+        {
+            if (same(fontOptionRects_[index]))
+            {
+                textFontFamily_ = kTextFontFamilies[index];
+                if (textEditing_)
+                {
+                    activeTextBox_.fontFamily = textFontFamily_;
+                    UpdateTextEditFont();
+                }
                 imageToolbarPopup_ = ImageToolbarPopup::None;
                 break;
             }

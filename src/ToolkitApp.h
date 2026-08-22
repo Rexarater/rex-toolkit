@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AnimeTrackerService.h"
+#include "EqualizerPage.h"
 #include "FileConversionService.h"
 #include "MacroRecorderService.h"
 #include "MediaEditorPage.h"
@@ -42,6 +43,7 @@ enum class ToolKind
     AutoClicker,
     FileConverter,
     MediaDownloader,
+    Equalizer,
     AnimeTracker,
     Reminders,
     SmartFileTransfer,
@@ -155,8 +157,7 @@ enum class MacroRecorderTab
 enum class SettingsSection
 {
     General,
-    SmartTransfer,
-    WindowsIntegration,
+    Equalizer,
     MacroRecorder,
     Appearance,
     Updates,
@@ -296,6 +297,8 @@ struct AppearanceSettings
     bool gradientBlendWithTheme = true;
     UiSurfaceStyle uiSurfaceStyle = UiSurfaceStyle::Solid;
     int uiSurfaceOpacity = 100;
+    bool customHighlightColorEnabled = false;
+    COLORREF highlightColor = RGB(83, 147, 245);
     bool borderEdgeGlowEnabled = true;
     bool smoothScrollingEnabled = true;
 };
@@ -335,6 +338,7 @@ struct AppSettings
     AppearanceSettings appearance;
     bool minimizeToTrayOnClose = false;
     bool startWithWindowsToTray = false;
+    bool betaFeaturesEnabled = false;
     bool smartTransferWebRtcFallback = true;
     bool smartTransferWebRtcDiagnostics = false;
     std::wstring smartTransferStunServers = L"stun:stun.l.google.com:19302";
@@ -514,6 +518,7 @@ private:
     void PaintVideoCompressor(HDC hdc);
     void PaintVideoCompressorIcon(HDC hdc, const RECT& bounds);
     void PaintMediaEditor(HDC hdc);
+    void PaintEqualizer(HDC hdc);
     void PaintMacroOverlay(HWND hwnd, HDC hdc);
     void PaintSettings(HDC hdc);
     void PaintReminderBanner(HDC hdc);
@@ -697,6 +702,8 @@ private:
     void ChooseAppearanceBackgroundImage();
     void RemoveAppearanceBackgroundImage();
     void ChooseAppearanceGradientColor(bool firstColor);
+    void ChooseAppearanceInterfaceColor();
+    void ResetAppearanceInterfaceColors();
     void ApplyAppearancePreset(BackgroundPreset preset);
     void ResetAppearanceBackground();
     void ResetAppearance();
@@ -818,11 +825,13 @@ private:
     void UpdateCurrentToolControls();
     void PaintDropdown(HDC hdc);
     void UpdateMediaEditorPage();
+    void UpdateEqualizerPage();
     bool HandleDropdownClick(POINT point);
     RECT ButtonRectAtPoint(POINT point) const;
     void UpdateButtonHover(POINT point);
     bool IsPointOverInteractiveSurface(POINT point) const;
     void ApplyCursorForPoint(POINT point) const;
+    bool IsToolAvailable(ToolKind tool) const;
     void RebuildVisibleToolsCache();
     const std::vector<const ToolDefinition*>& VisibleToolsForCurrentPage() const;
     const ToolDefinition* FindTool(ToolKind tool) const;
@@ -854,6 +863,7 @@ private:
     std::wstring SmartTransferHostStatusLabel() const;
     std::wstring SmartTransferClientStatusLabel() const;
     void ApplyTheme();
+    void RefreshThemedEditContextMenus();
     std::wstring ReminderFilterLabel() const;
     std::wstring ReminderSortLabel() const;
     std::wstring ReminderCategoryText() const;
@@ -878,6 +888,7 @@ private:
     std::unique_ptr<Gdiplus::Bitmap> macroRecorderIcon_;
     std::unique_ptr<Gdiplus::Bitmap> videoCompressorIcon_;
     std::unique_ptr<Gdiplus::Bitmap> mediaEditorIcon_;
+    std::unique_ptr<Gdiplus::Bitmap> equalizerIcon_;
     std::unique_ptr<Gdiplus::Bitmap> allToolsIcon_;
     std::unique_ptr<Gdiplus::Bitmap> settingsIcon_;
     std::unique_ptr<Gdiplus::Bitmap> customImageIcon_;
@@ -889,6 +900,7 @@ private:
     std::unique_ptr<Gdiplus::Bitmap> macroRecorderIconTinted_;
     std::unique_ptr<Gdiplus::Bitmap> videoCompressorIconTinted_;
     std::unique_ptr<Gdiplus::Bitmap> mediaEditorIconTinted_;
+    std::unique_ptr<Gdiplus::Bitmap> equalizerIconTinted_;
     std::unique_ptr<Gdiplus::Bitmap> allToolsIconTinted_;
     std::unique_ptr<Gdiplus::Bitmap> settingsIconTinted_;
     std::unique_ptr<Gdiplus::Bitmap> customImageIconTinted_;
@@ -914,6 +926,7 @@ private:
     MacroHotkeyService macroHotkeyService_;
     std::vector<ConversionJob> conversionJobs_;
     MediaEditorPage mediaEditorPage_;
+    EqualizerPage equalizerPage_;
     ConversionOptions conversionOptions_;
     MediaDownloadOptions mediaDownloadOptions_;
     MediaDownloadJob mediaDownloadJob_;
@@ -1016,6 +1029,7 @@ private:
     bool smartTransferConnecting_ = false;
     bool smartTransferDownloading_ = false;
     bool smartTransferHosting_ = false;
+    bool smartTransferP2pOptionsOpen_ = false;
     bool smartTransferWebRtcFallbackOffered_ = false;
     bool smartTransferWebRtcDependencyMissing_ = false;
     bool smartTransferWebRtcBusy_ = false;
@@ -1129,6 +1143,7 @@ private:
     RECT mediaFileNameEditRect_ {};
     RECT mediaDownloadButtonRect_ {};
     RECT mediaCancelButtonRect_ {};
+    RECT mediaEditorCompatibilityToggleRect_ {};
     RECT mediaProgressRect_ {};
     RECT mediaOpenFileButtonRect_ {};
     RECT mediaOpenFolderButtonRect_ {};
@@ -1166,6 +1181,11 @@ private:
     RECT videoCompressorAnotherButtonRect_ {};
     RECT smartTransferSendTabRect_ {};
     RECT smartTransferReceiveTabRect_ {};
+    RECT smartTransferP2pOptionsToggleRect_ {};
+    RECT smartTransferP2pOptionsPanelRect_ {};
+    RECT smartTransferWebRtcFallbackToggleRect_ {};
+    RECT smartTransferWebRtcDiagnosticsToggleRect_ {};
+    RECT smartTransferStunEditRect_ {};
     RECT smartTransferDropZoneRect_ {};
     RECT smartTransferBrowseButtonRect_ {};
     RECT smartTransferClearButtonRect_ {};
@@ -1245,9 +1265,8 @@ private:
     RECT settingsCheckUpdatesButtonRect_ {};
     RECT settingsDownloadUpdateButtonRect_ {};
     RECT settingsGeneralTabRect_ {};
-    RECT settingsSmartTransferTabRect_ {};
+    RECT settingsEqualizerTabRect_ {};
     RECT settingsMacroRecorderTabRect_ {};
-    RECT settingsWindowsIntegrationTabRect_ {};
     RECT settingsAppearanceTabRect_ {};
     RECT settingsUpdatesTabRect_ {};
     RECT settingsAboutTabRect_ {};
@@ -1256,10 +1275,17 @@ private:
     RECT settingsStartPageButtonRect_ {};
     RECT settingsMinimizeToTrayToggleRect_ {};
     RECT settingsStartWithWindowsToggleRect_ {};
-    RECT settingsWebRtcFallbackToggleRect_ {};
+    RECT settingsBetaFeaturesToggleRect_ {};
+    RECT settingsEqualizerStartupToggleRect_ {};
+    RECT settingsEqualizerRememberDeviceToggleRect_ {};
+    RECT settingsEqualizerAutoApplyToggleRect_ {};
+    RECT settingsEqualizerPreventClippingToggleRect_ {};
+    RECT settingsEqualizerTrayToggleRect_ {};
+    RECT settingsEqualizerTechnicalToggleRect_ {};
+    RECT settingsEqualizerSetupButtonRect_ {};
+    RECT settingsEqualizerProfilesButtonRect_ {};
+    RECT settingsEqualizerDiagnosticsButtonRect_ {};
     RECT settingsExplorerContextToggleRect_ {};
-    RECT settingsWebRtcDiagnosticsToggleRect_ {};
-    RECT settingsWebRtcStunServersRect_ {};
     RECT settingsMacroRecordHotkeyButtonRect_ {};
     RECT settingsMacroPlayHotkeyButtonRect_ {};
     RECT settingsMacroStopHotkeyButtonRect_ {};
@@ -1285,6 +1311,7 @@ private:
     RECT settingsAppearanceEditorRect_ {};
     RECT settingsAppearanceInterfaceSectionRect_ {};
     RECT settingsAppearanceMotionSectionRect_ {};
+    RECT settingsAppearanceColorSectionRect_ {};
     RECT settingsAppearancePreviewRect_ {};
     RECT settingsAppearancePreviewCanvasRect_ {};
     RECT settingsAppearancePreviewFitButtonRect_ {};
@@ -1324,6 +1351,8 @@ private:
     RECT settingsUiSurfaceOpacityTrackRect_ {};
     RECT settingsUiSurfaceOpacityThumbRect_ {};
     RECT settingsBorderEdgeGlowToggleRect_ {};
+    RECT settingsHighlightColorButtonRect_ {};
+    RECT settingsUseThemeInterfaceColorsButtonRect_ {};
     RECT settingsSmoothScrollingToggleRect_ {};
     RECT settingsResetBackgroundButtonRect_ {};
     RECT settingsResetAppearanceButtonRect_ {};
@@ -1408,6 +1437,7 @@ private:
     HWND mediaFileNameEdit_ = nullptr;
     HWND videoCompressorTargetEdit_ = nullptr;
     HWND smartTransferNameEdit_ = nullptr;
+    HWND smartTransferStunEdit_ = nullptr;
     HWND smartTransferCodeEdit_ = nullptr;
     HWND smartTransferReceiverResponseEdit_ = nullptr;
     HWND smartTransferSenderPairingEdit_ = nullptr;

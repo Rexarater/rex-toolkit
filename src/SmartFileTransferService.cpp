@@ -1194,7 +1194,7 @@ bool TransferHostServer::Start(
             ? SmartTransferWebRtcStatus::Disabled
             : (WebRtcTransport::IsAvailable() ? SmartTransferWebRtcStatus::ReadyForFallback : SmartTransferWebRtcStatus::DependencyMissing);
         snapshot_.webRtcMessage = !options.enableWebRtcFallback
-            ? L"Manual P2P fallback is disabled in settings."
+            ? L"Manual P2P fallback is disabled in P2P options."
             : (WebRtcTransport::IsAvailable()
                 ? L"Manual P2P fallback is available if LAN and Direct Host fail."
                 : WebRtcTransport::DependencyMessage());
